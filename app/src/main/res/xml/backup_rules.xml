@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 备份规则配置 (Android 11及以下) -->
+<full-backup-content>
+    <!-- 包含数据库文件 -->
+    <include domain="database" path="." />
+    <!-- 包含SharedPreferences -->
+    <include domain="sharedpref" path="." />
+    <!-- 排除临时文件 -->
+    <exclude domain="cache" path="." />
+</full-backup-content>

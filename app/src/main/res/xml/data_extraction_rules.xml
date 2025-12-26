@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 数据提取规则配置 (Android 12+) -->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- 云端备份包含数据库 -->
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+        <exclude domain="cache" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <!-- 设备迁移包含所有数据 -->
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="." />
+        <exclude domain="cache" path="." />
+    </device-transfer>
+</data-extraction-rules>

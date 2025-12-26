@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用图标前景 - AI生活管家 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 背景圆形 -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+
+    <!-- AI图标 - 简化的大脑/智能图案 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30
+                         C40,30 30,40 30,54
+                         C30,68 40,78 54,78
+                         C68,78 78,68 78,54
+                         C78,40 68,30 54,30
+                         M54,36
+                         C64.5,36 72,43.5 72,54
+                         C72,64.5 64.5,72 54,72
+                         C43.5,72 36,64.5 36,54
+                         C36,43.5 43.5,36 54,36" />
+
+    <!-- 内部装饰线条 - 代表智能连接 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,42 L54,66 M42,54 L66,54"
+        android:strokeWidth="3"
+        android:strokeColor="#FFFFFF" />
+
+    <!-- 四角装饰点 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,46m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,46m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,62m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,62m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+
+</vector>

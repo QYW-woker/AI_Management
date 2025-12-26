@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主题资源文件 -->
+<resources>
+    <!-- 基础主题 -->
+    <style name="Theme.AIManagement" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 状态栏颜色 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- 窗口背景 -->
+        <item name="android:windowBackground">@android:color/white</item>
+        <!-- 浅色状态栏图标 -->
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 字符串资源文件 -->
+<resources>
+    <!-- 应用名称 -->
+    <string name="app_name">AI生活管家</string>
+
+    <!-- 通用文本 -->
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="edit">编辑</string>
+    <string name="add">添加</string>
+    <string name="back">返回</string>
+    <string name="search">搜索</string>
+    <string name="filter">筛选</string>
+    <string name="reset">重置</string>
+    <string name="loading">加载中...</string>
+    <string name="error">出错了</string>
+    <string name="retry">重试</string>
+    <string name="empty_data">暂无数据</string>
+
+    <!-- 导航标签 -->
+    <string name="nav_home">首页</string>
+    <string name="nav_finance">收支</string>
+    <string name="nav_goal">目标</string>
+    <string name="nav_data">数据</string>
+    <string name="nav_profile">我的</string>
+
+    <!-- 财务模块 -->
+    <string name="income">收入</string>
+    <string name="expense">支出</string>
+    <string name="balance">结余</string>
+    <string name="total_income">总收入</string>
+    <string name="total_expense">总支出</string>
+    <string name="savings_rate">储蓄率</string>
+    <string name="monthly_income_expense">月度收支</string>
+    <string name="monthly_asset">月度资产</string>
+    <string name="monthly_expense_title">月度开销</string>
+    <string name="daily_transaction">日常记账</string>
+    <string name="amount">金额</string>
+    <string name="category">分类</string>
+    <string name="note">备注</string>
+    <string name="date">日期</string>
+
+    <!-- 目标模块 -->
+    <string name="goal">目标</string>
+    <string name="goal_management">目标管理</string>
+    <string name="add_goal">添加目标</string>
+    <string name="goal_progress">目标进度</string>
+    <string name="milestone">里程碑</string>
+
+    <!-- 待办模块 -->
+    <string name="todo">待办</string>
+    <string name="add_todo">添加待办</string>
+    <string name="todo_completed">已完成</string>
+    <string name="todo_pending">待完成</string>
+
+    <!-- 日记模块 -->
+    <string name="diary">日记</string>
+    <string name="write_diary">写日记</string>
+    <string name="mood">心情</string>
+
+    <!-- 时间统计 -->
+    <string name="time_tracking">时间统计</string>
+    <string name="start_timer">开始计时</string>
+    <string name="stop_timer">停止计时</string>
+    <string name="duration">时长</string>
+
+    <!-- 习惯打卡 -->
+    <string name="habit">习惯</string>
+    <string name="habit_check_in">打卡</string>
+    <string name="streak">连续天数</string>
+
+    <!-- 数据中心 -->
+    <string name="data_center">数据中心</string>
+    <string name="overview">总览</string>
+    <string name="finance_dashboard">财务</string>
+    <string name="efficiency">效率</string>
+    <string name="life">生活</string>
+
+    <!-- 设置 -->
+    <string name="settings">设置</string>
+    <string name="ai_settings">AI设置</string>
+    <string name="api_key">API密钥</string>
+    <string name="select_model">选择模型</string>
+
+    <!-- 字段管理 -->
+    <string name="field_management">类别管理</string>
+    <string name="add_category">添加类别</string>
+    <string name="edit_category">编辑类别</string>
+    <string name="category_name">类别名称</string>
+    <string name="select_icon">选择图标</string>
+    <string name="select_color">选择颜色</string>
+    <string name="preset">预设</string>
+
+    <!-- 时间筛选 -->
+    <string name="today">今日</string>
+    <string name="this_week">本周</string>
+    <string name="this_month">本月</string>
+    <string name="this_quarter">本季度</string>
+    <string name="this_year">本年</string>
+    <string name="last_7_days">近7天</string>
+    <string name="last_30_days">近30天</string>
+    <string name="last_90_days">近90天</string>
+    <string name="last_12_months">近12月</string>
+    <string name="custom_range">自定义</string>
+
+    <!-- AI相关 -->
+    <string name="voice_input">语音输入</string>
+    <string name="ai_analysis">AI分析</string>
+    <string name="ai_suggestion">AI建议</string>
+</resources>
