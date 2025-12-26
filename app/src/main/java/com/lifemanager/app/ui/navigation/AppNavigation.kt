@@ -21,6 +21,7 @@ import com.lifemanager.app.feature.finance.transaction.DailyTransactionScreen
 import com.lifemanager.app.feature.todo.TodoScreen
 import com.lifemanager.app.feature.diary.DiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
+import com.lifemanager.app.feature.habit.HabitScreen
 
 /**
  * 窗口尺寸类型
@@ -326,7 +327,9 @@ fun AppNavHost(
 
         // 习惯打卡
         composable(Screen.Habit.route) {
-            PlaceholderScreen(title = "习惯打卡")
+            HabitScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // 存钱计划
