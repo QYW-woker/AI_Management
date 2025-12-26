@@ -18,6 +18,7 @@ import com.lifemanager.app.feature.finance.income.FieldManagementScreen
 import com.lifemanager.app.feature.finance.asset.MonthlyAssetScreen
 import com.lifemanager.app.feature.finance.expense.MonthlyExpenseScreen
 import com.lifemanager.app.feature.finance.transaction.DailyTransactionScreen
+import com.lifemanager.app.feature.todo.TodoScreen
 
 /**
  * 窗口尺寸类型
@@ -302,7 +303,9 @@ fun AppNavHost(
 
         // 待办
         composable(Screen.Todo.route) {
-            PlaceholderScreen(title = "待办记事")
+            TodoScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // 日记
