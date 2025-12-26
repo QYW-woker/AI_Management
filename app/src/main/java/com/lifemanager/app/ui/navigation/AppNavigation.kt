@@ -16,6 +16,7 @@ import com.lifemanager.app.feature.home.HomeScreen
 import com.lifemanager.app.feature.finance.income.MonthlyIncomeExpenseScreen
 import com.lifemanager.app.feature.finance.income.FieldManagementScreen
 import com.lifemanager.app.feature.finance.asset.MonthlyAssetScreen
+import com.lifemanager.app.feature.finance.expense.MonthlyExpenseScreen
 
 /**
  * 窗口尺寸类型
@@ -242,6 +243,13 @@ fun AppNavHost(
         // 月度资产
         composable(Screen.MonthlyAsset.route) {
             MonthlyAssetScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 月度开销
+        composable(Screen.MonthlyExpense.route) {
+            MonthlyExpenseScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
