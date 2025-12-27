@@ -204,7 +204,7 @@ private fun HabitStatsCard(stats: HabitStats) {
 
             // 进度条
             LinearProgressIndicator(
-                progress = { if (stats.todayTotal > 0) stats.todayCompleted.toFloat() / stats.todayTotal else 0f },
+                progress = if (stats.todayTotal > 0) stats.todayCompleted.toFloat() / stats.todayTotal else 0f,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)

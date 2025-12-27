@@ -28,7 +28,7 @@ class DailyTransactionUseCase @Inject constructor(
     fun getTransactionsByDate(date: Int): Flow<List<DailyTransactionWithCategory>> {
         return combine(
             transactionRepository.getByDate(date),
-            fieldRepository.getByModuleType("DAILY_EXPENSE")
+            fieldRepository.getFieldsByModule("DAILY_EXPENSE")
         ) { transactions, fields ->
             val fieldMap = fields.associateBy { it.id }
             transactions.map { transaction ->
@@ -46,7 +46,7 @@ class DailyTransactionUseCase @Inject constructor(
     fun getTransactionGroupsByDateRange(startDate: Int, endDate: Int): Flow<List<DailyTransactionGroup>> {
         return combine(
             transactionRepository.getByDateRange(startDate, endDate),
-            fieldRepository.getByModuleType("DAILY_EXPENSE")
+            fieldRepository.getFieldsByModule("DAILY_EXPENSE")
         ) { transactions, fields ->
             val fieldMap = fields.associateBy { it.id }
 
@@ -80,7 +80,7 @@ class DailyTransactionUseCase @Inject constructor(
     fun getRecentTransactionGroups(limit: Int = 50): Flow<List<DailyTransactionGroup>> {
         return combine(
             transactionRepository.getRecentTransactions(limit),
-            fieldRepository.getByModuleType("DAILY_EXPENSE")
+            fieldRepository.getFieldsByModule("DAILY_EXPENSE")
         ) { transactions, fields ->
             val fieldMap = fields.associateBy { it.id }
 
@@ -166,7 +166,7 @@ class DailyTransactionUseCase @Inject constructor(
     fun getCategoryExpenseStats(startDate: Int, endDate: Int): Flow<List<CategoryExpenseStats>> {
         return combine(
             transactionRepository.getCategoryTotalsInRange(startDate, endDate, TransactionType.EXPENSE),
-            fieldRepository.getByModuleType("DAILY_EXPENSE")
+            fieldRepository.getFieldsByModule("DAILY_EXPENSE")
         ) { totals, fields ->
             val fieldMap = fields.associateBy { it.id }
             val totalExpense = totals.sumOf { it.total }
@@ -262,7 +262,7 @@ class DailyTransactionUseCase @Inject constructor(
      */
     suspend fun getTransactionById(id: Long): DailyTransactionWithCategory? {
         val transaction = transactionRepository.getById(id) ?: return null
-        val fields = fieldRepository.getByModuleType("DAILY_EXPENSE").first()
+        val fields = fieldRepository.getFieldsByModule("DAILY_EXPENSE").first()
         val category = transaction.categoryId?.let { catId ->
             fields.find { it.id == catId }
         }
@@ -275,7 +275,7 @@ class DailyTransactionUseCase @Inject constructor(
     fun searchTransactions(keyword: String): Flow<List<DailyTransactionWithCategory>> {
         return combine(
             transactionRepository.searchByNote(keyword),
-            fieldRepository.getByModuleType("DAILY_EXPENSE")
+            fieldRepository.getFieldsByModule("DAILY_EXPENSE")
         ) { transactions, fields ->
             val fieldMap = fields.associateBy { it.id }
             transactions.map { transaction ->

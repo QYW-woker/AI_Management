@@ -255,7 +255,7 @@ private fun ExpenseStatsCard(stats: ExpenseStats) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
+            Divider()
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(

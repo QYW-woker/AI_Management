@@ -234,7 +234,7 @@ class MonthlyIncomeExpenseViewModel @Inject constructor(
     /**
      * 显示添加记录对话框
      */
-    fun showAddDialog(type: IncomeExpenseType = IncomeExpenseType.INCOME) {
+    fun showAddDialog(type: String = IncomeExpenseType.INCOME) {
         _editState.value = EditRecordState(
             yearMonth = _currentYearMonth.value,
             type = type,
@@ -275,7 +275,7 @@ class MonthlyIncomeExpenseViewModel @Inject constructor(
     /**
      * 更新编辑状态 - 类型
      */
-    fun updateEditType(type: IncomeExpenseType) {
+    fun updateEditType(type: String) {
         _editState.value = _editState.value.copy(type = type, fieldId = 0)
     }
 

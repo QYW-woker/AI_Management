@@ -101,7 +101,7 @@ sealed class IncomeExpenseUiState {
 data class EditRecordState(
     val id: Long = 0,
     val yearMonth: Int = 0,
-    val type: IncomeExpenseType = IncomeExpenseType.INCOME,
+    val type: String = IncomeExpenseType.INCOME,
     val fieldId: Long = 0,
     val amount: Double = 0.0,
     val note: String = "",

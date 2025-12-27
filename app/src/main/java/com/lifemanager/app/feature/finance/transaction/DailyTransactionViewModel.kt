@@ -129,7 +129,7 @@ class DailyTransactionViewModel @Inject constructor(
      */
     private fun observeCategories() {
         viewModelScope.launch {
-            fieldUseCase.getFieldsByModuleType("DAILY_EXPENSE")
+            fieldUseCase.getFieldsByModule("DAILY_EXPENSE")
                 .collect { fields ->
                     _categories.value = fields
                 }

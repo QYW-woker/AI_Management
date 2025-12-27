@@ -324,7 +324,7 @@ private fun StatsCard(stats: MonthlyStats) {
             // 储蓄率
             if (stats.totalIncome > 0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider()
+                Divider()
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(

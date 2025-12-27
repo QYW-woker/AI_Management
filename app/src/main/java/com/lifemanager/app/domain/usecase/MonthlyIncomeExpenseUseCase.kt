@@ -33,7 +33,7 @@ class MonthlyIncomeExpenseUseCase @Inject constructor(
      */
     fun getRecordsWithFields(yearMonth: Int): Flow<List<MonthlyIncomeExpenseWithField>> {
         return repository.getByMonth(yearMonth).map { records ->
-            val fieldIds = records.map { it.fieldId }.distinct()
+            val fieldIds = records.mapNotNull { it.fieldId }.distinct()
             val fields = if (fieldIds.isNotEmpty()) {
                 fieldRepository.getFieldsByIds(fieldIds).associateBy { it.id }
             } else {
@@ -150,7 +150,7 @@ class MonthlyIncomeExpenseUseCase @Inject constructor(
      */
     fun getRecentRecords(limit: Int = 10): Flow<List<MonthlyIncomeExpenseWithField>> {
         return repository.getRecentRecords(limit).map { records ->
-            val fieldIds = records.map { it.fieldId }.distinct()
+            val fieldIds = records.mapNotNull { it.fieldId }.distinct()
             val fields = if (fieldIds.isNotEmpty()) {
                 fieldRepository.getFieldsByIds(fieldIds).associateBy { it.id }
             } else {
@@ -178,17 +178,19 @@ class MonthlyIncomeExpenseUseCase @Inject constructor(
      */
     suspend fun addRecord(
         yearMonth: Int,
-        type: IncomeExpenseType,
+        type: String,
         fieldId: Long,
         amount: Double,
-        note: String
+        note: String,
+        recordDate: Int = java.time.LocalDate.now().toEpochDay().toInt()
     ): Long {
         val record = MonthlyIncomeExpenseEntity(
             yearMonth = yearMonth,
             type = type,
             fieldId = fieldId,
             amount = amount,
-            note = note
+            note = note,
+            recordDate = recordDate
         )
         return repository.insert(record)
     }
@@ -199,7 +201,7 @@ class MonthlyIncomeExpenseUseCase @Inject constructor(
     suspend fun updateRecord(
         id: Long,
         yearMonth: Int,
-        type: IncomeExpenseType,
+        type: String,
         fieldId: Long,
         amount: Double,
         note: String
