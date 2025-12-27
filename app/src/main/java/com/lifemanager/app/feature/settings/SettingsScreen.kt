@@ -59,7 +59,7 @@ fun SettingsScreen(
                         checked = settings.isDarkMode,
                         onCheckedChange = { viewModel.toggleDarkMode(it) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.Language,
                         title = "语言",
@@ -79,7 +79,7 @@ fun SettingsScreen(
                         checked = settings.enableNotification,
                         onCheckedChange = { viewModel.toggleNotification(it) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.Schedule,
                         title = "每日提醒时间",
@@ -100,21 +100,21 @@ fun SettingsScreen(
                         checked = settings.autoBackup,
                         onCheckedChange = { viewModel.toggleAutoBackup(it) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.CloudUpload,
                         title = "立即备份",
                         value = "",
                         onClick = { /* TODO */ }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.CloudDownload,
                         title = "恢复数据",
                         value = "",
                         onClick = { /* TODO */ }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.Delete,
                         title = "清除所有数据",
@@ -134,14 +134,14 @@ fun SettingsScreen(
                         value = "1.0.0",
                         onClick = { }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.Description,
                         title = "隐私政策",
                         value = "",
                         onClick = { /* TODO */ }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
                         icon = Icons.Outlined.Gavel,
                         title = "用户协议",

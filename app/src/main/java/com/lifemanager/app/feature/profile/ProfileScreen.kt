@@ -326,14 +326,14 @@ private fun FunctionListCard(onNavigateToSettings: () -> Unit) {
                 subtitle = "主题、通知、数据管理",
                 onClick = onNavigateToSettings
             )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp))
             FunctionItem(
                 icon = Icons.Outlined.Help,
                 title = "帮助与反馈",
                 subtitle = "使用指南、问题反馈",
                 onClick = { }
             )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            Divider(modifier = Modifier.padding(horizontal = 16.dp))
             FunctionItem(
                 icon = Icons.Outlined.Info,
                 title = "关于",
