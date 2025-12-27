@@ -3,6 +3,7 @@ package com.lifemanager.app.core.di
 import com.lifemanager.app.data.repository.CustomFieldRepositoryImpl
 import com.lifemanager.app.data.repository.DailyTransactionRepositoryImpl
 import com.lifemanager.app.data.repository.DiaryRepositoryImpl
+import com.lifemanager.app.data.repository.GoalRepositoryImpl
 import com.lifemanager.app.data.repository.HabitRepositoryImpl
 import com.lifemanager.app.data.repository.SavingsPlanRepositoryImpl
 import com.lifemanager.app.data.repository.MonthlyAssetRepositoryImpl
@@ -13,6 +14,7 @@ import com.lifemanager.app.data.repository.TodoRepositoryImpl
 import com.lifemanager.app.domain.repository.CustomFieldRepository
 import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import com.lifemanager.app.domain.repository.DiaryRepository
+import com.lifemanager.app.domain.repository.GoalRepository
 import com.lifemanager.app.domain.repository.HabitRepository
 import com.lifemanager.app.domain.repository.SavingsPlanRepository
 import com.lifemanager.app.domain.repository.MonthlyAssetRepository
@@ -124,4 +126,13 @@ abstract class RepositoryModule {
     abstract fun bindSavingsPlanRepository(
         impl: SavingsPlanRepositoryImpl
     ): SavingsPlanRepository
+
+    /**
+     * 提供目标仓库实例
+     */
+    @Binds
+    @Singleton
+    abstract fun bindGoalRepository(
+        impl: GoalRepositoryImpl
+    ): GoalRepository
 }

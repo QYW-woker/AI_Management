@@ -23,6 +23,10 @@ import com.lifemanager.app.feature.diary.DiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
 import com.lifemanager.app.feature.habit.HabitScreen
 import com.lifemanager.app.feature.savings.SavingsPlanScreen
+import com.lifemanager.app.feature.goal.GoalScreen
+import com.lifemanager.app.feature.datacenter.DataCenterScreen
+import com.lifemanager.app.feature.profile.ProfileScreen
+import com.lifemanager.app.feature.settings.SettingsScreen
 
 /**
  * 窗口尺寸类型
@@ -269,20 +273,23 @@ fun AppNavHost(
 
         // 目标管理
         composable(Screen.Goal.route) {
-            // TODO: 实现目标管理页面
-            PlaceholderScreen(title = "目标管理")
+            GoalScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // 数据中心
         composable(Screen.DataCenter.route) {
-            // TODO: 实现数据中心页面
-            PlaceholderScreen(title = "数据中心")
+            DataCenterScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // 个人中心
         composable(Screen.Profile.route) {
-            // TODO: 实现个人中心页面
-            PlaceholderScreen(title = "个人中心")
+            ProfileScreen(
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+            )
         }
 
         // 添加收支
@@ -342,7 +349,9 @@ fun AppNavHost(
 
         // 设置
         composable(Screen.Settings.route) {
-            PlaceholderScreen(title = "设置")
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // AI设置
