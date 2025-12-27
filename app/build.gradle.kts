@@ -80,7 +80,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // ==================== Compose BOM ====================
-    val composeBom = platform("androidx.compose:compose-bom:2024.01.00")
+    // 使用与 Kotlin 1.9.20 和 Compose Compiler 1.5.5 兼容的 BOM 版本
+    val composeBom = platform("androidx.compose:compose-bom:2023.10.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
@@ -94,6 +95,10 @@ dependencies {
     // Material 3设计
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material3:material3-window-size-class")
+
+    // 显式指定 animation-core 版本以避免版本冲突
+    implementation("androidx.compose.animation:animation")
+    implementation("androidx.compose.animation:animation-core")
 
     // Material Icons扩展
     implementation("androidx.compose.material:material-icons-extended")
