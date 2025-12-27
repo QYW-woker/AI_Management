@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * 待办事项DAO接口
+ *
+ * Room数据访问对象，提供待办事项的CRUD操作
  */
 @Dao
 interface TodoDao {
