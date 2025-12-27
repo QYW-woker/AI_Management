@@ -49,6 +49,8 @@ android {
     }
 
     compileOptions {
+        // 启用Java 8 Time API desugaring，确保在所有Android版本上兼容
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -74,6 +76,9 @@ android {
 }
 
 dependencies {
+    // ==================== Core Library Desugaring ====================
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
     // ==================== Compose BOM ====================
     val composeBom = platform("androidx.compose:compose-bom:2024.01.00")
     implementation(composeBom)
