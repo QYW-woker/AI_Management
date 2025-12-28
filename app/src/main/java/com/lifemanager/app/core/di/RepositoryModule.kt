@@ -1,5 +1,6 @@
 package com.lifemanager.app.core.di
 
+import com.lifemanager.app.data.repository.BudgetRepositoryImpl
 import com.lifemanager.app.data.repository.CustomFieldRepositoryImpl
 import com.lifemanager.app.data.repository.DailyTransactionRepositoryImpl
 import com.lifemanager.app.data.repository.DiaryRepositoryImpl
@@ -11,6 +12,7 @@ import com.lifemanager.app.data.repository.TimeTrackRepositoryImpl
 import com.lifemanager.app.data.repository.MonthlyExpenseRepositoryImpl
 import com.lifemanager.app.data.repository.MonthlyIncomeExpenseRepositoryImpl
 import com.lifemanager.app.data.repository.TodoRepositoryImpl
+import com.lifemanager.app.domain.repository.BudgetRepository
 import com.lifemanager.app.domain.repository.CustomFieldRepository
 import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import com.lifemanager.app.domain.repository.DiaryRepository
@@ -135,4 +137,13 @@ abstract class RepositoryModule {
     abstract fun bindGoalRepository(
         impl: GoalRepositoryImpl
     ): GoalRepository
+
+    /**
+     * 提供预算仓库实例
+     */
+    @Binds
+    @Singleton
+    abstract fun bindBudgetRepository(
+        impl: BudgetRepositoryImpl
+    ): BudgetRepository
 }

@@ -159,4 +159,10 @@ object DatabaseModule {
     fun provideUserDao(database: AppDatabase): UserDao {
         return database.userDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideBudgetDao(database: AppDatabase): BudgetDao {
+        return database.budgetDao()
+    }
 }

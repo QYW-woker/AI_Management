@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.core.database.entity.ModuleType
+import com.lifemanager.app.domain.model.MonthlyBudgetAnalysis
 import com.lifemanager.app.domain.repository.*
+import com.lifemanager.app.domain.usecase.BudgetUseCase
 import com.lifemanager.app.feature.datacenter.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +43,13 @@ data class OverviewStats(
     val completedGoals: Int = 0,
     val avgGoalProgress: Float = 0f,
     val diaryCount: Int = 0,
-    val avgMoodScore: Float = 0f
+    val avgMoodScore: Float = 0f,
+    // 预算相关
+    val budgetAmount: Double = 0.0,
+    val budgetSpent: Double = 0.0,
+    val budgetRemaining: Double = 0.0,
+    val budgetUsagePercentage: Int = 0,
+    val hasBudget: Boolean = false
 )
 
 /**
@@ -57,7 +65,8 @@ class DataCenterViewModel @Inject constructor(
     private val goalRepository: GoalRepository,
     private val monthlyIncomeExpenseRepository: MonthlyIncomeExpenseRepository,
     private val dailyTransactionRepository: DailyTransactionRepository,
-    private val customFieldRepository: CustomFieldRepository
+    private val customFieldRepository: CustomFieldRepository,
+    private val budgetUseCase: BudgetUseCase
 ) : ViewModel() {
 
     // UI状态
@@ -103,6 +112,14 @@ class DataCenterViewModel @Inject constructor(
     // 生活图表数据
     private val _lifestyleChartData = MutableStateFlow<LifestyleChartData?>(null)
     val lifestyleChartData: StateFlow<LifestyleChartData?> = _lifestyleChartData.asStateFlow()
+
+    // 预算历史分析
+    private val _budgetAnalysis = MutableStateFlow<List<MonthlyBudgetAnalysis>>(emptyList())
+    val budgetAnalysis: StateFlow<List<MonthlyBudgetAnalysis>> = _budgetAnalysis.asStateFlow()
+
+    // 预算AI建议
+    private val _budgetAIAdvice = MutableStateFlow("")
+    val budgetAIAdvice: StateFlow<String> = _budgetAIAdvice.asStateFlow()
 
     init {
         loadCategories()
@@ -207,11 +224,28 @@ class DataCenterViewModel @Inject constructor(
                 loadFinanceDataInternal()
                 loadProductivityData()
                 loadLifestyleData()
+                loadBudgetData()
 
                 _uiState.value = DataCenterUiState.Success
             } catch (e: Exception) {
                 _uiState.value = DataCenterUiState.Error(e.message ?: "加载失败")
             }
+        }
+    }
+
+    /**
+     * 加载预算数据
+     */
+    private suspend fun loadBudgetData() {
+        try {
+            // 加载预算历史分析
+            _budgetAnalysis.value = budgetUseCase.getMonthlyBudgetAnalysis(6)
+
+            // 加载当月预算AI建议
+            val currentYearMonth = LocalDate.now().let { it.year * 100 + it.monthValue }
+            _budgetAIAdvice.value = budgetUseCase.generateAIBudgetAdvice(currentYearMonth)
+        } catch (e: Exception) {
+            // 忽略预算加载错误
         }
     }
 
@@ -476,6 +510,14 @@ class DataCenterViewModel @Inject constructor(
         val totalIncome = monthlyIncomeExpenseRepository.getTotalIncome(yearMonth)
         val totalExpense = monthlyIncomeExpenseRepository.getTotalExpense(yearMonth)
 
+        // 预算统计
+        val budgetWithSpending = budgetUseCase.getBudgetWithSpending(yearMonth).first()
+        val budgetAmount = budgetWithSpending?.budget?.totalBudget ?: 0.0
+        val budgetSpent = budgetWithSpending?.totalSpent ?: 0.0
+        val budgetRemaining = budgetWithSpending?.remaining ?: 0.0
+        val budgetUsagePercentage = budgetWithSpending?.usagePercentage ?: 0
+        val hasBudget = budgetWithSpending != null
+
         return OverviewStats(
             totalIncome = totalIncome,
             totalExpense = totalExpense,
@@ -489,7 +531,12 @@ class DataCenterViewModel @Inject constructor(
             completedGoals = completedGoals,
             avgGoalProgress = avgProgress,
             diaryCount = diaries.size,
-            avgMoodScore = avgMood
+            avgMoodScore = avgMood,
+            budgetAmount = budgetAmount,
+            budgetSpent = budgetSpent,
+            budgetRemaining = budgetRemaining,
+            budgetUsagePercentage = budgetUsagePercentage,
+            hasBudget = hasBudget
         )
     }
 

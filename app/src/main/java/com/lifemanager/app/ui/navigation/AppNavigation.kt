@@ -34,6 +34,7 @@ import com.lifemanager.app.feature.legal.PrivacyPolicyScreen
 import com.lifemanager.app.feature.legal.TermsOfServiceScreen
 import com.lifemanager.app.feature.ai.AISettingsScreen
 import com.lifemanager.app.feature.ai.VoiceInputScreen
+import com.lifemanager.app.feature.budget.BudgetScreen
 import com.lifemanager.app.feature.finance.transaction.billimport.BillImportScreen
 
 /**
@@ -284,6 +285,13 @@ fun AppNavHost(
         // 账单导入
         composable(Screen.BillImport.route) {
             BillImportScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 预算管理
+        composable(Screen.Budget.route) {
+            BudgetScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

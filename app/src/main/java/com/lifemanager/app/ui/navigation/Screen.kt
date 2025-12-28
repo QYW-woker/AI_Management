@@ -42,6 +42,9 @@ sealed class Screen(val route: String) {
     /** 账单导入 */
     object BillImport : Screen("bill_import")
 
+    /** 预算管理 */
+    object Budget : Screen("budget")
+
     // ==================== 详情/编辑页面 ====================
 
     /** 添加收支记录 */

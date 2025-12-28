@@ -109,9 +109,11 @@ class DiaryUseCase @Inject constructor(
         content: String,
         moodScore: Int? = null,
         weather: String? = null,
-        location: String? = null
+        location: String? = null,
+        attachments: List<String> = emptyList()
     ): Long {
         val existing = repository.getByDate(date)
+        val attachmentsJson = convertAttachmentsToJson(attachments)
 
         val diary = if (existing != null) {
             existing.copy(
@@ -119,6 +121,7 @@ class DiaryUseCase @Inject constructor(
                 moodScore = moodScore,
                 weather = weather,
                 location = location,
+                attachments = attachmentsJson,
                 updatedAt = System.currentTimeMillis()
             )
         } else {
@@ -127,11 +130,36 @@ class DiaryUseCase @Inject constructor(
                 content = content,
                 moodScore = moodScore,
                 weather = weather,
-                location = location
+                location = location,
+                attachments = attachmentsJson
             )
         }
 
         return repository.insert(diary)
+    }
+
+    /**
+     * 将附件列表转换为JSON字符串
+     */
+    private fun convertAttachmentsToJson(attachments: List<String>): String {
+        if (attachments.isEmpty()) return "[]"
+        return "[${attachments.joinToString(",") { "\"$it\"" }}]"
+    }
+
+    /**
+     * 解析附件JSON为列表
+     */
+    fun parseAttachments(attachmentsJson: String): List<String> {
+        if (attachmentsJson.isBlank() || attachmentsJson == "[]") return emptyList()
+        return try {
+            attachmentsJson
+                .removeSurrounding("[", "]")
+                .split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotBlank() }
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     /**

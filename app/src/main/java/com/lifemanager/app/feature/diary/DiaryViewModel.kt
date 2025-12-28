@@ -210,7 +210,8 @@ class DiaryViewModel @Inject constructor(
                     content = existing.content,
                     moodScore = existing.moodScore,
                     weather = existing.weather,
-                    location = existing.location
+                    location = existing.location,
+                    attachments = diaryUseCase.parseAttachments(existing.attachments)
                 )
             } else {
                 DiaryEditState(
@@ -251,6 +252,26 @@ class DiaryViewModel @Inject constructor(
     }
 
     /**
+     * 添加附件
+     */
+    fun addAttachment(uri: String) {
+        val currentAttachments = _editState.value.attachments.toMutableList()
+        if (!currentAttachments.contains(uri)) {
+            currentAttachments.add(uri)
+            _editState.value = _editState.value.copy(attachments = currentAttachments)
+        }
+    }
+
+    /**
+     * 移除附件
+     */
+    fun removeAttachment(uri: String) {
+        val currentAttachments = _editState.value.attachments.toMutableList()
+        currentAttachments.remove(uri)
+        _editState.value = _editState.value.copy(attachments = currentAttachments)
+    }
+
+    /**
      * 保存日记
      */
     fun saveDiary() {
@@ -269,7 +290,8 @@ class DiaryViewModel @Inject constructor(
                     content = state.content,
                     moodScore = state.moodScore,
                     weather = state.weather,
-                    location = state.location
+                    location = state.location,
+                    attachments = state.attachments
                 )
 
                 hideEditDialog()

@@ -1,9 +1,13 @@
 package com.lifemanager.app.feature.finance.transaction
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,11 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.domain.model.*
 import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.YearMonth
 import java.util.Locale
 
 /**
@@ -116,28 +123,39 @@ fun DailyTransactionScreen(
                 }
 
                 is TransactionUiState.Success -> {
-                    if (transactionGroups.isEmpty()) {
-                        EmptyState()
+                    if (viewMode == "CALENDAR") {
+                        // 日历视图
+                        CalendarView(
+                            viewModel = viewModel,
+                            transactionGroups = transactionGroups,
+                            onShowEditDialog = { viewModel.showEditDialog(it) },
+                            onShowDeleteConfirm = { viewModel.showDeleteConfirm(it) }
+                        )
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            transactionGroups.forEach { group ->
-                                item(key = "header_${group.date}") {
-                                    DayHeader(group = group)
-                                }
+                        // 列表视图
+                        if (transactionGroups.isEmpty()) {
+                            EmptyState()
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                transactionGroups.forEach { group ->
+                                    item(key = "header_${group.date}") {
+                                        DayHeader(group = group)
+                                    }
 
-                                items(
-                                    items = group.transactions,
-                                    key = { it.transaction.id }
-                                ) { transaction ->
-                                    TransactionItem(
-                                        transaction = transaction,
-                                        onClick = { viewModel.showEditDialog(transaction.transaction.id) },
-                                        onDelete = { viewModel.showDeleteConfirm(transaction.transaction.id) }
-                                    )
+                                    items(
+                                        items = group.transactions,
+                                        key = { it.transaction.id }
+                                    ) { transaction ->
+                                        TransactionItem(
+                                            transaction = transaction,
+                                            onClick = { viewModel.showEditDialog(transaction.transaction.id) },
+                                            onDelete = { viewModel.showDeleteConfirm(transaction.transaction.id) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -430,4 +448,275 @@ private fun parseColor(colorString: String): Color {
     } catch (e: Exception) {
         Color.Gray
     }
+}
+
+/**
+ * 日历视图
+ */
+@Composable
+private fun CalendarView(
+    viewModel: DailyTransactionViewModel,
+    transactionGroups: List<DailyTransactionGroup>,
+    onShowEditDialog: (Long) -> Unit,
+    onShowDeleteConfirm: (Long) -> Unit
+) {
+    val currentYearMonth by viewModel.currentYearMonth.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val calendarData by viewModel.calendarData.collectAsState()
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 月份导航
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { viewModel.previousMonth() }) {
+                Icon(Icons.Filled.ChevronLeft, contentDescription = "上个月")
+            }
+
+            Text(
+                text = viewModel.formatYearMonth(currentYearMonth),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            IconButton(onClick = { viewModel.nextMonth() }) {
+                Icon(Icons.Filled.ChevronRight, contentDescription = "下个月")
+            }
+        }
+
+        // 星期标题
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("日", "一", "二", "三", "四", "五", "六").forEach { day ->
+                Text(
+                    text = day,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 日历网格
+        val calendarDays = remember(currentYearMonth) {
+            generateCalendarDays(currentYearMonth)
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(calendarDays, key = { it.epochDay }) { day ->
+                CalendarDayCell(
+                    day = day,
+                    isSelected = day.epochDay == selectedDate,
+                    expense = calendarData[day.epochDay] ?: 0.0,
+                    onClick = {
+                        if (day.isCurrentMonth) {
+                            viewModel.selectDate(day.epochDay)
+                        }
+                    }
+                )
+            }
+        }
+
+        // 选中日期的交易列表
+        val selectedDayTransactions = remember(selectedDate, transactionGroups) {
+            transactionGroups.find { it.date == selectedDate }?.transactions ?: emptyList()
+        }
+
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Text(
+            text = "选中日期的记录",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium
+        )
+
+        if (selectedDayTransactions.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "当日无记录",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(
+                    items = selectedDayTransactions,
+                    key = { it.transaction.id }
+                ) { transaction ->
+                    TransactionItem(
+                        transaction = transaction,
+                        onClick = { onShowEditDialog(transaction.transaction.id) },
+                        onDelete = { onShowDeleteConfirm(transaction.transaction.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 日历单元格
+ */
+@Composable
+private fun CalendarDayCell(
+    day: CalendarDay,
+    isSelected: Boolean,
+    expense: Double,
+    onClick: () -> Unit
+) {
+    val today = remember { LocalDate.now().toEpochDay().toInt() }
+    val isToday = day.epochDay == today
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    isToday -> MaterialTheme.colorScheme.primaryContainer
+                    else -> Color.Transparent
+                }
+            )
+            .then(
+                if (isToday && !isSelected) {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                } else Modifier
+            )
+            .clickable(enabled = day.isCurrentMonth, onClick = onClick)
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = day.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                    !day.isCurrentMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    isToday -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
+            )
+
+            if (expense > 0 && day.isCurrentMonth) {
+                Text(
+                    text = "¥${if (expense >= 1000) "${(expense / 1000).toInt()}k" else expense.toInt().toString()}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                        else -> Color(0xFFF44336)
+                    },
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 日历日期数据类
+ */
+data class CalendarDay(
+    val epochDay: Int,
+    val dayOfMonth: Int,
+    val isCurrentMonth: Boolean
+)
+
+/**
+ * 生成日历天数
+ */
+private fun generateCalendarDays(yearMonth: Int): List<CalendarDay> {
+    val year = yearMonth / 100
+    val month = yearMonth % 100
+    val ym = YearMonth.of(year, month)
+    val firstDayOfMonth = ym.atDay(1)
+    val lastDayOfMonth = ym.atEndOfMonth()
+
+    val days = mutableListOf<CalendarDay>()
+
+    // 上个月的天数填充
+    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 0 = Sunday
+    if (firstDayOfWeek > 0) {
+        val prevMonth = ym.minusMonths(1)
+        val prevMonthLastDay = prevMonth.atEndOfMonth()
+        for (i in (firstDayOfWeek - 1) downTo 0) {
+            val date = prevMonthLastDay.minusDays(i.toLong())
+            days.add(
+                CalendarDay(
+                    epochDay = date.toEpochDay().toInt(),
+                    dayOfMonth = date.dayOfMonth,
+                    isCurrentMonth = false
+                )
+            )
+        }
+    }
+
+    // 当月天数
+    for (day in 1..lastDayOfMonth.dayOfMonth) {
+        val date = ym.atDay(day)
+        days.add(
+            CalendarDay(
+                epochDay = date.toEpochDay().toInt(),
+                dayOfMonth = day,
+                isCurrentMonth = true
+            )
+        )
+    }
+
+    // 下个月的天数填充（填满6行）
+    val remainingDays = 42 - days.size
+    val nextMonth = ym.plusMonths(1)
+    for (day in 1..remainingDays) {
+        val date = nextMonth.atDay(day)
+        days.add(
+            CalendarDay(
+                epochDay = date.toEpochDay().toInt(),
+                dayOfMonth = day,
+                isCurrentMonth = false
+            )
+        )
+    }
+
+    return days
 }

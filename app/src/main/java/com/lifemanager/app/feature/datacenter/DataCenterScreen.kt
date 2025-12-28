@@ -47,6 +47,10 @@ fun DataCenterScreen(
     val selectedIncomeIds by viewModel.selectedIncomeIds.collectAsState()
     val selectedExpenseIds by viewModel.selectedExpenseIds.collectAsState()
 
+    // 预算数据
+    val budgetAnalysis by viewModel.budgetAnalysis.collectAsState()
+    val budgetAIAdvice by viewModel.budgetAIAdvice.collectAsState()
+
     // Tab配置
     val tabs = listOf("总览", "财务", "效率", "生活")
 
@@ -143,7 +147,9 @@ fun DataCenterScreen(
                             onIncomeSelectionChange = { viewModel.updateIncomeSelection(it) },
                             onExpenseSelectionChange = { viewModel.updateExpenseSelection(it) },
                             chartType = filterState.chartType,
-                            onChartTypeChange = { viewModel.updateChartType(it) }
+                            onChartTypeChange = { viewModel.updateChartType(it) },
+                            budgetAnalysis = budgetAnalysis,
+                            budgetAIAdvice = budgetAIAdvice
                         )
 
                         2 -> ProductivityTab(

@@ -1,9 +1,11 @@
 package com.lifemanager.app.feature.diary
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,10 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.lifemanager.app.core.database.entity.DiaryEntity
 import com.lifemanager.app.domain.model.*
 
@@ -266,6 +272,11 @@ private fun DiaryItem(
     getDayOfWeek: (Int) -> String,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val attachments = remember(diary.attachments) {
+        parseAttachments(diary.attachments)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -298,6 +309,21 @@ private fun DiaryItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 附件数量指示
+                    if (attachments.isNotEmpty()) {
+                        Icon(
+                            imageVector = Icons.Filled.Image,
+                            contentDescription = "有附件",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = attachments.size.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     diary.weather?.let { weather ->
                         Text(
                             text = getWeatherEmoji(weather),
@@ -314,6 +340,58 @@ private fun DiaryItem(
                 }
             }
 
+            // 附件预览
+            if (attachments.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(attachments.take(4), key = { it }) { attachment ->
+                        val isVideo = attachment.contains("video") || attachment.endsWith(".mp4") || attachment.endsWith(".mov")
+                        Box(modifier = Modifier.size(60.dp)) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(Uri.parse(attachment))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "附件",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            if (isVideo) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayCircle,
+                                    contentDescription = "视频",
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(24.dp),
+                                    tint = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                    if (attachments.size > 4) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+${attachments.size - 4}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             // 内容预览
@@ -325,6 +403,22 @@ private fun DiaryItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/**
+ * 解析附件JSON
+ */
+private fun parseAttachments(attachmentsJson: String): List<String> {
+    if (attachmentsJson.isBlank() || attachmentsJson == "[]") return emptyList()
+    return try {
+        attachmentsJson
+            .removeSurrounding("[", "]")
+            .split(",")
+            .map { it.trim().removeSurrounding("\"") }
+            .filter { it.isNotBlank() }
+    } catch (e: Exception) {
+        emptyList()
     }
 }
 

@@ -1,5 +1,9 @@
 package com.lifemanager.app.feature.diary
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,17 +14,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.lifemanager.app.domain.model.moodList
 import com.lifemanager.app.domain.model.weatherList
 
@@ -153,6 +165,22 @@ fun EditDiaryDialog(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // 图片/视频附件
+                    Text(
+                        text = "图片/视频",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    AttachmentSection(
+                        attachments = editState.attachments,
+                        onAddAttachment = { uri -> viewModel.addAttachment(uri) },
+                        onRemoveAttachment = { uri -> viewModel.removeAttachment(uri) }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     // 日记内容
                     Text(
                         text = "日记内容",
@@ -172,6 +200,176 @@ fun EditDiaryDialog(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentSection(
+    attachments: List<String>,
+    onAddAttachment: (String) -> Unit,
+    onRemoveAttachment: (String) -> Unit
+) {
+    val context = LocalContext.current
+
+    // 图片选择器
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 9)
+    ) { uris ->
+        uris.forEach { uri ->
+            // 请求持久化URI权限
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            onAddAttachment(uri.toString())
+        }
+    }
+
+    // 视频选择器
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(
+                it,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            onAddAttachment(it.toString())
+        }
+    }
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // 添加图片按钮
+        item {
+            AddMediaButton(
+                icon = Icons.Filled.Image,
+                label = "图片",
+                onClick = {
+                    imagePickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+            )
+        }
+
+        // 添加视频按钮
+        item {
+            AddMediaButton(
+                icon = Icons.Filled.Videocam,
+                label = "视频",
+                onClick = {
+                    videoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    )
+                }
+            )
+        }
+
+        // 已添加的附件
+        items(attachments, key = { it }) { attachment ->
+            AttachmentItem(
+                uri = attachment,
+                onRemove = { onRemoveAttachment(attachment) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddMediaButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .size(80.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttachmentItem(
+    uri: String,
+    onRemove: () -> Unit
+) {
+    val context = LocalContext.current
+    val isVideo = uri.contains("video") || uri.endsWith(".mp4") || uri.endsWith(".mov")
+
+    Box(
+        modifier = Modifier.size(80.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(Uri.parse(uri))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "附件",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                // 视频标识
+                if (isVideo) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayCircle,
+                        contentDescription = "视频",
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(32.dp),
+                        tint = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+
+        // 删除按钮
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(24.dp)
+                .offset(x = 6.dp, y = (-6).dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.error)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "删除",
+                modifier = Modifier.size(14.dp),
+                tint = Color.White
+            )
         }
     }
 }

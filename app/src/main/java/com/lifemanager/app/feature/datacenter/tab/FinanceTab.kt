@@ -1,5 +1,6 @@
 package com.lifemanager.app.feature.datacenter.tab
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,8 @@ fun FinanceTab(
     onExpenseSelectionChange: (Set<Long>) -> Unit,
     chartType: ChartType,
     onChartTypeChange: (ChartType) -> Unit,
+    budgetAnalysis: List<com.lifemanager.app.domain.model.MonthlyBudgetAnalysis> = emptyList(),
+    budgetAIAdvice: String = "",
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -134,6 +137,20 @@ fun FinanceTab(
             TrendComparisonCard(
                 trendData = financeData?.dailyTrend ?: emptyList()
             )
+        }
+
+        // 预算执行分析
+        if (budgetAnalysis.isNotEmpty()) {
+            item {
+                BudgetAnalysisCard(budgetAnalysis = budgetAnalysis)
+            }
+        }
+
+        // AI预算建议
+        if (budgetAIAdvice.isNotBlank()) {
+            item {
+                AIBudgetAdviceCard(advice = budgetAIAdvice)
+            }
         }
     }
 }
@@ -339,4 +356,188 @@ private fun formatAmount(value: Double): String {
 private fun formatTrendDate(epochDay: Int): String {
     val date = LocalDate.ofEpochDay(epochDay.toLong())
     return date.format(DateTimeFormatter.ofPattern("MM/dd"))
+}
+
+/**
+ * 预算执行分析卡片
+ */
+@Composable
+private fun BudgetAnalysisCard(
+    budgetAnalysis: List<com.lifemanager.app.domain.model.MonthlyBudgetAnalysis>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "预算执行趋势",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // 预算执行柱状图
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                budgetAnalysis.forEach { analysis ->
+                    val maxValue = budgetAnalysis.maxOf { maxOf(it.budgetAmount, it.spentAmount) }
+                    val budgetHeight = if (maxValue > 0) (analysis.budgetAmount / maxValue * 80).toFloat() else 0f
+                    val spentHeight = if (maxValue > 0) (analysis.spentAmount / maxValue * 80).toFloat() else 0f
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        // 柱状图
+                        Row(
+                            modifier = Modifier.height(70.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            // 预算柱
+                            if (analysis.hasBudget) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(10.dp)
+                                        .height(budgetHeight.dp.coerceAtLeast(4.dp))
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                            RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+                                        )
+                                )
+                            }
+                            // 支出柱
+                            Box(
+                                modifier = Modifier
+                                    .width(10.dp)
+                                    .height(spentHeight.dp.coerceAtLeast(4.dp))
+                                    .background(
+                                        when {
+                                            analysis.usagePercentage >= 100 -> Color(0xFFF44336)
+                                            analysis.usagePercentage >= 80 -> Color(0xFFFF9800)
+                                            else -> Color(0xFF4CAF50)
+                                        },
+                                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+                                    )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // 月份标签
+                        Text(
+                            text = analysis.monthLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // 执行率
+                        if (analysis.hasBudget) {
+                            Text(
+                                text = "${analysis.usagePercentage}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = when {
+                                    analysis.usagePercentage >= 100 -> Color(0xFFF44336)
+                                    analysis.usagePercentage >= 80 -> Color(0xFFFF9800)
+                                    else -> Color(0xFF4CAF50)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 图例
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LegendItem(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                    label = "预算"
+                )
+                Spacer(modifier = Modifier.width(24.dp))
+                LegendItem(
+                    color = Color(0xFF4CAF50),
+                    label = "实际支出"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .background(color, RoundedCornerShape(2.dp))
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * AI预算建议卡片
+ */
+@Composable
+private fun AIBudgetAdviceCard(advice: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "AI 预算分析建议",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = advice,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
 }

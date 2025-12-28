@@ -22,6 +22,7 @@ data class DiaryEditState(
     val moodScore: Int? = null,
     val weather: String? = null,
     val location: String? = null,
+    val attachments: List<String> = emptyList(),
     val isSaving: Boolean = false,
     val error: String? = null
 )

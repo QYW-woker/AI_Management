@@ -182,6 +182,12 @@ private fun QuickAccessSection(
             label = "存钱",
             color = Color(0xFF00BCD4),
             route = Screen.SavingsPlan.route
+        ),
+        QuickAccessItem(
+            icon = Icons.Default.AccountBalanceWallet,
+            label = "预算",
+            color = Color(0xFF673AB7),
+            route = Screen.Budget.route
         )
     )
 
