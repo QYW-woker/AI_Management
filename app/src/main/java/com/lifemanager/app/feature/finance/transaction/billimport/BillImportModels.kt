@@ -1,4 +1,4 @@
-package com.lifemanager.app.feature.finance.transaction.import
+package com.lifemanager.app.feature.finance.transaction.billimport
 
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 

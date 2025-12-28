@@ -1,4 +1,4 @@
-package com.lifemanager.app.feature.finance.transaction.import
+package com.lifemanager.app.feature.finance.transaction.billimport
 
 import android.content.Context
 import android.net.Uri

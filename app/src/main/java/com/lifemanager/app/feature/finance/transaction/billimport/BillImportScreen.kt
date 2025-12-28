@@ -1,4 +1,4 @@
-package com.lifemanager.app.feature.finance.transaction.import
+package com.lifemanager.app.feature.finance.transaction.billimport
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
