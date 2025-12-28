@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.dp
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.feature.datacenter.component.CategorySelector
 import com.lifemanager.app.feature.datacenter.component.ChartTypeSelector
+import com.lifemanager.app.feature.datacenter.model.BillQueryItem
 import com.lifemanager.app.feature.datacenter.model.CategoryChartItem
+import com.lifemanager.app.feature.datacenter.model.CategoryRankingItem
 import com.lifemanager.app.feature.datacenter.model.ChartType
 import com.lifemanager.app.feature.datacenter.model.DailyFinanceTrend
 import com.lifemanager.app.feature.datacenter.model.FinanceChartData
@@ -43,6 +45,8 @@ fun FinanceTab(
     onChartTypeChange: (ChartType) -> Unit,
     budgetAnalysis: List<com.lifemanager.app.domain.model.MonthlyBudgetAnalysis> = emptyList(),
     budgetAIAdvice: String = "",
+    billList: List<BillQueryItem> = emptyList(),
+    expenseRanking: List<CategoryRankingItem> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -150,6 +154,20 @@ fun FinanceTab(
         if (budgetAIAdvice.isNotBlank()) {
             item {
                 AIBudgetAdviceCard(advice = budgetAIAdvice)
+            }
+        }
+
+        // 支出分类排名
+        if (expenseRanking.isNotEmpty()) {
+            item {
+                ExpenseRankingCard(ranking = expenseRanking)
+            }
+        }
+
+        // 账单明细列表
+        if (billList.isNotEmpty()) {
+            item {
+                BillListCard(bills = billList)
             }
         }
     }
@@ -539,5 +557,228 @@ private fun AIBudgetAdviceCard(advice: String) {
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+    }
+}
+
+/**
+ * 支出分类排名卡片
+ */
+@Composable
+private fun ExpenseRankingCard(ranking: List<CategoryRankingItem>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.TrendingDown,
+                    contentDescription = null,
+                    tint = Color(0xFFF44336),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "支出分类排名",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            ranking.take(10).forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 排名
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(
+                                when (item.rank) {
+                                    1 -> Color(0xFFFFD700)
+                                    2 -> Color(0xFFC0C0C0)
+                                    3 -> Color(0xFFCD7F32)
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                RoundedCornerShape(4.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${item.rank}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (item.rank <= 3) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 颜色指示
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(item.color, RoundedCornerShape(2.dp))
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 分类名称
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // 金额和百分比
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "¥${formatAmount(item.amount)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF44336)
+                        )
+                        Text(
+                            text = "${String.format("%.1f", item.percentage)}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (item.rank < ranking.size.coerceAtMost(10)) {
+                    Divider(
+                        modifier = Modifier.padding(start = 32.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 账单明细卡片
+ */
+@Composable
+private fun BillListCard(bills: List<BillQueryItem>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.TrendingUp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "账单明细",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "共${bills.size}笔",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            bills.take(20).forEach { bill ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 分类颜色
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(parseColor(bill.categoryColor), RoundedCornerShape(2.dp))
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 分类和备注
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = bill.categoryName,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (bill.note.isNotBlank()) {
+                            Text(
+                                text = bill.note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // 金额和日期
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "${if (bill.type == "INCOME") "+" else "-"}¥${formatAmount(bill.amount)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (bill.type == "INCOME") Color(0xFF4CAF50) else Color(0xFFF44336)
+                        )
+                        Text(
+                            text = formatBillDate(bill.date),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Divider(
+                    modifier = Modifier.padding(start = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
+
+            if (bills.size > 20) {
+                Text(
+                    text = "...还有${bills.size - 20}笔记录",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+private fun formatBillDate(epochDay: Int): String {
+    val date = LocalDate.ofEpochDay(epochDay.toLong())
+    return date.format(DateTimeFormatter.ofPattern("MM-dd"))
+}
+
+private fun parseColor(colorString: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(colorString))
+    } catch (e: Exception) {
+        Color.Gray
     }
 }

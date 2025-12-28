@@ -51,6 +51,15 @@ fun DataCenterScreen(
     val budgetAnalysis by viewModel.budgetAnalysis.collectAsState()
     val budgetAIAdvice by viewModel.budgetAIAdvice.collectAsState()
 
+    // 资产趋势数据
+    val assetTrendData by viewModel.assetTrendData.collectAsState()
+
+    // 账单列表
+    val billList by viewModel.billList.collectAsState()
+
+    // 支出排名
+    val expenseRanking by viewModel.expenseRanking.collectAsState()
+
     // Tab配置
     val tabs = listOf("总览", "财务", "效率", "生活")
 
@@ -135,7 +144,8 @@ fun DataCenterScreen(
                             overviewStats = overviewStats,
                             financeData = financeChartData,
                             productivityData = productivityChartData,
-                            lifestyleData = lifestyleChartData
+                            lifestyleData = lifestyleChartData,
+                            assetTrendData = assetTrendData
                         )
 
                         1 -> FinanceTab(
@@ -149,7 +159,9 @@ fun DataCenterScreen(
                             chartType = filterState.chartType,
                             onChartTypeChange = { viewModel.updateChartType(it) },
                             budgetAnalysis = budgetAnalysis,
-                            budgetAIAdvice = budgetAIAdvice
+                            budgetAIAdvice = budgetAIAdvice,
+                            billList = billList,
+                            expenseRanking = expenseRanking
                         )
 
                         2 -> ProductivityTab(

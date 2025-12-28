@@ -66,7 +66,8 @@ class DataCenterViewModel @Inject constructor(
     private val monthlyIncomeExpenseRepository: MonthlyIncomeExpenseRepository,
     private val dailyTransactionRepository: DailyTransactionRepository,
     private val customFieldRepository: CustomFieldRepository,
-    private val budgetUseCase: BudgetUseCase
+    private val budgetUseCase: BudgetUseCase,
+    private val monthlyAssetRepository: MonthlyAssetRepository
 ) : ViewModel() {
 
     // UI状态
@@ -120,6 +121,18 @@ class DataCenterViewModel @Inject constructor(
     // 预算AI建议
     private val _budgetAIAdvice = MutableStateFlow("")
     val budgetAIAdvice: StateFlow<String> = _budgetAIAdvice.asStateFlow()
+
+    // 资产趋势数据
+    private val _assetTrendData = MutableStateFlow<AssetTrendData?>(null)
+    val assetTrendData: StateFlow<AssetTrendData?> = _assetTrendData.asStateFlow()
+
+    // 账单列表
+    private val _billList = MutableStateFlow<List<BillQueryItem>>(emptyList())
+    val billList: StateFlow<List<BillQueryItem>> = _billList.asStateFlow()
+
+    // 支出分类排名
+    private val _expenseRanking = MutableStateFlow<List<CategoryRankingItem>>(emptyList())
+    val expenseRanking: StateFlow<List<CategoryRankingItem>> = _expenseRanking.asStateFlow()
 
     init {
         loadCategories()
@@ -225,6 +238,9 @@ class DataCenterViewModel @Inject constructor(
                 loadProductivityData()
                 loadLifestyleData()
                 loadBudgetData()
+                loadAssetTrendData()
+                loadBillList()
+                loadExpenseRanking()
 
                 _uiState.value = DataCenterUiState.Success
             } catch (e: Exception) {
@@ -634,6 +650,139 @@ class DataCenterViewModel @Inject constructor(
             2 -> Color(0xFFFF9800)
             1 -> Color(0xFFF44336)
             else -> Color.Gray
+        }
+    }
+
+    /**
+     * 加载资产趋势数据
+     */
+    private suspend fun loadAssetTrendData() {
+        try {
+            val today = LocalDate.now()
+            val endMonth = today.year * 100 + today.monthValue
+            // 获取最近12个月的数据
+            val startMonth = today.minusMonths(11).let { it.year * 100 + it.monthValue }
+
+            val netWorthTrend = monthlyAssetRepository.getNetWorthTrend(startMonth, endMonth).first()
+
+            val trendPoints = mutableListOf<AssetTrendPoint>()
+
+            // 为每个月获取资产和负债数据
+            for (month in generateMonthRange(startMonth, endMonth)) {
+                val totalAssets = monthlyAssetRepository.getTotalAssets(month)
+                val totalLiabilities = monthlyAssetRepository.getTotalLiabilities(month)
+                val netWorth = totalAssets - totalLiabilities
+
+                if (totalAssets > 0 || totalLiabilities > 0) {
+                    trendPoints.add(
+                        AssetTrendPoint(
+                            yearMonth = month,
+                            totalAssets = totalAssets,
+                            totalLiabilities = totalLiabilities,
+                            netWorth = netWorth
+                        )
+                    )
+                }
+            }
+
+            // 计算变化
+            val latestNetWorth = trendPoints.lastOrNull()?.netWorth ?: 0.0
+            val previousNetWorth = if (trendPoints.size >= 2) trendPoints[trendPoints.size - 2].netWorth else 0.0
+            val netWorthChange = latestNetWorth - previousNetWorth
+            val netWorthChangePercentage = if (previousNetWorth != 0.0) {
+                ((netWorthChange / previousNetWorth) * 100).toFloat()
+            } else 0f
+
+            _assetTrendData.value = AssetTrendData(
+                trendPoints = trendPoints,
+                latestNetWorth = latestNetWorth,
+                netWorthChange = netWorthChange,
+                netWorthChangePercentage = netWorthChangePercentage
+            )
+        } catch (e: Exception) {
+            // 忽略资产趋势加载错误
+        }
+    }
+
+    /**
+     * 生成月份范围
+     */
+    private fun generateMonthRange(startMonth: Int, endMonth: Int): List<Int> {
+        val months = mutableListOf<Int>()
+        var current = startMonth
+        while (current <= endMonth) {
+            months.add(current)
+            val year = current / 100
+            val month = current % 100
+            if (month == 12) {
+                current = (year + 1) * 100 + 1
+            } else {
+                current = year * 100 + month + 1
+            }
+        }
+        return months
+    }
+
+    /**
+     * 加载账单列表
+     */
+    private suspend fun loadBillList() {
+        try {
+            val (startDate, endDate) = getDateRange()
+            val transactions = dailyTransactionRepository.getByDateRange(startDate, endDate).first()
+
+            val categoryMap = (_incomeCategories.value + _expenseCategories.value).associateBy { it.id }
+
+            _billList.value = transactions.map { tx ->
+                val category = tx.fieldId?.let { categoryMap[it] }
+                BillQueryItem(
+                    id = tx.id,
+                    date = tx.date,
+                    type = tx.type,
+                    amount = tx.amount,
+                    categoryName = category?.name ?: "未分类",
+                    categoryColor = category?.color ?: "#808080",
+                    note = tx.note
+                )
+            }.sortedByDescending { it.date }
+        } catch (e: Exception) {
+            // 忽略账单列表加载错误
+        }
+    }
+
+    /**
+     * 加载支出分类排名
+     */
+    private suspend fun loadExpenseRanking() {
+        try {
+            val (startDate, endDate) = getDateRange()
+
+            val expenseTotals = dailyTransactionRepository
+                .getCategoryTotalsInRange(startDate, endDate, "EXPENSE")
+                .first()
+
+            val categoryMap = _expenseCategories.value.associateBy { it.id }
+            val totalExpense = expenseTotals.sumOf { it.total }
+
+            _expenseRanking.value = expenseTotals
+                .mapNotNull { total ->
+                    val fieldId = total.fieldId ?: return@mapNotNull null
+                    val category = categoryMap[fieldId] ?: return@mapNotNull null
+                    CategoryRankingItem(
+                        fieldId = fieldId,
+                        name = category.name,
+                        amount = total.total,
+                        percentage = if (totalExpense > 0) (total.total / totalExpense * 100).toFloat() else 0f,
+                        color = parseHexColor(category.color),
+                        rank = 0 // 临时值，下面会更新
+                    )
+                }
+                .sortedByDescending { it.amount }
+                .mapIndexed { index, item ->
+                    item.copy(rank = index + 1)
+                }
+        } catch (e: Exception) {
+            // 忽略支出排名加载错误
         }
     }
 }

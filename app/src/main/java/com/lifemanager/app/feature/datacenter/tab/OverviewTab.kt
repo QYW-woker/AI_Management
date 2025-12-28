@@ -18,11 +18,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lifemanager.app.feature.datacenter.DataCenterViewModel
 import com.lifemanager.app.feature.datacenter.OverviewStats
+import com.lifemanager.app.feature.datacenter.model.AssetTrendData
 import com.lifemanager.app.feature.datacenter.model.FinanceChartData
 import com.lifemanager.app.feature.datacenter.model.LifestyleChartData
 import com.lifemanager.app.feature.datacenter.model.ProductivityChartData
 import com.lifemanager.app.ui.component.charts.IncomeExpenseComparisonBar
 import com.lifemanager.app.ui.component.charts.ProgressRingWithLabel
+import com.lifemanager.app.ui.component.charts.TrendLineChart
+import com.lifemanager.app.ui.component.charts.LineChartSeries
 
 /**
  * 总览标签页
@@ -35,6 +38,7 @@ fun OverviewTab(
     financeData: FinanceChartData?,
     productivityData: ProductivityChartData?,
     lifestyleData: LifestyleChartData?,
+    assetTrendData: AssetTrendData? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -45,6 +49,11 @@ fun OverviewTab(
         // 数据总览卡片
         item {
             OverviewSummaryCard(stats = overviewStats)
+        }
+
+        // 资产趋势图
+        item {
+            AssetTrendCard(assetTrendData = assetTrendData)
         }
 
         // 财务概览
@@ -366,4 +375,127 @@ private fun getMoodColor(mood: Float): Color {
         mood > 0 -> Color(0xFFF44336)
         else -> Color.Gray
     }
+}
+
+/**
+ * 资产趋势卡片
+ */
+@Composable
+private fun AssetTrendCard(assetTrendData: AssetTrendData?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "资产趋势",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            assetTrendData?.let { data ->
+                if (data.trendPoints.isEmpty()) {
+                    EmptyDataHint()
+                } else {
+                    // 净资产变化摘要
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "当前净资产",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "¥${formatNumber(data.latestNetWorth)}",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (data.latestNetWorth >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
+                            )
+                        }
+
+                        // 变化指示
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "较上月",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (data.netWorthChange >= 0) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                                    contentDescription = null,
+                                    tint = if (data.netWorthChange >= 0) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${if (data.netWorthChange >= 0) "+" else ""}${formatNumber(data.netWorthChange)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (data.netWorthChange >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
+                                )
+                                Text(
+                                    text = " (${String.format("%+.1f", data.netWorthChangePercentage)}%)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (data.netWorthChange >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
+                                )
+                            }
+                        }
+                    }
+
+                    // 趋势图
+                    val netWorthValues = data.trendPoints.map { it.netWorth.toFloat() }
+                    val assetValues = data.trendPoints.map { it.totalAssets.toFloat() }
+                    val liabilityValues = data.trendPoints.map { it.totalLiabilities.toFloat() }
+                    val labels = data.trendPoints.map { formatYearMonth(it.yearMonth) }
+
+                    TrendLineChart(
+                        series = listOf(
+                            LineChartSeries(
+                                label = "净资产",
+                                values = netWorthValues,
+                                color = Color(0xFF2196F3)
+                            ),
+                            LineChartSeries(
+                                label = "总资产",
+                                values = assetValues,
+                                color = Color(0xFF4CAF50)
+                            ),
+                            LineChartSeries(
+                                label = "总负债",
+                                values = liabilityValues,
+                                color = Color(0xFFF44336)
+                            )
+                        ),
+                        xLabels = labels,
+                        showLegend = true
+                    )
+                }
+            } ?: EmptyDataHint()
+        }
+    }
+}
+
+private fun formatYearMonth(yearMonth: Int): String {
+    val year = yearMonth / 100
+    val month = yearMonth % 100
+    return "${month}月"
 }

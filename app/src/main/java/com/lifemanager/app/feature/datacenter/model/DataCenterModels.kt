@@ -201,3 +201,48 @@ data class LifestyleChartData(
     val diaryStats: DiaryChartData = DiaryChartData(),
     val savingsStats: SavingsChartData = SavingsChartData()
 )
+
+/**
+ * 资产趋势数据点
+ */
+data class AssetTrendPoint(
+    val yearMonth: Int,
+    val totalAssets: Double,
+    val totalLiabilities: Double,
+    val netWorth: Double
+)
+
+/**
+ * 资产趋势数据
+ */
+data class AssetTrendData(
+    val trendPoints: List<AssetTrendPoint> = emptyList(),
+    val latestNetWorth: Double = 0.0,
+    val netWorthChange: Double = 0.0,
+    val netWorthChangePercentage: Float = 0f
+)
+
+/**
+ * 账单查询项
+ */
+data class BillQueryItem(
+    val id: Long,
+    val date: Int,
+    val type: String,
+    val amount: Double,
+    val categoryName: String,
+    val categoryColor: String,
+    val note: String
+)
+
+/**
+ * 分类排名项
+ */
+data class CategoryRankingItem(
+    val fieldId: Long,
+    val name: String,
+    val amount: Double,
+    val percentage: Float,
+    val color: Color,
+    val rank: Int
+)
