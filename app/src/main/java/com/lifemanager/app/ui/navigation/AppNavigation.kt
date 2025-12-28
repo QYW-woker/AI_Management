@@ -34,6 +34,7 @@ import com.lifemanager.app.feature.legal.PrivacyPolicyScreen
 import com.lifemanager.app.feature.legal.TermsOfServiceScreen
 import com.lifemanager.app.feature.ai.AISettingsScreen
 import com.lifemanager.app.feature.ai.VoiceInputScreen
+import com.lifemanager.app.feature.finance.transaction.import.BillImportScreen
 
 /**
  * 窗口尺寸类型
@@ -274,6 +275,14 @@ fun AppNavHost(
         // 日常记账
         composable(Screen.DailyTransaction.route) {
             DailyTransactionScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToImport = { navController.navigate(Screen.BillImport.route) }
+            )
+        }
+
+        // 账单导入
+        composable(Screen.BillImport.route) {
+            BillImportScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

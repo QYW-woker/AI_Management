@@ -39,6 +39,9 @@ sealed class Screen(val route: String) {
     /** 日常记账 */
     object DailyTransaction : Screen("daily_transaction")
 
+    /** 账单导入 */
+    object BillImport : Screen("bill_import")
+
     // ==================== 详情/编辑页面 ====================
 
     /** 添加收支记录 */

@@ -7,16 +7,18 @@ import com.lifemanager.app.core.database.entity.*
  *
  * 包含应用初始化时需要插入的所有预设类别
  * 这些预设项不可删除，但可以禁用
+ *
+ * 分类参考微信/支付宝常见分类
  */
 object PresetData {
 
     /**
-     * 收入类别预设
+     * 收入类别预设（参考微信/支付宝）
      */
     val incomeFields = listOf(
         CustomFieldEntity(
             moduleType = ModuleType.INCOME,
-            name = "工资收入",
+            name = "工资薪酬",
             iconName = "work",
             color = "#4CAF50",
             tagType = TagType.OTHER,
@@ -25,11 +27,20 @@ object PresetData {
         ),
         CustomFieldEntity(
             moduleType = ModuleType.INCOME,
-            name = "副业收入",
-            iconName = "business_center",
+            name = "奖金补贴",
+            iconName = "emoji_events",
             color = "#8BC34A",
             tagType = TagType.OTHER,
             sortOrder = 2,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.INCOME,
+            name = "兼职外快",
+            iconName = "business_center",
+            color = "#CDDC39",
+            tagType = TagType.OTHER,
+            sortOrder = 3,
             isPreset = true
         ),
         CustomFieldEntity(
@@ -38,25 +49,52 @@ object PresetData {
             iconName = "trending_up",
             color = "#FF9800",
             tagType = TagType.INVESTMENT,
-            sortOrder = 3,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.INCOME,
-            name = "奖金",
-            iconName = "emoji_events",
-            color = "#FFC107",
-            tagType = TagType.OTHER,
             sortOrder = 4,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.INCOME,
-            name = "红包礼金",
+            name = "生意收入",
+            iconName = "store",
+            color = "#2196F3",
+            tagType = TagType.OTHER,
+            sortOrder = 5,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.INCOME,
+            name = "红包收入",
             iconName = "card_giftcard",
             color = "#E91E63",
             tagType = TagType.OTHER,
-            sortOrder = 5,
+            sortOrder = 6,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.INCOME,
+            name = "转账收入",
+            iconName = "swap_horiz",
+            color = "#9C27B0",
+            tagType = TagType.OTHER,
+            sortOrder = 7,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.INCOME,
+            name = "退款退货",
+            iconName = "replay",
+            color = "#00BCD4",
+            tagType = TagType.OTHER,
+            sortOrder = 8,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.INCOME,
+            name = "报销款项",
+            iconName = "receipt",
+            color = "#3F51B5",
+            tagType = TagType.OTHER,
+            sortOrder = 9,
             isPreset = true
         ),
         CustomFieldEntity(
@@ -71,61 +109,152 @@ object PresetData {
     )
 
     /**
-     * 支出类别预设（收入的去向）
+     * 支出类别预设（参考微信/支付宝常见消费分类）
      */
     val expenseFields = listOf(
+        // 日常消费
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "存款",
-            iconName = "savings",
-            color = "#2196F3",
-            tagType = TagType.SAVINGS,
+            name = "餐饮美食",
+            iconName = "restaurant",
+            color = "#FF5722",
+            tagType = TagType.CONSUMPTION,
             sortOrder = 1,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "养老金",
-            iconName = "elderly",
-            color = "#3F51B5",
-            tagType = TagType.SAVINGS,
+            name = "交通出行",
+            iconName = "directions_car",
+            color = "#2196F3",
+            tagType = TagType.CONSUMPTION,
             sortOrder = 2,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "股票",
-            iconName = "show_chart",
-            color = "#E91E63",
-            tagType = TagType.INVESTMENT,
+            name = "日常购物",
+            iconName = "shopping_bag",
+            color = "#9C27B0",
+            tagType = TagType.CONSUMPTION,
             sortOrder = 3,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "基金",
-            iconName = "pie_chart",
-            color = "#9C27B0",
-            tagType = TagType.INVESTMENT,
+            name = "服饰美容",
+            iconName = "checkroom",
+            color = "#E91E63",
+            tagType = TagType.CONSUMPTION,
             sortOrder = 4,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "日常支出",
-            iconName = "shopping_cart",
-            color = "#FF5722",
+            name = "生活服务",
+            iconName = "home_repair_service",
+            color = "#00BCD4",
             tagType = TagType.CONSUMPTION,
             sortOrder = 5,
             isPreset = true
         ),
         CustomFieldEntity(
             moduleType = ModuleType.EXPENSE,
-            name = "大额支出",
-            iconName = "credit_card",
-            color = "#795548",
+            name = "医疗健康",
+            iconName = "local_hospital",
+            color = "#4CAF50",
             tagType = TagType.CONSUMPTION,
             sortOrder = 6,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "文化娱乐",
+            iconName = "sports_esports",
+            color = "#673AB7",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 7,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "教育培训",
+            iconName = "school",
+            color = "#3F51B5",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 8,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "人情往来",
+            iconName = "card_giftcard",
+            color = "#F44336",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 9,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "通讯服务",
+            iconName = "wifi",
+            color = "#009688",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 10,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "住房支出",
+            iconName = "home",
+            color = "#795548",
+            tagType = TagType.FIXED,
+            sortOrder = 11,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "金融保险",
+            iconName = "account_balance",
+            color = "#607D8B",
+            tagType = TagType.OTHER,
+            sortOrder = 12,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "宠物",
+            iconName = "pets",
+            color = "#FF9800",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 13,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "数码电子",
+            iconName = "devices",
+            color = "#1976D2",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 14,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "转账支出",
+            iconName = "swap_horiz",
+            color = "#8BC34A",
+            tagType = TagType.OTHER,
+            sortOrder = 15,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.EXPENSE,
+            name = "其他支出",
+            iconName = "more_horiz",
+            color = "#9E9E9E",
+            tagType = TagType.CONSUMPTION,
+            sortOrder = 99,
             isPreset = true
         )
     )

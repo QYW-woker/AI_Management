@@ -30,6 +30,7 @@ import java.util.Locale
 @Composable
 fun DailyTransactionScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToImport: () -> Unit = {},
     viewModel: DailyTransactionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,6 +51,13 @@ fun DailyTransactionScreen(
                     }
                 },
                 actions = {
+                    // 导入账单按钮
+                    IconButton(onClick = onNavigateToImport) {
+                        Icon(
+                            imageVector = Icons.Filled.FileUpload,
+                            contentDescription = "导入账单"
+                        )
+                    }
                     IconButton(onClick = { viewModel.toggleViewMode() }) {
                         Icon(
                             imageVector = if (viewMode == "LIST") Icons.Filled.CalendarMonth else Icons.Filled.List,
