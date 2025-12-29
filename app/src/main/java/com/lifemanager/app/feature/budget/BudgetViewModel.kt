@@ -2,6 +2,9 @@ package com.lifemanager.app.feature.budget
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifemanager.app.core.database.dao.CustomFieldDao
+import com.lifemanager.app.core.database.dao.DailyTransactionDao
+import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.usecase.BudgetUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,7 +18,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
-    private val budgetUseCase: BudgetUseCase
+    private val budgetUseCase: BudgetUseCase,
+    private val customFieldDao: CustomFieldDao,
+    private val dailyTransactionDao: DailyTransactionDao
 ) : ViewModel() {
 
     // UI状态
@@ -48,9 +53,22 @@ class BudgetViewModel @Inject constructor(
     private val _editState = MutableStateFlow(BudgetEditState())
     val editState: StateFlow<BudgetEditState> = _editState.asStateFlow()
 
+    // 支出分类列表
+    private val _expenseCategories = MutableStateFlow<List<CustomFieldEntity>>(emptyList())
+    val expenseCategories: StateFlow<List<CustomFieldEntity>> = _expenseCategories.asStateFlow()
+
+    // 分类预算状态列表（带实际支出）
+    private val _categoryBudgetStatuses = MutableStateFlow<List<CategoryBudgetItem>>(emptyList())
+    val categoryBudgetStatuses: StateFlow<List<CategoryBudgetItem>> = _categoryBudgetStatuses.asStateFlow()
+
+    // 是否显示添加分类预算对话框
+    private val _showAddCategoryBudgetDialog = MutableStateFlow(false)
+    val showAddCategoryBudgetDialog: StateFlow<Boolean> = _showAddCategoryBudgetDialog.asStateFlow()
+
     init {
         loadData()
         observeBudget()
+        loadExpenseCategories()
     }
 
     /**
@@ -75,6 +93,18 @@ class BudgetViewModel @Inject constructor(
     }
 
     /**
+     * 加载支出分类
+     */
+    private fun loadExpenseCategories() {
+        viewModelScope.launch {
+            customFieldDao.getFieldsByModuleType("EXPENSE_CATEGORY")
+                .collectLatest { categories ->
+                    _expenseCategories.value = categories
+                }
+        }
+    }
+
+    /**
      * 观察当前月份预算
      */
     private fun observeBudget() {
@@ -88,7 +118,45 @@ class BudgetViewModel @Inject constructor(
                 if (_uiState.value is BudgetUiState.Loading) {
                     _uiState.value = BudgetUiState.Success
                 }
+                // 更新分类预算状态
+                updateCategoryBudgetStatuses(budget)
             }
+        }
+    }
+
+    /**
+     * 更新分类预算状态
+     */
+    private fun updateCategoryBudgetStatuses(budget: BudgetWithSpending?) {
+        viewModelScope.launch {
+            val yearMonth = _currentYearMonth.value
+            val year = yearMonth / 100
+            val month = yearMonth % 100
+            val ym = YearMonth.of(year, month)
+            val startDate = ym.atDay(1).toEpochDay().toInt()
+            val endDate = ym.atEndOfMonth().toEpochDay().toInt()
+
+            val categoryBudgets = budget?.categoryBudgets ?: emptyMap()
+            val categories = _expenseCategories.value
+
+            val statuses = categories.mapNotNull { category ->
+                val budgetAmount = categoryBudgets[category.name]
+                if (budgetAmount != null && budgetAmount > 0) {
+                    // 获取该分类的实际支出
+                    val spentAmount = dailyTransactionDao.getTotalByCategoryInRange(
+                        startDate, endDate, category.id
+                    )
+                    CategoryBudgetItem(
+                        categoryId = category.id,
+                        categoryName = category.name,
+                        categoryColor = category.color ?: "#2196F3",
+                        budgetAmount = budgetAmount.toString(),
+                        spentAmount = spentAmount
+                    )
+                } else null
+            }
+
+            _categoryBudgetStatuses.value = statuses
         }
     }
 
@@ -151,24 +219,43 @@ class BudgetViewModel @Inject constructor(
     fun showEditDialog() {
         val current = _budgetWithSpending.value
 
-        _editState.value = if (current != null) {
-            BudgetEditState(
-                yearMonth = current.budget.yearMonth,
-                totalBudget = current.budget.totalBudget.toString(),
-                alertThreshold = current.budget.alertThreshold,
-                alertEnabled = current.budget.alertEnabled,
-                note = current.budget.note,
-                isEditing = true
-            )
-        } else {
-            BudgetEditState(
-                yearMonth = _currentYearMonth.value,
-                totalBudget = "",
-                alertThreshold = 80,
-                alertEnabled = true
-            )
+        viewModelScope.launch {
+            // 加载现有分类预算
+            val categoryBudgetItems = if (current != null) {
+                current.categoryBudgets.map { (name, amount) ->
+                    val category = _expenseCategories.value.find { it.name == name }
+                    CategoryBudgetItem(
+                        categoryId = category?.id ?: 0,
+                        categoryName = name,
+                        categoryColor = category?.color ?: "#2196F3",
+                        budgetAmount = amount.toString()
+                    )
+                }
+            } else {
+                emptyList()
+            }
+
+            _editState.value = if (current != null) {
+                BudgetEditState(
+                    yearMonth = current.budget.yearMonth,
+                    totalBudget = current.budget.totalBudget.toString(),
+                    alertThreshold = current.budget.alertThreshold,
+                    alertEnabled = current.budget.alertEnabled,
+                    note = current.budget.note,
+                    isEditing = true,
+                    categoryBudgets = categoryBudgetItems
+                )
+            } else {
+                BudgetEditState(
+                    yearMonth = _currentYearMonth.value,
+                    totalBudget = "",
+                    alertThreshold = 80,
+                    alertEnabled = true,
+                    categoryBudgets = emptyList()
+                )
+            }
+            _showEditDialog.value = true
         }
-        _showEditDialog.value = true
     }
 
     /**
@@ -208,6 +295,71 @@ class BudgetViewModel @Inject constructor(
     }
 
     /**
+     * 添加分类预算
+     */
+    fun addCategoryBudget(categoryId: Long, categoryName: String, categoryColor: String, amount: String) {
+        val current = _editState.value
+        val existing = current.categoryBudgets.find { it.categoryId == categoryId }
+
+        val updatedList = if (existing != null) {
+            current.categoryBudgets.map {
+                if (it.categoryId == categoryId) it.copy(budgetAmount = amount) else it
+            }
+        } else {
+            current.categoryBudgets + CategoryBudgetItem(
+                categoryId = categoryId,
+                categoryName = categoryName,
+                categoryColor = categoryColor,
+                budgetAmount = amount
+            )
+        }
+
+        _editState.value = current.copy(categoryBudgets = updatedList)
+    }
+
+    /**
+     * 更新分类预算金额
+     */
+    fun updateCategoryBudgetAmount(categoryId: Long, amount: String) {
+        val current = _editState.value
+        val updatedList = current.categoryBudgets.map {
+            if (it.categoryId == categoryId) it.copy(budgetAmount = amount) else it
+        }
+        _editState.value = current.copy(categoryBudgets = updatedList)
+    }
+
+    /**
+     * 删除分类预算
+     */
+    fun removeCategoryBudget(categoryId: Long) {
+        val current = _editState.value
+        val updatedList = current.categoryBudgets.filter { it.categoryId != categoryId }
+        _editState.value = current.copy(categoryBudgets = updatedList)
+    }
+
+    /**
+     * 显示添加分类预算对话框
+     */
+    fun showAddCategoryBudgetDialog() {
+        _showAddCategoryBudgetDialog.value = true
+    }
+
+    /**
+     * 隐藏添加分类预算对话框
+     */
+    fun hideAddCategoryBudgetDialog() {
+        _showAddCategoryBudgetDialog.value = false
+    }
+
+    /**
+     * 获取未添加预算的分类
+     */
+    fun getAvailableCategories(): List<CustomFieldEntity> {
+        val existingCategoryIds = _editState.value.categoryBudgets.map { it.categoryId }.toSet()
+        return _expenseCategories.value.filter { it.id !in existingCategoryIds }
+    }
+
+    /**
      * 保存预算
      */
     fun saveBudget() {
@@ -219,6 +371,11 @@ class BudgetViewModel @Inject constructor(
             return
         }
 
+        // 构建分类预算Map
+        val categoryBudgets = state.categoryBudgets
+            .filter { it.budgetAmount.toDoubleOrNull() != null && it.budgetAmount.toDoubleOrNull()!! > 0 }
+            .associate { it.categoryName to it.budgetAmount.toDouble() }
+
         viewModelScope.launch {
             try {
                 _editState.value = state.copy(isSaving = true, error = null)
@@ -226,6 +383,7 @@ class BudgetViewModel @Inject constructor(
                 budgetUseCase.setBudget(
                     yearMonth = state.yearMonth.takeIf { it > 0 } ?: _currentYearMonth.value,
                     totalBudget = amount,
+                    categoryBudgets = categoryBudgets,
                     alertThreshold = state.alertThreshold,
                     alertEnabled = state.alertEnabled,
                     note = state.note

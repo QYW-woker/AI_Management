@@ -40,6 +40,7 @@ import com.lifemanager.app.feature.finance.transaction.billimport.BillImportScre
 import com.lifemanager.app.feature.finance.accounting.AccountingMainScreen
 import com.lifemanager.app.feature.finance.accounting.AccountingCalendarScreen
 import com.lifemanager.app.feature.finance.accounting.AccountingSearchScreen
+import com.lifemanager.app.feature.finance.ledger.LedgerManagementScreen
 
 /**
  * 窗口尺寸类型
@@ -333,9 +334,11 @@ fun AppNavHost(
             )
         }
 
-        // 账本管理（占位）
+        // 账本管理
         composable(Screen.LedgerManagement.route) {
-            PlaceholderScreen(title = "账本管理")
+            LedgerManagementScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         // 周期记账（占位）

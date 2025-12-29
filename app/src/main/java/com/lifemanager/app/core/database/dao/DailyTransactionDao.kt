@@ -162,6 +162,17 @@ interface DailyTransactionDao {
         GROUP BY date
     """)
     fun getDailyIncomeExpenseTotals(startDate: Int, endDate: Int): Flow<List<DailyIncomeExpense>>
+
+    /**
+     * 获取指定日期范围内指定分类的支出总额
+     */
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0.0) FROM daily_transactions
+        WHERE date BETWEEN :startDate AND :endDate
+        AND categoryId = :categoryId
+        AND type = 'EXPENSE'
+    """)
+    suspend fun getTotalByCategoryInRange(startDate: Int, endDate: Int, categoryId: Long): Double
 }
 
 /**

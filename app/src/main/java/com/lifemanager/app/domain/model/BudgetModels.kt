@@ -82,8 +82,40 @@ data class BudgetEditState(
     val note: String = "",
     val isEditing: Boolean = false,
     val isSaving: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // 分类预算列表
+    val categoryBudgets: List<CategoryBudgetItem> = emptyList()
 )
+
+/**
+ * 分类预算项（用于编辑）
+ */
+data class CategoryBudgetItem(
+    val categoryId: Long,
+    val categoryName: String,
+    val categoryColor: String = "#2196F3",
+    val budgetAmount: String = "",
+    val spentAmount: Double = 0.0
+) {
+    val remaining: Double
+        get() {
+            val budget = budgetAmount.toDoubleOrNull() ?: 0.0
+            return budget - spentAmount
+        }
+
+    val usagePercentage: Int
+        get() {
+            val budget = budgetAmount.toDoubleOrNull() ?: 0.0
+            return if (budget > 0) ((spentAmount / budget) * 100).toInt() else 0
+        }
+
+    val status: BudgetStatus
+        get() = when {
+            usagePercentage >= 100 -> BudgetStatus.EXCEEDED
+            usagePercentage >= 80 -> BudgetStatus.WARNING
+            else -> BudgetStatus.NORMAL
+        }
+}
 
 /**
  * 预算图表数据点

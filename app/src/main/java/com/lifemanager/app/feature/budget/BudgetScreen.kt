@@ -5,8 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,11 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.domain.model.*
 import java.text.NumberFormat
 import java.util.Locale
@@ -39,6 +44,7 @@ fun BudgetScreen(
     val monthlyAnalysis by viewModel.monthlyAnalysis.collectAsState()
     val aiAdvice by viewModel.aiAdvice.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
+    val categoryBudgetStatuses by viewModel.categoryBudgetStatuses.collectAsState()
 
     Scaffold(
         topBar = {
@@ -123,6 +129,16 @@ fun BudgetScreen(
                     if (budgetWithSpending != null) {
                         item {
                             SpendingProgressCard(budgetWithSpending = budgetWithSpending!!)
+                        }
+                    }
+
+                    // 分类预算卡片
+                    if (categoryBudgetStatuses.isNotEmpty()) {
+                        item {
+                            CategoryBudgetsCard(
+                                categoryBudgets = categoryBudgetStatuses,
+                                onEditBudgets = { viewModel.showEditDialog() }
+                            )
                         }
                     }
 
@@ -407,10 +423,112 @@ private fun SpendingProgressCard(budgetWithSpending: BudgetWithSpending) {
     }
 }
 
+/**
+ * 分类预算卡片
+ */
 @Composable
-private fun BudgetTrendCard(monthlyAnalysis: List<MonthlyBudgetAnalysis>) {
+private fun CategoryBudgetsCard(
+    categoryBudgets: List<CategoryBudgetItem>,
+    onEditBudgets: () -> Unit
+) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "分类预算",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onEditBudgets) {
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("编辑")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            categoryBudgets.forEach { budget ->
+                CategoryBudgetProgressItem(
+                    budget = budget,
+                    numberFormat = numberFormat
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryBudgetProgressItem(
+    budget: CategoryBudgetItem,
+    numberFormat: NumberFormat
+) {
+    val budgetAmount = budget.budgetAmount.toDoubleOrNull() ?: 0.0
+    val progress = if (budgetAmount > 0) (budget.spentAmount / budgetAmount).coerceIn(0.0, 1.0).toFloat() else 0f
+
+    val progressColor = when (budget.status) {
+        BudgetStatus.NORMAL -> Color(0xFF4CAF50)
+        BudgetStatus.WARNING -> Color(0xFFFF9800)
+        BudgetStatus.EXCEEDED -> Color(0xFFF44336)
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(parseColor(budget.categoryColor))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = budget.categoryName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Text(
+                text = "¥${numberFormat.format(budget.spentAmount)} / ¥${numberFormat.format(budgetAmount)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun BudgetTrendCard(monthlyAnalysis: List<MonthlyBudgetAnalysis>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp)
@@ -569,6 +687,8 @@ private fun EditBudgetDialog(
     onDismiss: () -> Unit
 ) {
     val editState by viewModel.editState.collectAsState()
+    val expenseCategories by viewModel.expenseCategories.collectAsState()
+    val showAddCategoryDialog by viewModel.showAddCategoryBudgetDialog.collectAsState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -576,7 +696,10 @@ private fun EditBudgetDialog(
             Text(text = if (editState.isEditing) "编辑预算" else "设置预算")
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 // 错误提示
                 editState.error?.let { error ->
                     Text(
@@ -590,11 +713,63 @@ private fun EditBudgetDialog(
                 OutlinedTextField(
                     value = editState.totalBudget,
                     onValueChange = { viewModel.updateBudgetAmount(it) },
-                    label = { Text("月度预算金额") },
+                    label = { Text("月度预算总额") },
                     prefix = { Text("¥") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // 分类预算区域
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "分类预算",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(
+                                onClick = { viewModel.showAddCategoryBudgetDialog() },
+                                enabled = viewModel.getAvailableCategories().isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("添加")
+                            }
+                        }
+
+                        if (editState.categoryBudgets.isEmpty()) {
+                            Text(
+                                text = "暂无分类预算，点击添加按钮设置",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            editState.categoryBudgets.forEach { categoryBudget ->
+                                CategoryBudgetEditItem(
+                                    categoryBudget = categoryBudget,
+                                    onAmountChange = { amount ->
+                                        viewModel.updateCategoryBudgetAmount(categoryBudget.categoryId, amount)
+                                    },
+                                    onRemove = {
+                                        viewModel.removeCategoryBudget(categoryBudget.categoryId)
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }
 
                 // 提醒阈值
                 Column {
@@ -654,4 +829,145 @@ private fun EditBudgetDialog(
             }
         }
     )
+
+    // 添加分类预算对话框
+    if (showAddCategoryDialog) {
+        AddCategoryBudgetDialog(
+            availableCategories = viewModel.getAvailableCategories(),
+            onAdd = { category, amount ->
+                viewModel.addCategoryBudget(
+                    categoryId = category.id,
+                    categoryName = category.name,
+                    categoryColor = category.color ?: "#2196F3",
+                    amount = amount
+                )
+                viewModel.hideAddCategoryBudgetDialog()
+            },
+            onDismiss = { viewModel.hideAddCategoryBudgetDialog() }
+        )
+    }
+}
+
+@Composable
+private fun CategoryBudgetEditItem(
+    categoryBudget: CategoryBudgetItem,
+    onAmountChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(parseColor(categoryBudget.categoryColor))
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = categoryBudget.categoryName,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        OutlinedTextField(
+            value = categoryBudget.budgetAmount,
+            onValueChange = onAmountChange,
+            modifier = Modifier.width(100.dp),
+            prefix = { Text("¥", style = MaterialTheme.typography.bodySmall) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodySmall
+        )
+        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "删除",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddCategoryBudgetDialog(
+    availableCategories: List<CustomFieldEntity>,
+    onAdd: (CustomFieldEntity, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf<CustomFieldEntity?>(null) }
+    var amount by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加分类预算") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = "选择分类",
+                    style = MaterialTheme.typography.labelMedium
+                )
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(availableCategories) { category ->
+                        val isSelected = selectedCategory?.id == category.id
+                        if (isSelected) {
+                            Button(
+                                onClick = { selectedCategory = category },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(category.name)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { selectedCategory = category },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(category.name)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("预算金额") },
+                    prefix = { Text("¥") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    selectedCategory?.let { category ->
+                        if (amount.isNotBlank()) {
+                            onAdd(category, amount)
+                        }
+                    }
+                },
+                enabled = selectedCategory != null && amount.isNotBlank()
+            ) {
+                Text("添加")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+private fun parseColor(colorString: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(colorString))
+    } catch (e: Exception) {
+        Color(0xFF2196F3)
+    }
 }
