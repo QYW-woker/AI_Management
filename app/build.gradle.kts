@@ -49,8 +49,8 @@ android {
     }
 
     compileOptions {
-        // 启用Java 8 Time API desugaring，确保在所有Android版本上兼容
-        isCoreLibraryDesugaringEnabled = true
+        // 暂时禁用 Core Library Desugaring 以解决 jlink 兼容性问题
+        isCoreLibraryDesugaringEnabled = false
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
