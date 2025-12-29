@@ -1,6 +1,8 @@
 package com.lifemanager.app.feature.habit
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,7 +17,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -169,55 +177,148 @@ fun HabitScreen(
 
 @Composable
 private fun HabitStatsCard(stats: HabitStats) {
+    val progress = if (stats.todayTotal > 0) stats.todayCompleted.toFloat() / stats.todayTotal else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        label = "progress"
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = Color(0xFFEC4899).copy(alpha = 0.25f)
+            ),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFEC4899),
+                            Color(0xFF8B5CF6)
+                        )
+                    )
+                )
+                .padding(24.dp)
         ) {
-            // 今日进度
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "今日完成",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // 进度环
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(100.dp)
+                ) {
+                    Canvas(modifier = Modifier.size(100.dp)) {
+                        val strokeWidth = 10.dp.toPx()
+                        val radius = (size.minDimension - strokeWidth) / 2
+                        val center = Offset(size.width / 2, size.height / 2)
+
+                        // 背景圆环
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.3f),
+                            radius = radius,
+                            center = center,
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        )
+
+                        // 进度圆环
+                        drawArc(
+                            color = Color.White,
+                            startAngle = -90f,
+                            sweepAngle = animatedProgress * 360f,
+                            useCenter = false,
+                            topLeft = Offset(center.x - radius, center.y - radius),
+                            size = Size(radius * 2, radius * 2),
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${(animatedProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                // 统计数据
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HabitStatItem(
+                        icon = Icons.Default.CheckCircle,
+                        label = "今日完成",
+                        value = "${stats.todayCompleted}/${stats.todayTotal}",
+                        color = Color(0xFF4ADE80)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${stats.todayCompleted}/${stats.todayTotal}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    HabitStatItem(
+                        icon = Icons.Default.LocalFireDepartment,
+                        label = "最长连续",
+                        value = "${stats.longestStreak}天",
+                        color = Color(0xFFFBBF24)
+                    )
+                    HabitStatItem(
+                        icon = Icons.Default.Verified,
+                        label = "活跃习惯",
+                        value = "${stats.todayTotal}个",
+                        color = Color(0xFF60A5FA)
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 进度条
-            LinearProgressIndicator(
-                progress = if (stats.todayTotal > 0) stats.todayCompleted.toFloat() / stats.todayTotal else 0f,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+@Composable
+private fun HabitStatItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    color: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp)
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 完成率
+        }
+        Column {
             Text(
-                text = String.format("完成率 %.1f%%", stats.todayCompletionRate),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.8f)
             )
         }
     }
@@ -236,21 +337,30 @@ private fun HabitItem(
     val habitColor = try {
         Color(android.graphics.Color.parseColor(habit.color))
     } catch (e: Exception) {
-        MaterialTheme.colorScheme.primary
+        Color(0xFF8B5CF6)
     }
 
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isChecked) habitColor.copy(alpha = 0.1f)
-        else MaterialTheme.colorScheme.surfaceVariant,
-        label = "bgColor"
+    val scale by animateFloatAsState(
+        targetValue = if (isChecked) 1f else 0.95f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scale"
     )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = if (isChecked) 6.dp else 2.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = habitColor.copy(alpha = 0.2f)
+            )
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isChecked)
+                habitColor.copy(alpha = 0.08f)
+            else MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -258,21 +368,43 @@ private fun HabitItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 打卡按钮
+            // 打卡按钮 - 更大更明显
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(56.dp)
+                    .shadow(
+                        elevation = if (isChecked) 4.dp else 0.dp,
+                        shape = CircleShape,
+                        spotColor = habitColor
+                    )
                     .clip(CircleShape)
-                    .background(if (isChecked) habitColor else habitColor.copy(alpha = 0.3f))
+                    .background(
+                        brush = if (isChecked)
+                            Brush.linearGradient(
+                                colors = listOf(habitColor, habitColor.copy(alpha = 0.8f))
+                            )
+                        else Brush.linearGradient(
+                            colors = listOf(habitColor.copy(alpha = 0.15f), habitColor.copy(alpha = 0.1f))
+                        )
+                    )
                     .clickable(onClick = onCheckIn),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Add,
-                    contentDescription = if (isChecked) "已打卡" else "打卡",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+                AnimatedContent(
+                    targetState = isChecked,
+                    transitionSpec = {
+                        scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) togetherWith
+                                scaleOut()
+                    },
+                    label = "checkIcon"
+                ) { checked ->
+                    Icon(
+                        imageVector = if (checked) Icons.Filled.Check else Icons.Filled.Add,
+                        contentDescription = if (checked) "已打卡" else "打卡",
+                        tint = if (checked) Color.White else habitColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -282,51 +414,91 @@ private fun HabitItem(
                 Text(
                     text = habit.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isChecked) habitColor else MaterialTheme.colorScheme.onSurface
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = getFrequencyDisplayText(habit.frequency, habit.targetTimes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // 频率标签
+                    Surface(
+                        color = habitColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = getFrequencyDisplayText(habit.frequency, habit.targetTimes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = habitColor,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
 
+                    // 连续天数 - 火焰样式
                     if (habitWithStatus.streak > 0) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(4.dp)
+                            color = Color(0xFFFEF3C7),
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Text(
-                                text = "连续${habitWithStatus.streak}天",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "${habitWithStatus.streak}天",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFD97706),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
 
                 if (habit.isNumeric && habit.targetValue != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "目标: ${habit.targetValue?.toInt() ?: 0} ${habit.unit}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Flag,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "${habit.targetValue?.toInt() ?: 0} ${habit.unit}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
-            // 操作按钮
-            IconButton(onClick = onDelete) {
+            // 删除按钮
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
+                    imageVector = Icons.Default.DeleteOutline,
                     contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }

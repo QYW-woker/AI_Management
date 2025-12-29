@@ -1,10 +1,12 @@
 package com.lifemanager.app.feature.todo
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -165,49 +170,130 @@ fun TodoScreen(
 
 @Composable
 private fun StatisticsCard(statistics: TodoStatistics) {
+    val completionRate = if (statistics.todayTotal > 0)
+        statistics.todayCompleted.toFloat() / statistics.todayTotal else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = completionRate,
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "progress"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp)
+            .padding(horizontal = 16.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFFF59E0B).copy(alpha = 0.25f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFF59E0B),
+                            Color(0xFFEF4444)
+                        )
+                    )
+                )
+                .padding(20.dp)
         ) {
-            StatItem(
-                label = "待完成",
-                value = statistics.totalPending.toString(),
-                color = MaterialTheme.colorScheme.primary
-            )
-            StatItem(
-                label = "今日",
-                value = "${statistics.todayCompleted}/${statistics.todayTotal}",
-                color = Color(0xFF4CAF50)
-            )
+            Column {
+                Text(
+                    text = "任务概览",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatItem(
+                        icon = Icons.Default.Assignment,
+                        label = "待完成",
+                        value = statistics.totalPending.toString(),
+                        color = Color(0xFFFCD34D)
+                    )
+                    StatItem(
+                        icon = Icons.Default.CheckCircle,
+                        label = "今日完成",
+                        value = "${statistics.todayCompleted}/${statistics.todayTotal}",
+                        color = Color(0xFF4ADE80)
+                    )
+                    StatItem(
+                        icon = Icons.Default.TrendingUp,
+                        label = "完成率",
+                        value = "${(completionRate * 100).toInt()}%",
+                        color = Color(0xFF60A5FA)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 进度条
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color.White.copy(alpha = 0.3f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(animatedProgress)
+                            .background(Color.White, RoundedCornerShape(3.dp))
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun StatItem(
+    icon: ImageVector,
     label: String,
     value: String,
     color: Color
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = color
+            color = Color.White
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.8f)
         )
     }
 }
@@ -217,37 +303,63 @@ private fun FilterBar(
     currentFilter: TodoFilter,
     onFilterChange: (TodoFilter) -> Unit
 ) {
-    val filters = listOf(
-        TodoFilter.ALL to "全部",
-        TodoFilter.TODAY to "今日",
-        TodoFilter.UPCOMING to "计划",
-        TodoFilter.OVERDUE to "逾期",
-        TodoFilter.COMPLETED to "已完成"
+    data class FilterItem(
+        val filter: TodoFilter,
+        val label: String,
+        val icon: ImageVector,
+        val color: Color
     )
 
-    Row(
+    val filters = remember {
+        listOf(
+            FilterItem(TodoFilter.ALL, "全部", Icons.Default.ViewList, Color(0xFF6366F1)),
+            FilterItem(TodoFilter.TODAY, "今日", Icons.Default.Today, Color(0xFF10B981)),
+            FilterItem(TodoFilter.UPCOMING, "计划", Icons.Default.Event, Color(0xFF3B82F6)),
+            FilterItem(TodoFilter.OVERDUE, "逾期", Icons.Default.Warning, Color(0xFFEF4444)),
+            FilterItem(TodoFilter.COMPLETED, "完成", Icons.Default.Done, Color(0xFF8B5CF6))
+        )
+    }
+
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        filters.forEach { (filter, label) ->
-            val isSelected = currentFilter == filter
-            if (isSelected) {
-                Button(
-                    onClick = { },
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+        items(filters, key = { it.filter }) { item ->
+            val isSelected = currentFilter == item.filter
+            val backgroundColor by animateColorAsState(
+                targetValue = if (isSelected) item.color else item.color.copy(alpha = 0.1f),
+                label = "bgColor"
+            )
+            val contentColor by animateColorAsState(
+                targetValue = if (isSelected) Color.White else item.color,
+                label = "contentColor"
+            )
+
+            Surface(
+                onClick = { onFilterChange(item.filter) },
+                shape = RoundedCornerShape(12.dp),
+                color = backgroundColor,
+                modifier = Modifier.height(36.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(label, style = MaterialTheme.typography.labelMedium)
-                }
-            } else {
-                OutlinedButton(
-                    onClick = { onFilterChange(filter) },
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                ) {
-                    Text(label, style = MaterialTheme.typography.labelMedium)
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = contentColor
+                    )
                 }
             }
         }
@@ -458,41 +570,60 @@ private fun TodoItem(
 ) {
     val isCompleted = todo.status == TodoStatus.COMPLETED
     val priorityColor = when (todo.priority) {
-        Priority.HIGH -> Color(0xFFF44336)
-        Priority.MEDIUM -> Color(0xFFFF9800)
-        Priority.LOW -> Color(0xFF4CAF50)
-        else -> Color.Transparent
+        Priority.HIGH -> Color(0xFFEF4444)
+        Priority.MEDIUM -> Color(0xFFF59E0B)
+        Priority.LOW -> Color(0xFF10B981)
+        else -> MaterialTheme.colorScheme.outline
     }
+
+    val cardBackground by animateColorAsState(
+        targetValue = if (isCompleted)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else MaterialTheme.colorScheme.surface,
+        label = "cardBg"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = if (isCompleted) 0.dp else 2.dp,
+                shape = RoundedCornerShape(16.dp),
+                spotColor = priorityColor.copy(alpha = 0.15f)
+            )
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBackground)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 复选框
-            Checkbox(
-                checked = isCompleted,
-                onCheckedChange = { onToggleComplete() }
-            )
-
-            // 优先级指示条
-            if (priorityColor != Color.Transparent) {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(priorityColor)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+            // 自定义复选框
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isCompleted) priorityColor
+                        else priorityColor.copy(alpha = 0.15f)
+                    )
+                    .clickable(onClick = onToggleComplete),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCompleted) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.width(14.dp))
 
             // 标题和描述
             Column(modifier = Modifier.weight(1f)) {
@@ -501,10 +632,12 @@ private fun TodoItem(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     else MaterialTheme.colorScheme.onSurface
                 )
+
                 if (todo.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = todo.description,
                         style = MaterialTheme.typography.bodySmall,
@@ -513,36 +646,55 @@ private fun TodoItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+
                 todo.dueDate?.let { date ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Schedule,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = if (isOverdue) Color(0xFFF44336)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = formatDueDate(date),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isOverdue) Color(0xFFF44336)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = if (isOverdue) Color(0xFFEF4444).copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isOverdue) Icons.Default.Warning else Icons.Filled.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = if (isOverdue) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = formatDueDate(date),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isOverdue) Color(0xFFEF4444) else MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
+            }
+
+            // 优先级徽章
+            if (todo.priority != Priority.NONE) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(priorityColor, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
             }
 
             // 删除按钮
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
+                    imageVector = Icons.Default.DeleteOutline,
                     contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp)
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

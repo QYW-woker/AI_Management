@@ -1,140 +1,260 @@
 package com.lifemanager.app.feature.home
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.lifemanager.app.ui.component.card.StatCard
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.ui.navigation.Screen
-import com.lifemanager.app.ui.theme.AppColors
+import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
- * 首页屏幕
- *
- * 展示今日概览和快捷入口
- *
- * @param onNavigateToModule 导航到指定模块的回调
+ * 首页屏幕 - 现代化设计
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onNavigateToModule: (String) -> Unit
+    onNavigateToModule: (String) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
+    val isLoading by viewModel.isLoading.collectAsState()
+    val todayStats by viewModel.todayStats.collectAsState()
+    val monthlyFinance by viewModel.monthlyFinance.collectAsState()
+    val topGoals by viewModel.topGoals.collectAsState()
+
+    val today = remember { LocalDate.now() }
+    val greeting = remember {
+        when (java.time.LocalTime.now().hour) {
+            in 5..11 -> "早上好"
+            in 12..13 -> "中午好"
+            in 14..17 -> "下午好"
+            else -> "晚上好"
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "AI生活管家",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = greeting,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${today.monthValue}月${today.dayOfMonth}日 ${today.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.CHINA)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
                 actions = {
+                    IconButton(onClick = { onNavigateToModule(Screen.AIAssistant.route) }) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = "AI助手",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { onNavigateToModule(Screen.Settings.route) }) {
                         Icon(Icons.Default.Settings, contentDescription = "设置")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 今日概览卡片
-            item {
-                TodayOverviewSection()
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
             }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // 今日概览卡片
+                item(key = "today_overview") {
+                    TodayOverviewCard(todayStats = todayStats)
+                }
 
-            // 快捷功能入口
-            item {
-                QuickAccessSection(onNavigateToModule = onNavigateToModule)
-            }
+                // 快捷功能入口
+                item(key = "quick_access") {
+                    QuickAccessSection(onNavigateToModule = onNavigateToModule)
+                }
 
-            // 本月财务概览
-            item {
-                MonthlyFinanceSection(onNavigateToModule = onNavigateToModule)
-            }
+                // 本月财务概览
+                item(key = "monthly_finance") {
+                    MonthlyFinanceCard(
+                        finance = monthlyFinance,
+                        onClick = { onNavigateToModule(Screen.AccountingMain.route) }
+                    )
+                }
 
-            // 目标进度
-            item {
-                GoalProgressSection(onNavigateToModule = onNavigateToModule)
-            }
+                // 目标进度
+                if (topGoals.isNotEmpty()) {
+                    item(key = "goals") {
+                        GoalProgressSection(
+                            goals = topGoals,
+                            onClick = { onNavigateToModule(Screen.Goal.route) }
+                        )
+                    }
+                }
 
-            // AI建议卡片
-            item {
-                AISuggestionCard(onNavigateToAI = { onNavigateToModule(Screen.AIAssistant.route) })
+                // AI建议卡片
+                item(key = "ai_card") {
+                    AIAssistantCard(onClick = { onNavigateToModule(Screen.AIAssistant.route) })
+                }
+
+                // 底部间距
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
     }
 }
 
 /**
- * 今日概览部分
+ * 今日概览卡片
  */
 @Composable
-private fun TodayOverviewSection() {
-    Column {
-        Text(
-            text = "今日概览",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+private fun TodayOverviewCard(todayStats: TodayStatsData) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = Color(0xFF6366F1).copy(alpha = 0.25f)
+            ),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF6366F1),
+                            Color(0xFF8B5CF6)
+                        )
+                    )
+                )
+                .padding(20.dp)
         ) {
-            item {
-                StatCard(
-                    title = "待办完成",
-                    value = "3/5",
-                    icon = Icons.Default.CheckCircle,
-                    modifier = Modifier.width(140.dp)
+            Column {
+                Text(
+                    text = "今日概览",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
                 )
-            }
-            item {
-                StatCard(
-                    title = "今日消费",
-                    value = "¥126",
-                    valueColor = AppColors.Expense,
-                    icon = Icons.Default.ShoppingCart,
-                    modifier = Modifier.width(140.dp)
-                )
-            }
-            item {
-                StatCard(
-                    title = "专注时长",
-                    value = "2h 30m",
-                    icon = Icons.Default.Timer,
-                    modifier = Modifier.width(140.dp)
-                )
-            }
-            item {
-                StatCard(
-                    title = "习惯打卡",
-                    value = "4/6",
-                    icon = Icons.Default.Verified,
-                    modifier = Modifier.width(140.dp)
-                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    TodayStatItem(
+                        icon = Icons.Default.CheckCircle,
+                        label = "待办",
+                        value = "${todayStats.completedTodos}/${todayStats.totalTodos}",
+                        color = Color(0xFF4ADE80)
+                    )
+                    TodayStatItem(
+                        icon = Icons.Default.ShoppingCart,
+                        label = "消费",
+                        value = "¥${numberFormat.format(todayStats.todayExpense.toInt())}",
+                        color = Color(0xFFFBBF24)
+                    )
+                    TodayStatItem(
+                        icon = Icons.Default.Verified,
+                        label = "习惯",
+                        value = "${todayStats.completedHabits}/${todayStats.totalHabits}",
+                        color = Color(0xFF60A5FA)
+                    )
+                }
             }
         }
+    }
+}
+
+/**
+ * 今日统计项
+ */
+@Composable
+private fun TodayStatItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .background(
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.8f)
+        )
     }
 }
 
@@ -142,60 +262,19 @@ private fun TodayOverviewSection() {
  * 快捷功能入口
  */
 @Composable
-private fun QuickAccessSection(
-    onNavigateToModule: (String) -> Unit
-) {
-    // 快捷功能列表
-    val quickAccessItems = listOf(
-        QuickAccessItem(
-            icon = Icons.Default.AutoAwesome,
-            label = "AI助手",
-            color = Color(0xFF2196F3),
-            route = Screen.AIAssistant.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.AccountBalance,
-            label = "记账",
-            color = AppColors.Primary,
-            route = Screen.AccountingMain.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.Assignment,
-            label = "待办",
-            color = AppColors.Secondary,
-            route = Screen.Todo.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.Schedule,
-            label = "计时",
-            color = AppColors.Tertiary,
-            route = Screen.TimeTrack.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.CheckCircle,
-            label = "打卡",
-            color = Color(0xFF9C27B0),
-            route = Screen.Habit.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.Book,
-            label = "日记",
-            color = Color(0xFFE91E63),
-            route = Screen.Diary.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.Savings,
-            label = "存钱",
-            color = Color(0xFF00BCD4),
-            route = Screen.SavingsPlan.route
-        ),
-        QuickAccessItem(
-            icon = Icons.Default.AccountBalanceWallet,
-            label = "预算",
-            color = Color(0xFF673AB7),
-            route = Screen.Budget.route
+private fun QuickAccessSection(onNavigateToModule: (String) -> Unit) {
+    val quickAccessItems = remember {
+        listOf(
+            QuickAccessItem(Icons.Default.AutoAwesome, "AI助手", Color(0xFF3B82F6), Screen.AIAssistant.route),
+            QuickAccessItem(Icons.Default.AccountBalance, "记账", Color(0xFF10B981), Screen.AccountingMain.route),
+            QuickAccessItem(Icons.Default.Assignment, "待办", Color(0xFFF59E0B), Screen.Todo.route),
+            QuickAccessItem(Icons.Default.Flag, "目标", Color(0xFF8B5CF6), Screen.Goal.route),
+            QuickAccessItem(Icons.Default.CheckCircle, "打卡", Color(0xFFEC4899), Screen.Habit.route),
+            QuickAccessItem(Icons.Default.Book, "日记", Color(0xFFEF4444), Screen.Diary.route),
+            QuickAccessItem(Icons.Default.Savings, "存钱", Color(0xFF06B6D4), Screen.SavingsPlan.route),
+            QuickAccessItem(Icons.Default.PieChart, "预算", Color(0xFF6366F1), Screen.Budget.route)
         )
-    )
+    }
 
     Column {
         Text(
@@ -206,11 +285,10 @@ private fun QuickAccessSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            quickAccessItems.forEach { item ->
+            items(quickAccessItems, key = { it.route }) { item ->
                 QuickAccessButton(
                     item = item,
                     onClick = { onNavigateToModule(item.route) }
@@ -231,13 +309,14 @@ private fun QuickAccessButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(8.dp)
     ) {
         Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = item.color.copy(alpha = 0.1f),
-            modifier = Modifier.size(48.dp)
+            shape = RoundedCornerShape(16.dp),
+            color = item.color.copy(alpha = 0.12f),
+            modifier = Modifier.size(56.dp)
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -247,45 +326,154 @@ private fun QuickAccessButton(
                     imageVector = item.icon,
                     contentDescription = item.label,
                     tint = item.color,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = item.label,
-            style = MaterialTheme.typography.labelSmall
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
 /**
- * 本月财务概览
+ * 本月财务卡片
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MonthlyFinanceSection(
-    onNavigateToModule: (String) -> Unit
+private fun MonthlyFinanceCard(
+    finance: MonthlyFinanceData,
+    onClick: () -> Unit
 ) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+    val today = remember { LocalDate.now() }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { onNavigateToModule(Screen.AccountingMain.route) }
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "本月财务",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${today.monthValue}月财务",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "查看详情",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                FinanceStatItem(
+                    label = "收入",
+                    value = "¥${numberFormat.format(finance.totalIncome.toLong())}",
+                    color = Color(0xFF4CAF50)
+                )
+                FinanceStatItem(
+                    label = "支出",
+                    value = "¥${numberFormat.format(finance.totalExpense.toLong())}",
+                    color = Color(0xFFF44336)
+                )
+                FinanceStatItem(
+                    label = "结余",
+                    value = "¥${numberFormat.format(finance.balance.toLong())}",
+                    color = if (finance.balance >= 0) MaterialTheme.colorScheme.primary else Color(0xFFF44336)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinanceStatItem(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            color = color,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/**
+ * 目标进度部分
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GoalProgressSection(
+    goals: List<GoalProgressData>,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Flag,
+                        contentDescription = null,
+                        tint = Color(0xFF8B5CF6),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "目标进度",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "查看详情",
@@ -295,107 +483,16 @@ private fun MonthlyFinanceSection(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // 收入
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "收入",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "¥15,000",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = AppColors.Income,
-                        fontWeight = FontWeight.Bold
-                    )
+            goals.forEachIndexed { index, goal ->
+                if (index > 0) {
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-
-                // 支出
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "支出",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "¥8,500",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = AppColors.Expense,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // 结余
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "结余",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "¥6,500",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = AppColors.Primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 目标进度
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GoalProgressSection(
-    onNavigateToModule: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = { onNavigateToModule(Screen.Goal.route) }
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "目标进度",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "查看详情",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                GoalProgressItem(
+                    title = goal.title,
+                    progress = goal.progress,
+                    progressText = goal.progressText
                 )
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 示例目标进度
-            GoalProgressItem(
-                title = "存款10万元",
-                progress = 0.65f,
-                progressText = "¥65,000 / ¥100,000"
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            GoalProgressItem(
-                title = "阅读12本书",
-                progress = 0.5f,
-                progressText = "6 / 12本"
-            )
         }
     }
 }
@@ -409,6 +506,12 @@ private fun GoalProgressItem(
     progress: Float,
     progressText: String
 ) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "progress"
+    )
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -416,7 +519,8 @@ private fun GoalProgressItem(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
             )
             Text(
                 text = progressText,
@@ -425,45 +529,80 @@ private fun GoalProgressItem(
             )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        LinearProgressIndicator(
-            progress = progress,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp),
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(animatedProgress)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF8B5CF6),
+                                Color(0xFFA855F7)
+                            )
+                        ),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+            )
+        }
     }
 }
 
 /**
- * AI建议卡片
+ * AI助手卡片
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AISuggestionCard(
-    onNavigateToAI: () -> Unit
-) {
+private fun AIAssistantCard(onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = Color(0xFF3B82F6).copy(alpha = 0.2f)
+            ),
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        onClick = onNavigateToAI
+            containerColor = Color(0xFF3B82F6).copy(alpha = 0.08f)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = "AI建议",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF3B82F6),
+                                Color(0xFF8B5CF6)
+                            )
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -472,16 +611,16 @@ private fun AISuggestionCard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "点击使用语音或文字命令，快速记账、添加待办、查询数据等",
+                    text = "语音或文字命令，快速记账、添加待办、查询数据",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "进入",
-                tint = MaterialTheme.colorScheme.primary
+                tint = Color(0xFF3B82F6)
             )
         }
     }
