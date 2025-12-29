@@ -42,6 +42,17 @@ interface AIService {
     ): Result<Long?>
 
     /**
+     * 使用AI视觉模型识别图片内容（支付截图/小票等）
+     * @param imageBase64 图片的Base64编码
+     * @param categories 可用的分类列表
+     * @return 解析后的支付信息
+     */
+    suspend fun recognizeImagePayment(
+        imageBase64: String,
+        categories: List<CustomFieldEntity> = emptyList()
+    ): Result<PaymentInfo>
+
+    /**
      * 解析支付截图文本
      * @param ocrText OCR识别的文本
      * @return 解析后的支付信息

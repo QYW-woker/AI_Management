@@ -22,6 +22,7 @@ import com.lifemanager.app.core.database.entity.*
         // 目标管理
         GoalEntity::class,
         GoalMilestoneEntity::class,
+        GoalRecordEntity::class,
         // 财务模块
         MonthlyIncomeExpenseEntity::class,
         MonthlyAssetEntity::class,
@@ -42,7 +43,7 @@ import com.lifemanager.app.core.database.entity.*
         SavingsPlanEntity::class,
         SavingsRecordEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -64,6 +65,11 @@ abstract class AppDatabase : RoomDatabase() {
      * 目标里程碑DAO
      */
     abstract fun goalMilestoneDao(): GoalMilestoneDao
+
+    /**
+     * 目标记录DAO
+     */
+    abstract fun goalRecordDao(): GoalRecordDao
 
     /**
      * 月度收支DAO

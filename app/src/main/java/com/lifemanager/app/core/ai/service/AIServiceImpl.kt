@@ -2,9 +2,7 @@ package com.lifemanager.app.core.ai.service
 
 import com.google.gson.Gson
 import com.lifemanager.app.core.ai.model.*
-import com.lifemanager.app.core.ai.service.api.ChatMessage
-import com.lifemanager.app.core.ai.service.api.ChatRequest
-import com.lifemanager.app.core.ai.service.api.DeepSeekApi
+import com.lifemanager.app.core.ai.service.api.*
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.data.repository.AIConfigRepository
 import kotlinx.coroutines.Dispatchers
@@ -195,6 +193,85 @@ $categoryList
         }
     }
 
+    /**
+     * 使用AI视觉模型识别图片内容
+     */
+    override suspend fun recognizeImagePayment(
+        imageBase64: String,
+        categories: List<CustomFieldEntity>
+    ): Result<PaymentInfo> = withContext(Dispatchers.IO) {
+        try {
+            val config = configRepository.getConfig()
+            if (!config.isConfigured) {
+                return@withContext Result.failure(Exception("API Key未配置"))
+            }
+
+            val categoryNames = if (categories.isNotEmpty()) {
+                categories.map { it.name }.joinToString("、")
+            } else {
+                "餐饮、购物、交通、娱乐、日用、通讯、医疗、教育、其他"
+            }
+
+            val prompt = """
+请仔细识别这张图片中的支付/消费信息。这可能是：
+- 支付宝/微信支付截图
+- 银行转账截图
+- 购物小票/发票
+- 外卖订单截图
+- 其他消费凭证
+
+请提取以下信息并返回JSON格式：
+{
+  "amount": 金额数字（必须是数字，如123.45）,
+  "type": "expense"（支出）或"income"（收入）,
+  "payee": "商家/收款方名称",
+  "category": "从以下分类中选择最匹配的：$categoryNames",
+  "paymentMethod": "支付方式（支付宝/微信/银行卡/现金等）",
+  "note": "简短描述（如：午餐、打车费等）",
+  "date": "日期（如有，格式YYYY-MM-DD）"
+}
+
+注意：
+1. 金额必须是准确的数字，不要包含货币符号
+2. 如果是转账给个人，payee填写对方姓名或昵称
+3. 如果无法识别某个字段，该字段填null
+4. 只返回JSON，不要其他文字
+""".trimIndent()
+
+            // 构建多模态消息内容
+            val contentParts = listOf(
+                mapOf("type" to "text", "text" to prompt),
+                mapOf(
+                    "type" to "image_url",
+                    "image_url" to mapOf(
+                        "url" to "data:image/jpeg;base64,$imageBase64",
+                        "detail" to "high"
+                    )
+                )
+            )
+
+            val request = ChatRequest(
+                model = "deepseek-chat",  // 使用支持视觉的模型
+                messages = listOf(ChatMessage("user", contentParts)),
+                temperature = 0.1,
+                maxTokens = 500
+            )
+
+            val response = api.chatCompletion(
+                authorization = "Bearer ${config.apiKey}",
+                request = request
+            )
+
+            val content = response.choices?.firstOrNull()?.message?.content as? String
+                ?: return@withContext Result.failure(Exception("AI响应为空"))
+
+            val paymentInfo = parseJsonToPaymentInfo(content, "图片识别")
+            Result.success(paymentInfo)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun parsePaymentScreenshot(ocrText: String): Result<PaymentInfo> =
         withContext(Dispatchers.IO) {
             try {
@@ -231,7 +308,7 @@ $ocrText
                     request = request
                 )
 
-                val content = response.choices?.firstOrNull()?.message?.content
+                val content = response.choices?.firstOrNull()?.message?.content as? String
                     ?: return@withContext Result.failure(Exception("AI响应为空"))
 
                 val paymentInfo = parseJsonToPaymentInfo(content, ocrText)

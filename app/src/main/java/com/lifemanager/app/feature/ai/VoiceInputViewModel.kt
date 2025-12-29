@@ -2,8 +2,11 @@ package com.lifemanager.app.feature.ai
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.ai.model.CommandIntent
@@ -23,8 +26,11 @@ import com.lifemanager.app.core.voice.VoiceRecognitionState
 import com.lifemanager.app.data.repository.AIConfigRepository
 import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -262,18 +268,68 @@ class VoiceInputViewModel @Inject constructor(
     }
 
     /**
-     * 处理图片进行识别
+     * 处理图片进行识别 - 使用AI视觉模型
      */
-    fun processImageForRecognition(uri: Uri, onResult: (PaymentInfo?) -> Unit) {
+    fun processImageForRecognition(context: Context, uri: Uri, onResult: (PaymentInfo?) -> Unit) {
         viewModelScope.launch {
             try {
-                // 这里实际上需要先进行OCR识别获取文本
-                // 简化处理：假设OCR已完成，直接调用AI解析
-                // 实际应用中需要集成MLKit或其他OCR库
-                val result = aiService.parsePaymentScreenshot("支付宝收款 金额: ¥12.50 商户: 测试商店")
+                _resultMessage.value = Pair("正在识别图片...", true)
+
+                // 将图片转换为Base64
+                val base64Image = withContext(Dispatchers.IO) {
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val bitmap = BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+
+                        if (bitmap == null) {
+                            return@withContext null
+                        }
+
+                        // 压缩图片以减少传输大小
+                        val maxSize = 1024
+                        val scaledBitmap = if (bitmap.width > maxSize || bitmap.height > maxSize) {
+                            val scale = minOf(
+                                maxSize.toFloat() / bitmap.width,
+                                maxSize.toFloat() / bitmap.height
+                            )
+                            Bitmap.createScaledBitmap(
+                                bitmap,
+                                (bitmap.width * scale).toInt(),
+                                (bitmap.height * scale).toInt(),
+                                true
+                            )
+                        } else {
+                            bitmap
+                        }
+
+                        // 转换为Base64
+                        val outputStream = ByteArrayOutputStream()
+                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+                        val byteArray = outputStream.toByteArray()
+                        Base64.encodeToString(byteArray, Base64.NO_WRAP)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                if (base64Image == null) {
+                    _resultMessage.value = Pair("无法读取图片", false)
+                    onResult(null)
+                    return@launch
+                }
+
+                // 使用AI视觉模型识别图片
+                val result = aiService.recognizeImagePayment(base64Image, _categories.value)
                 result.fold(
                     onSuccess = { paymentInfo ->
-                        onResult(paymentInfo)
+                        if (paymentInfo.amount > 0) {
+                            _resultMessage.value = Pair("识别成功！", true)
+                            onResult(paymentInfo)
+                        } else {
+                            _resultMessage.value = Pair("未能识别到有效的支付信息", false)
+                            onResult(null)
+                        }
                     },
                     onFailure = {
                         _resultMessage.value = Pair("图片识别失败: ${it.message}", false)

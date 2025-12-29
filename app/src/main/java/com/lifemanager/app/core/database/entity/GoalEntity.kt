@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
  *
  * 用于存储用户设定的各类目标
  * 支持年度、季度、月度、长期和自定义周期目标
+ * 支持多级目标（父-子目标关系）
  * 可关联财务字段实现自动进度更新
  */
 @Entity(tableName = "goals")
@@ -15,6 +16,9 @@ data class GoalEntity(
     // 主键ID
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+
+    // 父目标ID（用于多级目标，null表示顶级目标）
+    val parentId: Long? = null,
 
     // 目标标题
     val title: String,
@@ -56,9 +60,21 @@ data class GoalEntity(
     // 可选值: ACTIVE(进行中), COMPLETED(已完成), ABANDONED(已放弃), ARCHIVED(已归档)
     val status: String = "ACTIVE",
 
+    // 放弃原因（当status为ABANDONED时使用）
+    val abandonReason: String? = null,
+
+    // 放弃时间
+    val abandonedAt: Long? = null,
+
+    // 完成时间
+    val completedAt: Long? = null,
+
     // 关联的财务字段ID
     // 设置后可自动根据该字段的数据更新目标进度
     val linkedFieldId: Long? = null,
+
+    // 目标层级（0为顶级目标，1为一级子目标，以此类推）
+    val level: Int = 0,
 
     // 创建时间
     val createdAt: Long = System.currentTimeMillis(),
