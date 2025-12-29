@@ -33,6 +33,7 @@ import com.lifemanager.app.feature.auth.RegisterScreen
 import com.lifemanager.app.feature.legal.PrivacyPolicyScreen
 import com.lifemanager.app.feature.legal.TermsOfServiceScreen
 import com.lifemanager.app.feature.ai.AISettingsScreen
+import com.lifemanager.app.feature.ai.AIAssistantScreen
 import com.lifemanager.app.feature.ai.VoiceInputScreen
 import com.lifemanager.app.feature.budget.BudgetScreen
 import com.lifemanager.app.feature.finance.transaction.billimport.BillImportScreen
@@ -393,8 +394,9 @@ fun AppNavHost(
 
         // AI语音助手
         composable(Screen.AIAssistant.route) {
-            VoiceInputScreen(
+            AIAssistantScreen(
                 onNavigateBack = { navController.popBackStack() },
+                onNavigateToSettings = { navController.navigate(Screen.AISettings.route) },
                 onExecuteIntent = { intent ->
                     // 根据意图类型导航到对应页面或执行操作
                     // 这里可以在后续完善具体的命令执行逻辑

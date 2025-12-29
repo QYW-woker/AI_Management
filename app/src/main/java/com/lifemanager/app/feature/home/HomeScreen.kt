@@ -78,7 +78,7 @@ fun HomeScreen(
 
             // AI建议卡片
             item {
-                AISuggestionCard()
+                AISuggestionCard(onNavigateToAI = { onNavigateToModule(Screen.AIAssistant.route) })
             }
         }
     }
@@ -147,6 +147,12 @@ private fun QuickAccessSection(
 ) {
     // 快捷功能列表
     val quickAccessItems = listOf(
+        QuickAccessItem(
+            icon = Icons.Default.AutoAwesome,
+            label = "AI助手",
+            color = Color(0xFF2196F3),
+            route = Screen.AIAssistant.route
+        ),
         QuickAccessItem(
             icon = Icons.Default.AccountBalance,
             label = "记账",
@@ -434,13 +440,17 @@ private fun GoalProgressItem(
 /**
  * AI建议卡片
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AISuggestionCard() {
+private fun AISuggestionCard(
+    onNavigateToAI: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        ),
+        onClick = onNavigateToAI
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -457,16 +467,22 @@ private fun AISuggestionCard() {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "AI智能建议",
+                    text = "AI智能助手",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "本月储蓄率达到43.3%，保持良好！建议将部分资金配置到稳健型基金。",
+                    text = "点击使用语音或文字命令，快速记账、添加待办、查询数据等",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "进入",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
