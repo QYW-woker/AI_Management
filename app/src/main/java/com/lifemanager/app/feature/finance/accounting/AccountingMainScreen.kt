@@ -194,8 +194,8 @@ fun AccountingMainScreen(
     if (showQuickAddDialog) {
         QuickAddTransactionDialog(
             onDismiss = { viewModel.hideQuickAdd() },
-            onConfirm = { type, amount, categoryId, note ->
-                viewModel.quickAddTransaction(type, amount, categoryId, note)
+            onConfirm = { type, amount, categoryId, note, date, time ->
+                viewModel.quickAddTransaction(type, amount, categoryId, note, date, time)
             },
             categories = viewModel.categories.collectAsState().value
         )
@@ -816,20 +816,29 @@ private fun RecentTransactionItem(
 @Composable
 private fun QuickAddTransactionDialog(
     onDismiss: () -> Unit,
-    onConfirm: (type: String, amount: Double, categoryId: Long?, note: String) -> Unit,
+    onConfirm: (type: String, amount: Double, categoryId: Long?, note: String, date: LocalDate, time: String?) -> Unit,
     categories: List<com.lifemanager.app.core.database.entity.CustomFieldEntity>
 ) {
     var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
     var amount by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<Long?>(null) }
     var note by remember { mutableStateOf("") }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var selectedTime by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    // 日期选择器状态
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = selectedDate.toEpochDay() * 24 * 60 * 60 * 1000
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("快速记账") },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 类型选择
                 Row(
@@ -878,6 +887,78 @@ private fun QuickAddTransactionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+
+                // 日期和时间选择
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 日期选择
+                    OutlinedCard(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "日期",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "${selectedDate.monthValue}月${selectedDate.dayOfMonth}日",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // 时间选择
+                    OutlinedCard(
+                        onClick = { showTimePicker = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "时间",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = selectedTime ?: "现在",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
 
                 // 分类选择
                 val filteredCategories = categories.filter {
@@ -929,12 +1010,92 @@ private fun QuickAddTransactionDialog(
                 onClick = {
                     val amountValue = amount.toDoubleOrNull()
                     if (amountValue != null && amountValue > 0) {
-                        onConfirm(selectedType, amountValue, selectedCategoryId, note)
+                        onConfirm(selectedType, amountValue, selectedCategoryId, note, selectedDate, selectedTime)
                         onDismiss()
                     }
                 }
             ) {
                 Text("确认")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+
+    // 日期选择器对话框
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    // 时间选择器对话框
+    if (showTimePicker) {
+        TimePickerDialog(
+            onDismiss = { showTimePicker = false },
+            onConfirm = { hour, minute ->
+                selectedTime = String.format("%02d:%02d", hour, minute)
+                showTimePicker = false
+            }
+        )
+    }
+}
+
+/**
+ * 时间选择器对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (hour: Int, minute: Int) -> Unit
+) {
+    val currentTime = java.time.LocalTime.now()
+    val timePickerState = rememberTimePickerState(
+        initialHour = currentTime.hour,
+        initialMinute = currentTime.minute
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择时间") },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                TimePicker(state = timePickerState)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(timePickerState.hour, timePickerState.minute)
+                }
+            ) {
+                Text("确定")
             }
         },
         dismissButton = {

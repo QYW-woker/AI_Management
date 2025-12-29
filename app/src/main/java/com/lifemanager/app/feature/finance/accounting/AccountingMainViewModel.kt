@@ -177,16 +177,18 @@ class AccountingMainViewModel @Inject constructor(
         type: String,
         amount: Double,
         categoryId: Long?,
-        note: String
+        note: String,
+        date: LocalDate = LocalDate.now(),
+        time: String? = null
     ) {
-        val today = LocalDate.now()
         val now = System.currentTimeMillis()
+        val transactionTime = time ?: String.format("%02d:%02d", java.time.LocalTime.now().hour, java.time.LocalTime.now().minute)
 
         viewModelScope.launch {
             try {
                 val transaction = DailyTransactionEntity(
-                    date = today.toEpochDay().toInt(),
-                    time = String.format("%02d:%02d", java.time.LocalTime.now().hour, java.time.LocalTime.now().minute),
+                    date = date.toEpochDay().toInt(),
+                    time = transactionTime,
                     type = type,
                     amount = amount,
                     categoryId = categoryId,
