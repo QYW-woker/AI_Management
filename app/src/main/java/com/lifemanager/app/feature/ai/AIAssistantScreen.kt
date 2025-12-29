@@ -1,10 +1,13 @@
 package com.lifemanager.app.feature.ai
 
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.ai.model.CommandIntent
 import com.lifemanager.app.core.ai.model.ExecutionResult
+import com.lifemanager.app.core.ai.model.PaymentInfo
 import com.lifemanager.app.core.voice.CommandProcessState
 import com.lifemanager.app.core.voice.VoiceRecognitionState
 import com.lifemanager.app.feature.ai.component.*
@@ -40,8 +44,12 @@ fun AIAssistantScreen(
     val showConfirmDialog by viewModel.showConfirmDialog.collectAsState()
     val pendingIntent by viewModel.pendingIntent.collectAsState()
     val resultMessage by viewModel.resultMessage.collectAsState()
+    val featureConfig by viewModel.featureConfig.collectAsState()
 
     var textInput by remember { mutableStateOf("") }
+    var showImageRecognition by remember { mutableStateOf(false) }
+    var isImageProcessing by remember { mutableStateOf(false) }
+    var recognizedPayment by remember { mutableStateOf<PaymentInfo?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // 显示结果消息
@@ -84,23 +92,89 @@ fun AIAssistantScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                // 状态显示
                 when {
+                    // 图片识别模式
+                    showImageRecognition -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            // 返回按钮
+                            TextButton(
+                                onClick = {
+                                    showImageRecognition = false
+                                    recognizedPayment = null
+                                }
+                            ) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("返回语音输入")
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "拍照识别",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+
+                            ImageRecognitionComponent(
+                                isProcessing = isImageProcessing,
+                                recognizedPayment = recognizedPayment,
+                                onImageSelected = { uri ->
+                                    isImageProcessing = true
+                                    // 这里应该调用AI服务进行识别
+                                    // 暂时模拟延迟
+                                    viewModel.processImageForRecognition(uri) { payment ->
+                                        recognizedPayment = payment
+                                        isImageProcessing = false
+                                    }
+                                },
+                                onBitmapCaptured = { /* 处理bitmap */ },
+                                onConfirm = { payment ->
+                                    viewModel.confirmPaymentRecord(payment)
+                                    showImageRecognition = false
+                                    recognizedPayment = null
+                                },
+                                onCancel = {
+                                    recognizedPayment = null
+                                }
+                            )
+                        }
+                    }
+
+                    // 语音识别不可用时，允许使用文字输入和拍照
                     !isVoiceAvailable -> {
-                        // 语音识别不可用
                         VoiceUnavailableContent(
+                            onOpenImageRecognition = {
+                                if (featureConfig?.imageRecognitionEnabled == true) {
+                                    showImageRecognition = true
+                                }
+                            },
+                            imageRecognitionEnabled = featureConfig?.imageRecognitionEnabled == true,
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
+
+                    // 空闲状态，显示引导
                     recognitionState is VoiceRecognitionState.Idle &&
                             commandState is CommandProcessState.Idle -> {
-                        // 空闲状态，显示引导
                         IdleStateContent(
+                            onOpenImageRecognition = {
+                                if (featureConfig?.imageRecognitionEnabled == true) {
+                                    showImageRecognition = true
+                                }
+                            },
+                            imageRecognitionEnabled = featureConfig?.imageRecognitionEnabled == true,
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
+
+                    // 显示语音输入面板
                     else -> {
-                        // 显示语音输入面板
                         VoiceInputPanel(
                             state = recognitionState,
                             volumeLevel = volumeLevel,
@@ -178,6 +252,8 @@ fun AIAssistantScreen(
  */
 @Composable
 private fun VoiceUnavailableContent(
+    onOpenImageRecognition: () -> Unit,
+    imageRecognitionEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -198,11 +274,21 @@ private fun VoiceUnavailableContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "请检查设备是否支持语音识别，或尝试安装Google语音服务",
+            text = "请在下方输入文字命令，或使用拍照识别功能",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+
+        // 拍照识别按钮
+        if (imageRecognitionEnabled) {
+            Spacer(modifier = Modifier.height(24.dp))
+            FilledTonalButton(onClick = onOpenImageRecognition) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("拍照识别账单")
+            }
+        }
     }
 }
 
@@ -211,6 +297,8 @@ private fun VoiceUnavailableContent(
  */
 @Composable
 private fun IdleStateContent(
+    onOpenImageRecognition: () -> Unit,
+    imageRecognitionEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -234,6 +322,17 @@ private fun IdleStateContent(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // 拍照识别按钮
+        if (imageRecognitionEnabled) {
+            Spacer(modifier = Modifier.height(16.dp))
+            FilledTonalButton(onClick = onOpenImageRecognition) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("拍照识别账单")
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
 
         // 示例命令
@@ -254,7 +353,7 @@ private fun IdleStateContent(
 
                 CommandExample("今天午饭花了25元")
                 CommandExample("明天下午3点开会")
-                CommandExample("记日记今天很开心")
+                CommandExample("昨天开了场会议")
                 CommandExample("这个月花了多少钱")
                 CommandExample("打开记账")
             }

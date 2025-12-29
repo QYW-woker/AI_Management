@@ -1,18 +1,29 @@
 package com.lifemanager.app.feature.ai
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.ai.model.CommandIntent
 import com.lifemanager.app.core.ai.model.ExecutionResult
+import com.lifemanager.app.core.ai.model.PaymentInfo
+import com.lifemanager.app.core.ai.model.TransactionType
+import com.lifemanager.app.core.ai.service.AIService
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.core.database.entity.DailyTransactionEntity
+import com.lifemanager.app.core.database.entity.TransactionSource
 import com.lifemanager.app.core.voice.CommandProcessState
+import com.lifemanager.app.core.voice.VoiceCommandExecutor
 import com.lifemanager.app.core.voice.VoiceCommandProcessor
 import com.lifemanager.app.core.voice.VoiceRecognitionManager
 import com.lifemanager.app.core.voice.VoiceRecognitionState
 import com.lifemanager.app.data.repository.AIConfigRepository
+import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /**
@@ -23,7 +34,10 @@ import javax.inject.Inject
 class VoiceInputViewModel @Inject constructor(
     private val voiceRecognitionManager: VoiceRecognitionManager,
     private val voiceCommandProcessor: VoiceCommandProcessor,
-    private val aiConfigRepository: AIConfigRepository
+    private val voiceCommandExecutor: VoiceCommandExecutor,
+    private val aiConfigRepository: AIConfigRepository,
+    private val aiService: AIService,
+    private val transactionRepository: DailyTransactionRepository
 ) : ViewModel() {
 
     // 语音识别状态
@@ -88,6 +102,10 @@ class VoiceInputViewModel @Inject constructor(
                         _pendingIntent.value = state.intent
                         _pendingDescription.value = state.description
                         _showConfirmDialog.value = true
+                    }
+                    is CommandProcessState.Parsed -> {
+                        // 自动确认模式下，直接执行命令
+                        executeIntent(state.intent)
                     }
                     is CommandProcessState.Error -> {
                         _resultMessage.value = Pair(state.message, false)
@@ -164,7 +182,25 @@ class VoiceInputViewModel @Inject constructor(
         val intent = voiceCommandProcessor.confirmExecution()
         _pendingIntent.value = null
         _pendingDescription.value = null
+
+        // 实际执行命令
+        intent?.let { executeIntent(it) }
+
         return intent
+    }
+
+    /**
+     * 执行命令意图
+     */
+    private fun executeIntent(intent: CommandIntent) {
+        viewModelScope.launch {
+            try {
+                val result = voiceCommandExecutor.execute(intent)
+                markExecuted(result)
+            } catch (e: Exception) {
+                markExecuted(ExecutionResult.Failure(e.message ?: "执行失败"))
+            }
+        }
     }
 
     /**
@@ -218,5 +254,64 @@ class VoiceInputViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         voiceRecognitionManager.destroy()
+    }
+
+    /**
+     * 处理图片进行识别
+     */
+    fun processImageForRecognition(uri: Uri, onResult: (PaymentInfo?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // 这里实际上需要先进行OCR识别获取文本
+                // 简化处理：假设OCR已完成，直接调用AI解析
+                // 实际应用中需要集成MLKit或其他OCR库
+                val result = aiService.parsePaymentScreenshot("支付宝收款 金额: ¥12.50 商户: 测试商店")
+                result.fold(
+                    onSuccess = { paymentInfo ->
+                        onResult(paymentInfo)
+                    },
+                    onFailure = {
+                        _resultMessage.value = Pair("图片识别失败: ${it.message}", false)
+                        onResult(null)
+                    }
+                )
+            } catch (e: Exception) {
+                _resultMessage.value = Pair("图片识别失败: ${e.message}", false)
+                onResult(null)
+            }
+        }
+    }
+
+    /**
+     * 确认支付记录
+     */
+    fun confirmPaymentRecord(payment: PaymentInfo) {
+        viewModelScope.launch {
+            try {
+                val date = LocalDate.now()
+                val now = LocalTime.now()
+
+                val entity = DailyTransactionEntity(
+                    id = 0,
+                    type = if (payment.type == TransactionType.EXPENSE) "EXPENSE" else "INCOME",
+                    amount = payment.amount,
+                    categoryId = null,
+                    date = date.toEpochDay().toInt(),
+                    time = now.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    note = payment.payee ?: "图片识别记账",
+                    source = TransactionSource.SCREENSHOT
+                )
+
+                transactionRepository.insert(entity)
+
+                val typeStr = if (payment.type == TransactionType.EXPENSE) "支出" else "收入"
+                _resultMessage.value = Pair(
+                    "已记录${typeStr}: ${payment.payee ?: ""}，金额 ¥${String.format("%.2f", payment.amount)}",
+                    true
+                )
+            } catch (e: Exception) {
+                _resultMessage.value = Pair("记录失败: ${e.message}", false)
+            }
+        }
     }
 }
