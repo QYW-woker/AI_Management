@@ -139,7 +139,7 @@ class AIServiceImpl @Inject constructor(
                 request = request
             )
 
-            val content = response.choices?.firstOrNull()?.message?.content
+            val content = response.choices?.firstOrNull()?.message?.content as? String
                 ?: return@withContext Result.failure(Exception("AI响应为空"))
 
             val intent = parseJsonToIntent(content, text)
@@ -184,7 +184,7 @@ $categoryList
                 request = request
             )
 
-            val content = response.choices?.firstOrNull()?.message?.content?.trim()
+            val content = (response.choices?.firstOrNull()?.message?.content as? String)?.trim()
             val categoryId = content?.toLongOrNull()
 
             Result.success(if (categoryId == 0L) null else categoryId)

@@ -472,7 +472,7 @@ private fun AnimatedProgressCard(
 
             // 进度条
             LinearProgressIndicator(
-                progress = { animatedProgress },
+                progress = animatedProgress,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
@@ -501,6 +501,7 @@ private fun AnimatedProgressCard(
 /**
  * 子目标卡片
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SubGoalCard(
     goal: GoalEntity,
@@ -523,7 +524,7 @@ private fun SubGoalCard(
                 modifier = Modifier.size(48.dp)
             ) {
                 CircularProgressIndicator(
-                    progress = { progress },
+                    progress = progress,
                     modifier = Modifier.size(48.dp),
                     strokeWidth = 4.dp,
                     color = when {
