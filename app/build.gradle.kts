@@ -77,7 +77,8 @@ android {
 
 dependencies {
     // ==================== Core Library Desugaring ====================
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // 注释掉以避免 jlink.exe 兼容性问题
+    // coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // ==================== Compose BOM ====================
     // 使用与 Kotlin 1.9.20 和 Compose Compiler 1.5.5 兼容的 BOM 版本
