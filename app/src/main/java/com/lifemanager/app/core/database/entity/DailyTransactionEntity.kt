@@ -32,7 +32,11 @@ import androidx.room.PrimaryKey
         Index(value = ["date"]),
         Index(value = ["categoryId"]),
         Index(value = ["type"]),
-        Index(value = ["ledgerId"])
+        Index(value = ["ledgerId"]),
+        // 复合索引优化常用查询
+        Index(value = ["date", "type"]),
+        Index(value = ["ledgerId", "date"]),
+        Index(value = ["categoryId", "date"])
     ]
 )
 data class DailyTransactionEntity(

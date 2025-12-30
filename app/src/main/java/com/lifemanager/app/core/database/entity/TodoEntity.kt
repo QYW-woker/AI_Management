@@ -27,7 +27,11 @@ import androidx.room.PrimaryKey
         Index(value = ["dueDate"]),
         Index(value = ["status"]),
         Index(value = ["linkedGoalId"]),
-        Index(value = ["parentId"])
+        Index(value = ["parentId"]),
+        // 复合索引优化常用查询
+        Index(value = ["status", "dueDate"]),
+        Index(value = ["status", "quadrant"]),
+        Index(value = ["status", "priority"])
     ]
 )
 data class TodoEntity(

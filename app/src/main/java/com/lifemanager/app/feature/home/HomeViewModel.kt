@@ -9,8 +9,10 @@ import com.lifemanager.app.core.database.dao.TodoDao
 import com.lifemanager.app.core.database.entity.GoalEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
@@ -42,102 +44,155 @@ class HomeViewModel @Inject constructor(
     private val _topGoals = MutableStateFlow<List<GoalProgressData>>(emptyList())
     val topGoals: StateFlow<List<GoalProgressData>> = _topGoals.asStateFlow()
 
+    // 缓存日期参数，避免重复计算
+    private val today = LocalDate.now().toEpochDay().toInt()
+    private val yearMonth = YearMonth.now()
+    private val monthStartDate = yearMonth.atDay(1).toEpochDay().toInt()
+    private val monthEndDate = yearMonth.atEndOfMonth().toEpochDay().toInt()
+
     init {
-        loadAllData()
+        loadInitialData()
+        observeDataChanges()
     }
 
     /**
-     * 并行加载所有数据
+     * 快速加载初始数据（一次性查询）
      */
-    private fun loadAllData() {
-        viewModelScope.launch(Dispatchers.IO) {
+    private fun loadInitialData() {
+        viewModelScope.launch {
             _isLoading.value = true
 
-            // 并行加载各项数据
-            launch { loadTodayStats() }
-            launch { loadMonthlyFinance() }
-            launch { loadTopGoals() }
+            withContext(Dispatchers.IO) {
+                // 并行加载所有初始数据
+                val todayStatsDeferred = async { loadTodayStatsOnce() }
+                val monthlyFinanceDeferred = async { loadMonthlyFinanceOnce() }
+                val goalsDeferred = async { loadTopGoalsOnce() }
+
+                // 等待所有数据加载完成
+                _todayStats.value = todayStatsDeferred.await()
+                _monthlyFinance.value = monthlyFinanceDeferred.await()
+                _topGoals.value = goalsDeferred.await()
+            }
 
             _isLoading.value = false
         }
     }
 
     /**
-     * 加载今日统计
+     * 观察数据变化（后台更新）
      */
-    private suspend fun loadTodayStats() {
-        try {
-            val today = LocalDate.now().toEpochDay().toInt()
-
-            // 获取今日交易数据
-            transactionDao.getTransactionsByDate(today).collectLatest { transactions ->
-                val todayExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
-                val todayIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
-
-                // 获取待办完成情况
-                val todoStats = todoDao.getTodayStats(today)
-
-                // 获取活跃习惯数量
-                val totalHabits = habitDao.countActive()
-
-                _todayStats.value = TodayStatsData(
-                    completedTodos = todoStats.completed,
-                    totalTodos = todoStats.total,
-                    todayExpense = todayExpense,
-                    todayIncome = todayIncome,
-                    completedHabits = 0, // 需要 HabitCheckInDao
-                    totalHabits = totalHabits,
-                    focusMinutes = 0 // 暂无计时功能
-                )
-            }
-        } catch (e: Exception) {
-            // 静默处理错误
-        }
-    }
-
-    /**
-     * 加载本月财务
-     */
-    private suspend fun loadMonthlyFinance() {
-        try {
-            val yearMonth = YearMonth.now()
-            val startDate = yearMonth.atDay(1).toEpochDay().toInt()
-            val endDate = yearMonth.atEndOfMonth().toEpochDay().toInt()
-
-            transactionDao.getTransactionsInRange(startDate, endDate).collectLatest { transactions ->
-                val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
-                val expense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
-
-                _monthlyFinance.value = MonthlyFinanceData(
-                    totalIncome = income,
-                    totalExpense = expense,
-                    balance = income - expense
-                )
-            }
-        } catch (e: Exception) {
-            // 静默处理错误
-        }
-    }
-
-    /**
-     * 加载目标进度
-     */
-    private suspend fun loadTopGoals() {
-        try {
-            goalDao.getActiveGoals().collectLatest { goals ->
-                val topGoals = goals.take(3).map { goal ->
-                    val progress = calculateGoalProgress(goal)
-                    GoalProgressData(
-                        id = goal.id,
-                        title = goal.title,
-                        progress = progress,
-                        progressText = formatGoalProgress(goal, progress)
+    private fun observeDataChanges() {
+        // 观察今日交易变化
+        viewModelScope.launch {
+            transactionDao.getTransactionsByDate(today)
+                .drop(1) // 跳过初始值，因为已经加载过
+                .debounce(300) // 防抖，避免频繁更新
+                .collectLatest { transactions ->
+                    val todayExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+                    val todayIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+                    _todayStats.value = _todayStats.value.copy(
+                        todayExpense = todayExpense,
+                        todayIncome = todayIncome
                     )
                 }
-                _topGoals.value = topGoals
+        }
+
+        // 观察本月交易变化
+        viewModelScope.launch {
+            transactionDao.getTransactionsInRange(monthStartDate, monthEndDate)
+                .drop(1)
+                .debounce(300)
+                .collectLatest { transactions ->
+                    val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+                    val expense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+                    _monthlyFinance.value = MonthlyFinanceData(
+                        totalIncome = income,
+                        totalExpense = expense,
+                        balance = income - expense
+                    )
+                }
+        }
+
+        // 观察目标变化
+        viewModelScope.launch {
+            goalDao.getActiveGoals()
+                .drop(1)
+                .debounce(300)
+                .collectLatest { goals ->
+                    _topGoals.value = goals.take(3).map { goal ->
+                        val progress = calculateGoalProgress(goal)
+                        GoalProgressData(
+                            id = goal.id,
+                            title = goal.title,
+                            progress = progress,
+                            progressText = formatGoalProgress(goal, progress)
+                        )
+                    }
+                }
+        }
+    }
+
+    /**
+     * 一次性加载今日统计
+     */
+    private suspend fun loadTodayStatsOnce(): TodayStatsData {
+        return try {
+            val transactions = transactionDao.getTransactionsByDate(today).first()
+            val todayExpense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+            val todayIncome = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val todoStats = todoDao.getTodayStats(today)
+            val totalHabits = habitDao.countActive()
+
+            TodayStatsData(
+                completedTodos = todoStats.completed,
+                totalTodos = todoStats.total,
+                todayExpense = todayExpense,
+                todayIncome = todayIncome,
+                completedHabits = 0,
+                totalHabits = totalHabits,
+                focusMinutes = 0
+            )
+        } catch (e: Exception) {
+            TodayStatsData()
+        }
+    }
+
+    /**
+     * 一次性加载本月财务
+     */
+    private suspend fun loadMonthlyFinanceOnce(): MonthlyFinanceData {
+        return try {
+            val transactions = transactionDao.getTransactionsInRange(monthStartDate, monthEndDate).first()
+            val income = transactions.filter { it.type == "INCOME" }.sumOf { it.amount }
+            val expense = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+
+            MonthlyFinanceData(
+                totalIncome = income,
+                totalExpense = expense,
+                balance = income - expense
+            )
+        } catch (e: Exception) {
+            MonthlyFinanceData()
+        }
+    }
+
+    /**
+     * 一次性加载目标进度
+     */
+    private suspend fun loadTopGoalsOnce(): List<GoalProgressData> {
+        return try {
+            val goals = goalDao.getActiveGoals().first()
+            goals.take(3).map { goal ->
+                val progress = calculateGoalProgress(goal)
+                GoalProgressData(
+                    id = goal.id,
+                    title = goal.title,
+                    progress = progress,
+                    progressText = formatGoalProgress(goal, progress)
+                )
             }
         } catch (e: Exception) {
-            // 静默处理错误
+            emptyList()
         }
     }
 
@@ -172,7 +227,7 @@ class HomeViewModel @Inject constructor(
      * 刷新数据
      */
     fun refresh() {
-        loadAllData()
+        loadInitialData()
     }
 }
 

@@ -95,3 +95,40 @@
 -keepclassmembers class * {
     @androidx.room.* <methods>;
 }
+
+# ==================== Apache POI 优化 ====================
+# 只保留必要的POI类，积极移除未使用的代码
+-dontwarn org.apache.poi.**
+-dontwarn org.apache.xmlbeans.**
+-dontwarn org.apache.commons.**
+-dontwarn org.openxmlformats.**
+-dontwarn com.microsoft.**
+-dontwarn org.w3c.**
+-dontwarn javax.xml.**
+-dontwarn org.etsi.**
+-dontwarn schemaorg_apache_xmlbeans.**
+
+# 保留POI核心类
+-keep class org.apache.poi.ss.usermodel.** { *; }
+-keep class org.apache.poi.xssf.usermodel.XSSFWorkbook { *; }
+-keep class org.apache.poi.hssf.usermodel.HSSFWorkbook { *; }
+-keep class org.apache.poi.xwpf.usermodel.XWPFDocument { *; }
+-keep class org.apache.poi.xwpf.usermodel.XWPFTable { *; }
+-keep class org.apache.poi.xwpf.usermodel.XWPFTableRow { *; }
+-keep class org.apache.poi.xwpf.usermodel.XWPFTableCell { *; }
+-keep class org.apache.poi.xwpf.usermodel.XWPFParagraph { *; }
+
+# 移除POI的Log4j依赖（Android不需要）
+-assumenosideeffects class org.apache.logging.log4j.** { *; }
+-dontwarn org.apache.logging.log4j.**
+
+# ==================== 性能优化 ====================
+# 移除调试日志
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+}
+
+# 积极内联
+-allowaccessmodification
+-repackageclasses

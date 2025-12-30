@@ -8,6 +8,7 @@ import com.lifemanager.app.core.data.repository.SettingsRepository
 import com.lifemanager.app.core.data.repository.UserRepository
 import com.lifemanager.app.core.database.AppDatabase
 import com.lifemanager.app.core.database.entity.UserEntity
+import com.lifemanager.app.LifeManagerApplication
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -143,6 +144,8 @@ class SettingsViewModel @Inject constructor(
     fun setLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setLanguage(language)
+            // 同时保存到快速缓存，确保重启时能立即生效
+            LifeManagerApplication.saveLanguageToCache(context, language)
             hideLanguagePickerDialog()
             _uiState.value = SettingsUiState.Success("语言已更改，重启应用后生效")
         }

@@ -2,16 +2,10 @@ package com.lifemanager.app
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.res.Configuration
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import java.util.Locale
-
-private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /**
  * AI智能生活管理APP - Application入口类
@@ -23,7 +17,8 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 class LifeManagerApplication : Application() {
 
     companion object {
-        private val LANGUAGE_KEY = stringPreferencesKey("language")
+        private const val PREFS_NAME = "app_settings_cache"
+        private const val KEY_LANGUAGE = "language"
         const val LANGUAGE_CHINESE = "简体中文"
         const val LANGUAGE_ENGLISH = "English"
 
@@ -36,6 +31,16 @@ class LifeManagerApplication : Application() {
                 LANGUAGE_CHINESE -> Locale.SIMPLIFIED_CHINESE
                 else -> Locale.SIMPLIFIED_CHINESE
             }
+        }
+
+        /**
+         * 保存语言设置到快速缓存（供Application启动时使用）
+         */
+        fun saveLanguageToCache(context: Context, language: String) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_LANGUAGE, language)
+                .apply()
         }
     }
 
@@ -50,18 +55,12 @@ class LifeManagerApplication : Application() {
     }
 
     /**
-     * 更新语言配置
+     * 更新语言配置 - 使用SharedPreferences快速读取，避免阻塞
      */
     private fun updateLocale(context: Context): Context {
-        val language = runBlocking {
-            try {
-                context.settingsDataStore.data
-                    .map { preferences -> preferences[LANGUAGE_KEY] ?: LANGUAGE_CHINESE }
-                    .first()
-            } catch (e: Exception) {
-                LANGUAGE_CHINESE
-            }
-        }
+        // 使用SharedPreferences快速读取（不阻塞主线程）
+        val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val language = prefs.getString(KEY_LANGUAGE, LANGUAGE_CHINESE) ?: LANGUAGE_CHINESE
 
         val locale = getLocale(language)
         Locale.setDefault(locale)
