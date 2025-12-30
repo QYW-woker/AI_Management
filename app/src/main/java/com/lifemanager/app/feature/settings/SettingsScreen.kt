@@ -16,6 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.BuildConfig
+import com.lifemanager.app.core.data.repository.CurrencySymbol
+import com.lifemanager.app.core.data.repository.DateFormat
+import com.lifemanager.app.core.data.repository.WeekStartDay
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -45,6 +48,13 @@ fun SettingsScreen(
     val showExportSuccessDialog by viewModel.showExportSuccessDialog.collectAsState()
     val exportStartDate by viewModel.exportStartDate.collectAsState()
     val exportEndDate by viewModel.exportEndDate.collectAsState()
+
+    // 新增对话框状态
+    val showCurrencyPicker by viewModel.showCurrencyPicker.collectAsState()
+    val showDateFormatPicker by viewModel.showDateFormatPicker.collectAsState()
+    val showWeekStartPicker by viewModel.showWeekStartPicker.collectAsState()
+    val showDecimalPlacesPicker by viewModel.showDecimalPlacesPicker.collectAsState()
+    val showHomeCardSettings by viewModel.showHomeCardSettings.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -99,6 +109,59 @@ fun SettingsScreen(
                         title = "语言",
                         value = settings.language,
                         onClick = { viewModel.showLanguagePickerDialog() }
+                    )
+                }
+            }
+
+            // 显示格式设置
+            item {
+                SettingsSection(title = "显示格式") {
+                    ClickableSettingItem(
+                        icon = Icons.Outlined.AttachMoney,
+                        title = "货币符号",
+                        value = settings.currencySymbol.displayName,
+                        onClick = { viewModel.showCurrencyPickerDialog() }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    ClickableSettingItem(
+                        icon = Icons.Outlined.Pin,
+                        title = "金额小数位",
+                        value = "${settings.decimalPlaces}位",
+                        onClick = { viewModel.showDecimalPlacesPickerDialog() }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    SwitchSettingItem(
+                        icon = Icons.Outlined.FormatListNumbered,
+                        title = "千位分隔符",
+                        subtitle = "使用逗号分隔大数字 (如 1,000)",
+                        checked = settings.useThousandSeparator,
+                        onCheckedChange = { viewModel.toggleThousandSeparator(it) }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    ClickableSettingItem(
+                        icon = Icons.Outlined.CalendarMonth,
+                        title = "日期格式",
+                        value = settings.dateFormat.displayName,
+                        onClick = { viewModel.showDateFormatPickerDialog() }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    ClickableSettingItem(
+                        icon = Icons.Outlined.DateRange,
+                        title = "周起始日",
+                        value = settings.weekStartDay.displayName,
+                        onClick = { viewModel.showWeekStartPickerDialog() }
+                    )
+                }
+            }
+
+            // 首页布局设置
+            item {
+                SettingsSection(title = "首页布局") {
+                    ClickableSettingItem(
+                        icon = Icons.Outlined.Dashboard,
+                        title = "自定义首页卡片",
+                        value = "显示/隐藏卡片",
+                        onClick = { viewModel.showHomeCardSettingsDialog() }
                     )
                 }
             }
@@ -361,6 +424,52 @@ fun SettingsScreen(
                     Text("确定")
                 }
             }
+        )
+    }
+
+    // 货币符号选择对话框
+    if (showCurrencyPicker) {
+        CurrencyPickerDialog(
+            currentSymbol = settings.currencySymbol,
+            onSelect = { viewModel.setCurrencySymbol(it) },
+            onDismiss = { viewModel.hideCurrencyPickerDialog() }
+        )
+    }
+
+    // 日期格式选择对话框
+    if (showDateFormatPicker) {
+        DateFormatPickerDialog(
+            currentFormat = settings.dateFormat,
+            onSelect = { viewModel.setDateFormat(it) },
+            onDismiss = { viewModel.hideDateFormatPickerDialog() }
+        )
+    }
+
+    // 周起始日选择对话框
+    if (showWeekStartPicker) {
+        WeekStartPickerDialog(
+            currentDay = settings.weekStartDay,
+            onSelect = { viewModel.setWeekStartDay(it) },
+            onDismiss = { viewModel.hideWeekStartPickerDialog() }
+        )
+    }
+
+    // 小数位数选择对话框
+    if (showDecimalPlacesPicker) {
+        DecimalPlacesPickerDialog(
+            currentPlaces = settings.decimalPlaces,
+            onSelect = { viewModel.setDecimalPlaces(it) },
+            onDismiss = { viewModel.hideDecimalPlacesPickerDialog() }
+        )
+    }
+
+    // 首页卡片设置对话框
+    if (showHomeCardSettings) {
+        HomeCardSettingsDialog(
+            config = settings.homeCardConfig,
+            onCardVisibilityChange = { key, visible -> viewModel.setHomeCardVisibility(key, visible) },
+            onReset = { viewModel.resetHomeCardConfig() },
+            onDismiss = { viewModel.hideHomeCardSettingsDialog() }
         )
     }
 }
@@ -778,5 +887,281 @@ private fun ExportDataDialog(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+}
+
+/**
+ * 货币符号选择对话框
+ */
+@Composable
+private fun CurrencyPickerDialog(
+    currentSymbol: CurrencySymbol,
+    onSelect: (CurrencySymbol) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择货币符号") },
+        text = {
+            Column {
+                CurrencySymbol.entries.forEach { symbol ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(symbol) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = symbol == currentSymbol,
+                            onClick = { onSelect(symbol) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = symbol.displayName)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 日期格式选择对话框
+ */
+@Composable
+private fun DateFormatPickerDialog(
+    currentFormat: DateFormat,
+    onSelect: (DateFormat) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期格式") },
+        text = {
+            Column {
+                DateFormat.entries.forEach { format ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(format) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = format == currentFormat,
+                            onClick = { onSelect(format) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = format.displayName)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 周起始日选择对话框
+ */
+@Composable
+private fun WeekStartPickerDialog(
+    currentDay: WeekStartDay,
+    onSelect: (WeekStartDay) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择周起始日") },
+        text = {
+            Column {
+                WeekStartDay.entries.forEach { day ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(day) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = day == currentDay,
+                            onClick = { onSelect(day) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = day.displayName)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 小数位数选择对话框
+ */
+@Composable
+private fun DecimalPlacesPickerDialog(
+    currentPlaces: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(0, 1, 2, 3, 4)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择小数位数") },
+        text = {
+            Column {
+                options.forEach { places ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(places) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = places == currentPlaces,
+                            onClick = { onSelect(places) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "${places}位小数")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 首页卡片设置对话框
+ */
+@Composable
+private fun HomeCardSettingsDialog(
+    config: com.lifemanager.app.core.data.repository.HomeCardConfig,
+    onCardVisibilityChange: (String, Boolean) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val cardNames = mapOf(
+        "todayStats" to "今日统计",
+        "monthlyFinance" to "月度财务",
+        "topGoals" to "目标进度",
+        "habitProgress" to "习惯打卡",
+        "aiInsight" to "AI 洞察",
+        "quickActions" to "快捷操作"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("自定义首页卡片") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "选择要在首页显示的卡片",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // 今日统计
+                SwitchSettingRow(
+                    title = cardNames["todayStats"] ?: "",
+                    checked = config.showTodayStats,
+                    onCheckedChange = { onCardVisibilityChange("todayStats", it) }
+                )
+
+                // 月度财务
+                SwitchSettingRow(
+                    title = cardNames["monthlyFinance"] ?: "",
+                    checked = config.showMonthlyFinance,
+                    onCheckedChange = { onCardVisibilityChange("monthlyFinance", it) }
+                )
+
+                // 目标进度
+                SwitchSettingRow(
+                    title = cardNames["topGoals"] ?: "",
+                    checked = config.showTopGoals,
+                    onCheckedChange = { onCardVisibilityChange("topGoals", it) }
+                )
+
+                // 习惯打卡
+                SwitchSettingRow(
+                    title = cardNames["habitProgress"] ?: "",
+                    checked = config.showHabitProgress,
+                    onCheckedChange = { onCardVisibilityChange("habitProgress", it) }
+                )
+
+                // AI 洞察
+                SwitchSettingRow(
+                    title = cardNames["aiInsight"] ?: "",
+                    checked = config.showAIInsight,
+                    onCheckedChange = { onCardVisibilityChange("aiInsight", it) }
+                )
+
+                // 快捷操作
+                SwitchSettingRow(
+                    title = cardNames["quickActions"] ?: "",
+                    checked = config.showQuickActions,
+                    onCheckedChange = { onCardVisibilityChange("quickActions", it) }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("完成")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onReset) {
+                Text("重置")
+            }
+        }
+    )
+}
+
+/**
+ * 简单的开关行
+ */
+@Composable
+private fun SwitchSettingRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = title)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }

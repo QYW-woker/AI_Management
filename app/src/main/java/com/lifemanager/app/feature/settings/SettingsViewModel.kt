@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.data.repository.AppSettings
+import com.lifemanager.app.core.data.repository.CurrencySymbol
+import com.lifemanager.app.core.data.repository.DateFormat
 import com.lifemanager.app.core.data.repository.SettingsRepository
+import com.lifemanager.app.core.data.repository.WeekStartDay
 import com.lifemanager.app.core.data.repository.UserRepository
 import com.lifemanager.app.core.database.AppDatabase
 import com.lifemanager.app.core.database.entity.UserEntity
@@ -78,6 +81,26 @@ class SettingsViewModel @Inject constructor(
     // 显示备份成功对话框
     private val _showBackupSuccessDialog = MutableStateFlow<String?>(null)
     val showBackupSuccessDialog: StateFlow<String?> = _showBackupSuccessDialog.asStateFlow()
+
+    // 显示货币选择器
+    private val _showCurrencyPicker = MutableStateFlow(false)
+    val showCurrencyPicker: StateFlow<Boolean> = _showCurrencyPicker.asStateFlow()
+
+    // 显示日期格式选择器
+    private val _showDateFormatPicker = MutableStateFlow(false)
+    val showDateFormatPicker: StateFlow<Boolean> = _showDateFormatPicker.asStateFlow()
+
+    // 显示周起始日选择器
+    private val _showWeekStartPicker = MutableStateFlow(false)
+    val showWeekStartPicker: StateFlow<Boolean> = _showWeekStartPicker.asStateFlow()
+
+    // 显示小数位数选择器
+    private val _showDecimalPlacesPicker = MutableStateFlow(false)
+    val showDecimalPlacesPicker: StateFlow<Boolean> = _showDecimalPlacesPicker.asStateFlow()
+
+    // 显示首页卡片设置
+    private val _showHomeCardSettings = MutableStateFlow(false)
+    val showHomeCardSettings: StateFlow<Boolean> = _showHomeCardSettings.asStateFlow()
 
     /**
      * 切换深色模式
@@ -300,6 +323,103 @@ class SettingsViewModel @Inject constructor(
     fun confirmLogout() {
         logout()
         hideLogoutConfirmation()
+    }
+
+    // ============ 显示格式设置 ============
+
+    fun showCurrencyPickerDialog() {
+        _showCurrencyPicker.value = true
+    }
+
+    fun hideCurrencyPickerDialog() {
+        _showCurrencyPicker.value = false
+    }
+
+    fun setCurrencySymbol(symbol: CurrencySymbol) {
+        viewModelScope.launch {
+            settingsRepository.setCurrencySymbol(symbol)
+            hideCurrencyPickerDialog()
+        }
+    }
+
+    fun showDateFormatPickerDialog() {
+        _showDateFormatPicker.value = true
+    }
+
+    fun hideDateFormatPickerDialog() {
+        _showDateFormatPicker.value = false
+    }
+
+    fun setDateFormat(format: DateFormat) {
+        viewModelScope.launch {
+            settingsRepository.setDateFormat(format)
+            hideDateFormatPickerDialog()
+        }
+    }
+
+    fun showWeekStartPickerDialog() {
+        _showWeekStartPicker.value = true
+    }
+
+    fun hideWeekStartPickerDialog() {
+        _showWeekStartPicker.value = false
+    }
+
+    fun setWeekStartDay(day: WeekStartDay) {
+        viewModelScope.launch {
+            settingsRepository.setWeekStartDay(day)
+            hideWeekStartPickerDialog()
+        }
+    }
+
+    fun showDecimalPlacesPickerDialog() {
+        _showDecimalPlacesPicker.value = true
+    }
+
+    fun hideDecimalPlacesPickerDialog() {
+        _showDecimalPlacesPicker.value = false
+    }
+
+    fun setDecimalPlaces(places: Int) {
+        viewModelScope.launch {
+            settingsRepository.setDecimalPlaces(places)
+            hideDecimalPlacesPickerDialog()
+        }
+    }
+
+    fun toggleThousandSeparator(use: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseThousandSeparator(use)
+        }
+    }
+
+    // ============ 首页卡片设置 ============
+
+    fun showHomeCardSettingsDialog() {
+        _showHomeCardSettings.value = true
+    }
+
+    fun hideHomeCardSettingsDialog() {
+        _showHomeCardSettings.value = false
+    }
+
+    fun setHomeCardVisibility(cardKey: String, visible: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHomeCardVisibility(cardKey, visible)
+        }
+    }
+
+    fun setCardOrder(order: List<String>) {
+        viewModelScope.launch {
+            settingsRepository.setCardOrder(order)
+        }
+    }
+
+    fun resetHomeCardConfig() {
+        viewModelScope.launch {
+            settingsRepository.resetHomeCardConfig()
+            _uiState.value = SettingsUiState.Success("首页布局已重置")
+        }
     }
 
     // ============ 数据导出功能 ============
