@@ -21,6 +21,16 @@ interface DailyTransactionDao {
     fun getByDateRange(startDate: Int, endDate: Int): Flow<List<DailyTransactionEntity>>
 
     /**
+     * 获取指定日期范围的交易记录（同步版本，用于导出）
+     */
+    @Query("""
+        SELECT * FROM daily_transactions
+        WHERE date BETWEEN :startDate AND :endDate
+        ORDER BY date DESC, createdAt DESC
+    """)
+    suspend fun getTransactionsBetweenDatesSync(startDate: Int, endDate: Int): List<DailyTransactionEntity>
+
+    /**
      * 获取指定日期的交易记录
      */
     @Query("""

@@ -68,6 +68,9 @@ fun AccountingMainScreen(
     val showQuickAddDialog by viewModel.showQuickAddDialog.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
     val editingTransaction by viewModel.editingTransaction.collectAsState()
+    val showTransferDialog by viewModel.showTransferDialog.collectAsState()
+    val showExportDialog by viewModel.showExportDialog.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -117,6 +120,10 @@ fun AccountingMainScreen(
                 onNavigateToFundAccount = {
                     scope.launch { drawerState.close() }
                     onNavigateToFundAccount()
+                },
+                onExportData = {
+                    scope.launch { drawerState.close() }
+                    viewModel.showExport()
                 }
             )
         }
@@ -182,7 +189,8 @@ fun AccountingMainScreen(
                         onNavigateToDailyTransaction = onNavigateToDailyTransaction,
                         onNavigateToCalendar = onNavigateToCalendar,
                         onNavigateToBudget = onNavigateToBudget,
-                        onNavigateToStatistics = onNavigateToStatistics
+                        onNavigateToStatistics = onNavigateToStatistics,
+                        onTransfer = { viewModel.showTransfer() }
                     )
                 }
 
@@ -226,6 +234,25 @@ fun AccountingMainScreen(
             categories = viewModel.categories.collectAsState().value
         )
     }
+
+    // 转账对话框
+    if (showTransferDialog) {
+        TransferDialog(
+            accounts = accounts,
+            onDismiss = { viewModel.hideTransfer() },
+            onConfirm = { fromAccountId, toAccountId, amount, fee, note ->
+                viewModel.executeTransfer(fromAccountId, toAccountId, amount, fee, note)
+            }
+        )
+    }
+
+    // 导出对话框
+    if (showExportDialog) {
+        ExportDialog(
+            onDismiss = { viewModel.hideExport() },
+            viewModel = viewModel
+        )
+    }
 }
 
 /**
@@ -244,7 +271,8 @@ private fun AccountingSidebar(
     onNavigateToBudget: () -> Unit,
     onNavigateToImport: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToFundAccount: () -> Unit
+    onNavigateToFundAccount: () -> Unit,
+    onExportData: () -> Unit = {}
 ) {
     ModalDrawerSheet(
         modifier = Modifier.width(280.dp)
@@ -367,6 +395,13 @@ private fun AccountingSidebar(
             label = "记账导入",
             description = "导入账单数据",
             onClick = onNavigateToImport
+        )
+
+        SidebarItem(
+            icon = Icons.Outlined.FileDownload,
+            label = "数据导出",
+            description = "导出交易记录",
+            onClick = onExportData
         )
 
         Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -632,7 +667,8 @@ private fun QuickActionsSection(
     onNavigateToDailyTransaction: () -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToBudget: () -> Unit,
-    onNavigateToStatistics: () -> Unit
+    onNavigateToStatistics: () -> Unit,
+    onTransfer: () -> Unit = {}
 ) {
     Column {
         Text(
@@ -658,6 +694,12 @@ private fun QuickActionsSection(
                 label = "日历",
                 color = Color(0xFF4CAF50),
                 onClick = onNavigateToCalendar
+            )
+            QuickActionButton(
+                icon = Icons.Default.SwapHoriz,
+                label = "转账",
+                color = Color(0xFF00BCD4),
+                onClick = onTransfer
             )
             QuickActionButton(
                 icon = Icons.Default.PieChart,
@@ -1544,3 +1586,457 @@ data class LedgerInfo(
     val icon: String? = null,
     val isDefault: Boolean = false
 )
+
+/**
+ * 转账对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TransferDialog(
+    accounts: List<com.lifemanager.app.core.database.entity.FundAccountEntity>,
+    onDismiss: () -> Unit,
+    onConfirm: (fromAccountId: Long, toAccountId: Long, amount: Double, fee: Double, note: String) -> Unit
+) {
+    var fromAccountId by remember { mutableStateOf<Long?>(null) }
+    var toAccountId by remember { mutableStateOf<Long?>(null) }
+    var amount by remember { mutableStateOf("") }
+    var fee by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val fromAccount = accounts.find { it.id == fromAccountId }
+    val toAccount = accounts.find { it.id == toAccountId }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.SwapHoriz,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("账户转账")
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (accounts.size < 2) {
+                    Text(
+                        text = "需要至少两个资金账户才能进行转账",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    // 转出账户
+                    Text(
+                        text = "从",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(accounts.filter { it.id != toAccountId }) { account ->
+                            val isSelected = fromAccountId == account.id
+                            val icon = com.lifemanager.app.core.database.entity.AccountType.getIcon(account.accountType)
+                            if (isSelected) {
+                                Button(
+                                    onClick = { fromAccountId = account.id },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { fromAccountId = account.id },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+
+                    // 转入账户
+                    Text(
+                        text = "转入",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(accounts.filter { it.id != fromAccountId }) { account ->
+                            val isSelected = toAccountId == account.id
+                            val icon = com.lifemanager.app.core.database.entity.AccountType.getIcon(account.accountType)
+                            if (isSelected) {
+                                Button(
+                                    onClick = { toAccountId = account.id },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { toAccountId = account.id },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+
+                    // 转账金额
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = {
+                            amount = it.filter { c -> c.isDigit() || c == '.' }
+                            error = null
+                        },
+                        label = { Text("转账金额") },
+                        leadingIcon = { Text("¥") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        isError = error != null
+                    )
+
+                    // 手续费（可选）
+                    OutlinedTextField(
+                        value = fee,
+                        onValueChange = { fee = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text("手续费（选填）") },
+                        leadingIcon = { Text("¥") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // 备注
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text("备注（选填）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    // 转账预览
+                    if (fromAccount != null && toAccount != null && amount.isNotBlank()) {
+                        val amountValue = amount.toDoubleOrNull() ?: 0.0
+                        val feeValue = fee.toDoubleOrNull() ?: 0.0
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Text(
+                                    text = "转账预览",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "${fromAccount.name} → ${toAccount.name}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "转账: ¥${String.format("%.2f", amountValue)}" +
+                                            if (feeValue > 0) " (手续费: ¥${String.format("%.2f", feeValue)})" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // 错误提示
+                    if (error != null) {
+                        Text(
+                            text = error!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amountValue = amount.toDoubleOrNull()
+                    val feeValue = fee.toDoubleOrNull() ?: 0.0
+
+                    when {
+                        fromAccountId == null -> error = "请选择转出账户"
+                        toAccountId == null -> error = "请选择转入账户"
+                        amountValue == null || amountValue <= 0 -> error = "请输入有效金额"
+                        else -> {
+                            onConfirm(fromAccountId!!, toAccountId!!, amountValue, feeValue, note)
+                        }
+                    }
+                },
+                enabled = accounts.size >= 2
+            ) {
+                Text("确认转账")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 导出对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportDialog(
+    onDismiss: () -> Unit,
+    viewModel: AccountingMainViewModel
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedType by remember { mutableStateOf("transactions") }
+    var selectedRange by remember { mutableStateOf("month") }
+    var isExporting by remember { mutableStateOf(false) }
+    var exportResult by remember { mutableStateOf<String?>(null) }
+
+    val today = LocalDate.now()
+
+    AlertDialog(
+        onDismissRequest = { if (!isExporting) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.FileDownload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("数据导出")
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 导出类型选择
+                Text(
+                    text = "导出内容",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val types = listOf(
+                        "transactions" to "交易记录",
+                        "accounts" to "资金账户",
+                        "report" to "月度报告"
+                    )
+                    types.forEach { (type, label) ->
+                        if (selectedType == type) {
+                            Button(
+                                onClick = { selectedType = type },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { selectedType = type },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(8.dp)
+                            ) {
+                                Text(label, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+
+                // 时间范围选择（仅交易记录和报告需要）
+                if (selectedType != "accounts") {
+                    Text(
+                        text = "时间范围",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val ranges = listOf(
+                            "month" to "本月",
+                            "quarter" to "本季度",
+                            "year" to "本年"
+                        )
+                        ranges.forEach { (range, label) ->
+                            if (selectedRange == range) {
+                                Button(
+                                    onClick = { selectedRange = range },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(8.dp)
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { selectedRange = range },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(8.dp)
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 导出说明
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = when (selectedType) {
+                                "transactions" -> "将导出所选时间范围内的所有交易记录，包括日期、类型、金额、分类等信息"
+                                "accounts" -> "将导出所有资金账户信息，包括账户名称、类型、余额等"
+                                else -> "将生成所选月份的财务报告，包含收支汇总和分类统计"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // 导出状态
+                if (isExporting) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("正在导出...", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                // 导出结果
+                if (exportResult != null) {
+                    Text(
+                        text = exportResult!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (exportResult!!.startsWith("成功"))
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    isExporting = true
+                    exportResult = null
+
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            val (startDate, endDate) = when (selectedRange) {
+                                "month" -> {
+                                    val start = today.withDayOfMonth(1)
+                                    val end = today.withDayOfMonth(today.lengthOfMonth())
+                                    start.toEpochDay().toInt() to end.toEpochDay().toInt()
+                                }
+                                "quarter" -> {
+                                    val quarterStart = today.withMonth(((today.monthValue - 1) / 3) * 3 + 1).withDayOfMonth(1)
+                                    val quarterEnd = quarterStart.plusMonths(3).minusDays(1)
+                                    quarterStart.toEpochDay().toInt() to quarterEnd.toEpochDay().toInt()
+                                }
+                                else -> {
+                                    val start = today.withDayOfYear(1)
+                                    val end = today.withDayOfYear(today.lengthOfYear())
+                                    start.toEpochDay().toInt() to end.toEpochDay().toInt()
+                                }
+                            }
+
+                            val result = when (selectedType) {
+                                "transactions" -> {
+                                    val transactions = viewModel.getTransactionsForExport(startDate, endDate)
+                                    com.lifemanager.app.core.util.DataExporter.exportTransactionsToCSV(
+                                        context = context,
+                                        transactions = transactions,
+                                        categoryMap = viewModel.getCategoryMap(),
+                                        accountMap = viewModel.getAccountMap()
+                                    )
+                                }
+                                "accounts" -> {
+                                    val accounts = viewModel.accounts.value
+                                    com.lifemanager.app.core.util.DataExporter.exportAccountsToCSV(
+                                        context = context,
+                                        accounts = accounts
+                                    )
+                                }
+                                else -> {
+                                    val transactions = viewModel.getTransactionsForExport(startDate, endDate)
+                                    val yearMonth = "${today.year}年${today.monthValue}月"
+                                    com.lifemanager.app.core.util.DataExporter.generateMonthlyReport(
+                                        context = context,
+                                        transactions = transactions,
+                                        categoryMap = viewModel.getCategoryMap(),
+                                        yearMonth = yearMonth
+                                    )
+                                }
+                            }
+
+                            result.fold(
+                                onSuccess = { uri ->
+                                    exportResult = "成功导出！"
+                                    com.lifemanager.app.core.util.DataExporter.shareFile(context, uri)
+                                },
+                                onFailure = { e ->
+                                    exportResult = "导出失败：${e.message}"
+                                }
+                            )
+                        } catch (e: Exception) {
+                            exportResult = "导出失败：${e.message}"
+                        } finally {
+                            isExporting = false
+                        }
+                    }
+                },
+                enabled = !isExporting
+            ) {
+                Text("导出")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isExporting
+            ) {
+                Text("取消")
+            }
+        }
+    )
+}

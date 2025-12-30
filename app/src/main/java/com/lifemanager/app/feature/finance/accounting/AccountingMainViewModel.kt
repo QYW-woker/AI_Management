@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.dao.CustomFieldDao
 import com.lifemanager.app.core.database.dao.DailyTransactionDao
 import com.lifemanager.app.core.database.dao.FundAccountDao
+import com.lifemanager.app.core.database.dao.TransferDao
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.core.database.entity.DailyTransactionEntity
 import com.lifemanager.app.core.database.entity.FundAccountEntity
+import com.lifemanager.app.core.database.entity.TransferEntity
 import com.lifemanager.app.domain.model.DailyStats
 import com.lifemanager.app.domain.model.DailyTransactionWithCategory
 import com.lifemanager.app.domain.model.PeriodStats
@@ -33,7 +35,8 @@ import javax.inject.Inject
 class AccountingMainViewModel @Inject constructor(
     private val transactionDao: DailyTransactionDao,
     private val customFieldDao: CustomFieldDao,
-    private val fundAccountDao: FundAccountDao
+    private val fundAccountDao: FundAccountDao,
+    private val transferDao: TransferDao
 ) : ViewModel() {
 
     // UI状态
@@ -84,6 +87,14 @@ class AccountingMainViewModel @Inject constructor(
 
     private val _editingTransaction = MutableStateFlow<DailyTransactionWithCategory?>(null)
     val editingTransaction: StateFlow<DailyTransactionWithCategory?> = _editingTransaction.asStateFlow()
+
+    // 转账对话框状态
+    private val _showTransferDialog = MutableStateFlow(false)
+    val showTransferDialog: StateFlow<Boolean> = _showTransferDialog.asStateFlow()
+
+    // 导出对话框状态
+    private val _showExportDialog = MutableStateFlow(false)
+    val showExportDialog: StateFlow<Boolean> = _showExportDialog.asStateFlow()
 
     init {
         loadData()
@@ -345,5 +356,102 @@ class AccountingMainViewModel @Inject constructor(
                 // Handle error
             }
         }
+    }
+
+    /**
+     * 显示转账对话框
+     */
+    fun showTransfer() {
+        _showTransferDialog.value = true
+    }
+
+    /**
+     * 隐藏转账对话框
+     */
+    fun hideTransfer() {
+        _showTransferDialog.value = false
+    }
+
+    /**
+     * 执行转账
+     */
+    fun executeTransfer(
+        fromAccountId: Long,
+        toAccountId: Long,
+        amount: Double,
+        fee: Double = 0.0,
+        note: String = "",
+        date: LocalDate = LocalDate.now()
+    ) {
+        if (fromAccountId == toAccountId) return
+        if (amount <= 0) return
+
+        viewModelScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                val timeString = String.format("%02d:%02d", java.time.LocalTime.now().hour, java.time.LocalTime.now().minute)
+
+                // 创建转账记录
+                val transfer = TransferEntity(
+                    fromAccountId = fromAccountId,
+                    toAccountId = toAccountId,
+                    amount = amount,
+                    fee = fee,
+                    date = date.toEpochDay().toInt(),
+                    time = timeString,
+                    note = note,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                transferDao.insert(transfer)
+
+                // 更新账户余额
+                // 转出账户减少金额（包含手续费）
+                fundAccountDao.subtractBalance(fromAccountId, amount + fee)
+                // 转入账户增加金额
+                fundAccountDao.addBalance(toAccountId, amount)
+
+                hideTransfer()
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    /**
+     * 显示导出对话框
+     */
+    fun showExport() {
+        _showExportDialog.value = true
+    }
+
+    /**
+     * 隐藏导出对话框
+     */
+    fun hideExport() {
+        _showExportDialog.value = false
+    }
+
+    /**
+     * 获取用于导出的所有交易数据
+     */
+    suspend fun getTransactionsForExport(startDate: Int, endDate: Int): List<DailyTransactionEntity> {
+        return withContext(Dispatchers.IO) {
+            transactionDao.getTransactionsBetweenDatesSync(startDate, endDate)
+        }
+    }
+
+    /**
+     * 获取分类映射
+     */
+    fun getCategoryMap(): Map<Long, String> {
+        return _categories.value.associate { it.id to it.name }
+    }
+
+    /**
+     * 获取账户映射
+     */
+    fun getAccountMap(): Map<Long, String> {
+        return _accounts.value.associate { it.id to it.name }
     }
 }

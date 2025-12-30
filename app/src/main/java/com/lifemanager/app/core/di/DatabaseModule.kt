@@ -189,4 +189,10 @@ object DatabaseModule {
     fun provideFundAccountDao(database: AppDatabase): FundAccountDao {
         return database.fundAccountDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideTransferDao(database: AppDatabase): TransferDao {
+        return database.transferDao()
+    }
 }

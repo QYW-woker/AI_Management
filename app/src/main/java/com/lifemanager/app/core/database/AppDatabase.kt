@@ -32,6 +32,7 @@ import com.lifemanager.app.core.database.entity.*
         LedgerEntity::class,
         RecurringTransactionEntity::class,
         FundAccountEntity::class,
+        TransferEntity::class,
         // 待办记事
         TodoEntity::class,
         // 日记
@@ -46,7 +47,7 @@ import com.lifemanager.app.core.database.entity.*
         SavingsPlanEntity::class,
         SavingsRecordEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -158,6 +159,11 @@ abstract class AppDatabase : RoomDatabase() {
      * 资金账户DAO
      */
     abstract fun fundAccountDao(): FundAccountDao
+
+    /**
+     * 转账记录DAO
+     */
+    abstract fun transferDao(): TransferDao
 
     companion object {
         /**
