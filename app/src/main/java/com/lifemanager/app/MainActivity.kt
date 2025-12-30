@@ -2,6 +2,7 @@ package com.lifemanager.app
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,8 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.compose.rememberNavController
 import com.lifemanager.app.core.theme.ThemeManager
 import com.lifemanager.app.ui.navigation.AdaptiveNavigation
@@ -21,13 +20,8 @@ import com.lifemanager.app.ui.navigation.Screen
 import com.lifemanager.app.ui.navigation.rememberWindowSizeClass
 import com.lifemanager.app.ui.theme.LifeManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import java.util.Locale
 import javax.inject.Inject
-
-private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /**
  * 主Activity
@@ -47,19 +41,13 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 更新语言配置
+     * 更新语言配置 - 使用SharedPreferences快速读取，避免DataStore冲突
      */
     private fun updateLocale(context: Context): Context {
-        val languageKey = stringPreferencesKey("language")
-        val language = runBlocking {
-            try {
-                context.settingsDataStore.data
-                    .map { preferences -> preferences[languageKey] ?: LifeManagerApplication.LANGUAGE_CHINESE }
-                    .first()
-            } catch (e: Exception) {
-                LifeManagerApplication.LANGUAGE_CHINESE
-            }
-        }
+        // 使用SharedPreferences快速读取（与LifeManagerApplication保持一致）
+        val prefs: SharedPreferences = context.getSharedPreferences("app_settings_cache", Context.MODE_PRIVATE)
+        val language = prefs.getString("language", LifeManagerApplication.LANGUAGE_CHINESE)
+            ?: LifeManagerApplication.LANGUAGE_CHINESE
 
         val locale = LifeManagerApplication.getLocale(language)
         Locale.setDefault(locale)
