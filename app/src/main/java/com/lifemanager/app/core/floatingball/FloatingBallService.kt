@@ -420,6 +420,9 @@ class FloatingBallService : Service() {
                         is ExecutionResult.NeedMoreInfo -> {
                             showToast("⚠️ ${result.prompt}")
                         }
+                        is ExecutionResult.NeedConfirmation -> {
+                            showToast("ℹ️ ${result.previewMessage}")
+                        }
                         is ExecutionResult.NotRecognized -> {
                             showToast("❓ 无法识别: ${result.originalText}")
                         }

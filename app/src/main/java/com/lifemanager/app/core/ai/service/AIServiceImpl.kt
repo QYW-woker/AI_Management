@@ -557,9 +557,7 @@ $dataStr
         return CommandIntent.Goal(
             action = GoalAction.CREATE,
             goalName = data["goalName"] as? String,
-            targetAmount = (data["targetAmount"] as? Number)?.toDouble(),
-            deadline = data["deadline"] as? String,
-            category = data["category"] as? String
+            progress = (data["progress"] as? Number)?.toDouble()
         )
     }
 

@@ -10,7 +10,6 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.cardview.widget.CardView
 import com.lifemanager.app.core.ai.model.CommandIntent
 import com.lifemanager.app.core.ai.model.TransactionType
 
@@ -36,11 +35,10 @@ class FloatingConfirmationView(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.parseColor("#80000000"))
         setOnClickListener { onCancel?.invoke() }
 
-        // 卡片容器
-        val cardView = CardView(context).apply {
-            radius = 16 * density
-            cardElevation = 8 * density
-            setCardBackgroundColor(Color.WHITE)
+        // 卡片容器 (使用FrameLayout代替CardView)
+        val cardView = FrameLayout(context).apply {
+            background = createCardDrawable(16 * density)
+            elevation = 8 * density
             setOnClickListener { /* 阻止点击穿透 */ }
         }
 
@@ -165,7 +163,7 @@ class FloatingConfirmationView(context: Context) : FrameLayout(context) {
                 "待办事项 📝" to "内容：${intent.title}\n${if (intent.dueDate != null) "截止日期：已设置" else ""}"
             }
             is CommandIntent.Goal -> {
-                "目标 🎯" to "目标：${intent.goalName ?: "新目标"}\n${if (intent.targetAmount != null) "目标金额：¥${intent.targetAmount}" else ""}"
+                "目标 🎯" to "目标：${intent.goalName ?: "新目标"}${if (intent.progress != null) "\n进度：${intent.progress}%" else ""}"
             }
             is CommandIntent.Diary -> {
                 "日记 📔" to "内容：${intent.content.take(50)}${if (intent.content.length > 50) "..." else ""}"
@@ -205,6 +203,17 @@ class FloatingConfirmationView(context: Context) : FrameLayout(context) {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
             setColor(color)
+        }
+    }
+
+    /**
+     * 创建卡片背景
+     */
+    private fun createCardDrawable(radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radius
+            setColor(Color.WHITE)
         }
     }
 }
