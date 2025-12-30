@@ -80,21 +80,29 @@ fun AIAssistantScreen(
                     }
                 },
                 actions = {
-                    // 悬浮球快捷开关
+                    // 悬浮球快捷开关 - 使用气泡图标更直观
                     IconButton(
                         onClick = { viewModel.toggleFloatingBall(context) }
                     ) {
-                        Icon(
-                            imageVector = if (featureConfig?.floatingBallEnabled == true)
-                                Icons.Default.Visibility
-                            else
-                                Icons.Default.VisibilityOff,
-                            contentDescription = "悬浮球",
-                            tint = if (featureConfig?.floatingBallEnabled == true)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (featureConfig?.floatingBallEnabled == true) {
+                                    Badge(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Circle,
+                                contentDescription = "悬浮球",
+                                tint = if (featureConfig?.floatingBallEnabled == true)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "设置")
@@ -173,20 +181,7 @@ fun AIAssistantScreen(
                         }
                     }
 
-                    // 语音识别不可用时，允许使用文字输入和拍照
-                    !isVoiceAvailable -> {
-                        VoiceUnavailableContent(
-                            onOpenImageRecognition = {
-                                if (featureConfig?.imageRecognitionEnabled == true) {
-                                    showImageRecognition = true
-                                }
-                            },
-                            imageRecognitionEnabled = featureConfig?.imageRecognitionEnabled == true,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
-
-                    // 空闲状态，显示引导
+                    // 空闲状态，显示引导（不再预先判断语音不可用）
                     recognitionState is VoiceRecognitionState.Idle &&
                             commandState is CommandProcessState.Idle -> {
                         IdleStateContent(
@@ -242,7 +237,7 @@ fun AIAssistantScreen(
                 }
             }
 
-            // 底部输入区域
+            // 底部输入区域 - 始终启用语音按钮，让用户尝试
             BottomInputArea(
                 textInput = textInput,
                 onTextChange = { textInput = it },
@@ -256,7 +251,7 @@ fun AIAssistantScreen(
                 volumeLevel = volumeLevel,
                 onStartListening = { viewModel.startListening() },
                 onStopListening = { viewModel.stopListening() },
-                enabled = isVoiceAvailable
+                enabled = true
             )
         }
     }
