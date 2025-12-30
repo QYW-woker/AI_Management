@@ -17,8 +17,8 @@ android {
         applicationId = "com.lifemanager.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5.0"
+        versionCode = 7
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -161,6 +161,13 @@ dependencies {
 
     // ==================== 权限处理 (Accompanist) ====================
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+
+    // ==================== Apache POI (Excel/Word解析) ====================
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5") {
+        exclude(group = "org.apache.xmlbeans", module = "xmlbeans")
+    }
+    implementation("org.apache.xmlbeans:xmlbeans:5.1.1")
 
     // ==================== 测试依赖 ====================
     testImplementation("junit:junit:4.13.2")

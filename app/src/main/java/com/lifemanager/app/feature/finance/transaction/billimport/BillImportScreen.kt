@@ -76,7 +76,7 @@ fun BillImportScreen(
             when (val state = importState) {
                 is ImportState.Idle -> {
                     IdleContent(
-                        onSelectFile = { filePickerLauncher.launch("text/*") }
+                        onSelectFile = { filePickerLauncher.launch("*/*") }
                     )
                 }
 
@@ -96,7 +96,7 @@ fun BillImportScreen(
                         onUpdateCategory = { index, categoryId ->
                             viewModel.updateRecordCategory(index, categoryId)
                         },
-                        onSelectNewFile = { filePickerLauncher.launch("text/*") }
+                        onSelectNewFile = { filePickerLauncher.launch("*/*") }
                     )
                 }
 
@@ -111,7 +111,7 @@ fun BillImportScreen(
                         onDone = onNavigateBack,
                         onImportMore = {
                             viewModel.reset()
-                            filePickerLauncher.launch("text/*")
+                            filePickerLauncher.launch("*/*")
                         }
                     )
                 }
@@ -119,7 +119,7 @@ fun BillImportScreen(
                 is ImportState.Error -> {
                     ErrorContent(
                         message = state.message,
-                        onRetry = { filePickerLauncher.launch("text/*") },
+                        onRetry = { filePickerLauncher.launch("*/*") },
                         onDismiss = { viewModel.clearError() }
                     )
                 }
@@ -160,8 +160,16 @@ private fun IdleContent(onSelectFile: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "支持微信和支付宝导出的CSV账单文件",
+            text = "支持微信和支付宝导出的账单文件",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "支持格式：CSV、Excel(.xlsx/.xls)、Word(.docx)",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -173,7 +181,7 @@ private fun IdleContent(onSelectFile: () -> Unit) {
         ) {
             Icon(Icons.Default.FolderOpen, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("选择CSV文件")
+            Text("选择账单文件")
         }
 
         Spacer(modifier = Modifier.height(48.dp))

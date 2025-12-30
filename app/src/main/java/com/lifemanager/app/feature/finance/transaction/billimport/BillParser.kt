@@ -2,14 +2,18 @@ package com.lifemanager.app.feature.finance.transaction.billimport
 
 import android.content.Context
 import android.net.Uri
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import android.provider.OpenableColumns
+import org.apache.poi.hssf.usermodel.HSSFWorkbook
+import org.apache.poi.ss.usermodel.*
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.apache.poi.xwpf.usermodel.XWPFDocument
 import java.nio.charset.Charset
 
 /**
  * 账单解析器
  *
- * 支持解析微信和支付宝的CSV账单文件
+ * 支持解析微信和支付宝的账单文件
+ * 支持格式：CSV、Excel(.xlsx/.xls)、Word(.docx)
  */
 class BillParser(private val context: Context) {
 
@@ -31,28 +35,221 @@ class BillParser(private val context: Context) {
             "零钱提现", "零钱通转出", "信用卡还款",
             "转入零钱通", "零钱通收益", "理财通"
         )
+
+        // 支持的文件类型
+        val SUPPORTED_MIME_TYPES = arrayOf(
+            "text/csv",
+            "text/comma-separated-values",
+            "application/csv",
+            "text/plain",
+            "application/vnd.ms-excel",                                          // .xls
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+            "application/msword",                                                 // .doc
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+        )
+
+        // 支持的文件扩展名
+        val SUPPORTED_EXTENSIONS = listOf("csv", "xlsx", "xls", "docx")
+    }
+
+    /**
+     * 解析账单文件（支持CSV、Excel、Word）
+     */
+    fun parseFile(uri: Uri): BillParseResult {
+        return try {
+            val fileName = getFileName(uri)
+            val extension = fileName.substringAfterLast('.', "").lowercase()
+
+            when (extension) {
+                "csv", "txt" -> parseCSVFile(uri)
+                "xlsx" -> parseExcelFile(uri, isXlsx = true)
+                "xls" -> parseExcelFile(uri, isXlsx = false)
+                "docx" -> parseWordFile(uri)
+                "doc" -> BillParseResult.Error("暂不支持旧版Word(.doc)格式，请将文件另存为.docx格式")
+                else -> {
+                    // 尝试根据MIME类型判断
+                    val mimeType = context.contentResolver.getType(uri)
+                    when {
+                        mimeType?.contains("csv") == true ||
+                        mimeType?.contains("comma-separated") == true ||
+                        mimeType == "text/plain" -> parseCSVFile(uri)
+                        mimeType?.contains("spreadsheet") == true ||
+                        mimeType?.contains("excel") == true ||
+                        mimeType == "application/vnd.ms-excel" -> {
+                            parseExcelFile(uri, isXlsx = mimeType?.contains("openxml") == true)
+                        }
+                        mimeType?.contains("word") == true -> {
+                            if (mimeType.contains("openxml")) parseWordFile(uri)
+                            else BillParseResult.Error("暂不支持旧版Word(.doc)格式，请转换为.docx格式")
+                        }
+                        else -> parseCSVFile(uri) // 默认尝试CSV解析
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            BillParseResult.Error("解析失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 获取文件名
+     */
+    private fun getFileName(uri: Uri): String {
+        var fileName = "unknown"
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0) {
+                    fileName = cursor.getString(nameIndex) ?: "unknown"
+                }
+            }
+        }
+        return fileName
     }
 
     /**
      * 解析CSV文件
      */
-    fun parseFile(uri: Uri): BillParseResult {
+    private fun parseCSVFile(uri: Uri): BillParseResult {
+        val content = readFileContent(uri)
+        if (content.isBlank()) {
+            return BillParseResult.Error("文件内容为空")
+        }
+
+        // 检测账单类型
+        val source = detectBillSource(content)
+
+        return when (source) {
+            BillSource.WECHAT -> parseWechatBill(content)
+            BillSource.ALIPAY -> parseAlipayBill(content)
+            BillSource.UNKNOWN -> BillParseResult.Error("无法识别账单格式，请确保是微信或支付宝导出的账单")
+        }
+    }
+
+    /**
+     * 解析Excel文件 (.xlsx / .xls)
+     */
+    private fun parseExcelFile(uri: Uri, isXlsx: Boolean): BillParseResult {
         return try {
-            val content = readFileContent(uri)
-            if (content.isBlank()) {
-                return BillParseResult.Error("文件内容为空")
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: return BillParseResult.Error("无法打开文件")
+
+            val workbook: Workbook = if (isXlsx) {
+                XSSFWorkbook(inputStream)
+            } else {
+                HSSFWorkbook(inputStream)
             }
 
-            // 检测账单类型
-            val source = detectBillSource(content)
+            val sheet = workbook.getSheetAt(0)
+            if (sheet == null || sheet.physicalNumberOfRows == 0) {
+                workbook.close()
+                inputStream.close()
+                return BillParseResult.Error("Excel文件为空或无法读取")
+            }
 
+            // 将Excel转换为CSV格式的内容
+            val csvContent = excelSheetToCSV(sheet)
+            workbook.close()
+            inputStream.close()
+
+            if (csvContent.isBlank()) {
+                return BillParseResult.Error("Excel文件内容为空")
+            }
+
+            // 检测账单类型并解析
+            val source = detectBillSource(csvContent)
             when (source) {
-                BillSource.WECHAT -> parseWechatBill(content)
-                BillSource.ALIPAY -> parseAlipayBill(content)
-                BillSource.UNKNOWN -> BillParseResult.Error("无法识别账单格式，请确保是微信或支付宝导出的CSV账单")
+                BillSource.WECHAT -> parseWechatBill(csvContent)
+                BillSource.ALIPAY -> parseAlipayBill(csvContent)
+                BillSource.UNKNOWN -> BillParseResult.Error("无法识别Excel账单格式，请确保是微信或支付宝导出的账单")
             }
         } catch (e: Exception) {
-            BillParseResult.Error("解析失败: ${e.message}")
+            BillParseResult.Error("Excel解析失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 将Excel工作表转换为CSV格式字符串
+     */
+    private fun excelSheetToCSV(sheet: Sheet): String {
+        val sb = StringBuilder()
+        val formatter = DataFormatter()
+
+        for (row in sheet) {
+            val cells = mutableListOf<String>()
+            val lastCellNum = row.lastCellNum.toInt().coerceAtLeast(0)
+            for (i in 0 until lastCellNum) {
+                val cell = row.getCell(i, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK)
+                var cellValue = formatter.formatCellValue(cell)
+                // 处理包含逗号或换行的单元格
+                if (cellValue.contains(",") || cellValue.contains("\n") || cellValue.contains("\"")) {
+                    cellValue = "\"${cellValue.replace("\"", "\"\"")}\""
+                }
+                cells.add(cellValue)
+            }
+            if (cells.any { it.isNotBlank() }) {
+                sb.append(cells.joinToString(",")).append("\n")
+            }
+        }
+
+        return sb.toString()
+    }
+
+    /**
+     * 解析Word文件 (.docx)
+     */
+    private fun parseWordFile(uri: Uri): BillParseResult {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: return BillParseResult.Error("无法打开文件")
+
+            val document = XWPFDocument(inputStream)
+
+            // 提取Word文档中的所有文本和表格
+            val content = StringBuilder()
+
+            // 提取段落文本
+            for (paragraph in document.paragraphs) {
+                val text = paragraph.text.trim()
+                if (text.isNotBlank()) {
+                    content.append(text).append("\n")
+                }
+            }
+
+            // 提取表格内容（账单通常在表格中）
+            for (table in document.tables) {
+                for (row in table.rows) {
+                    val cells = row.tableCells.map { cell ->
+                        val cellText = cell.text.trim()
+                        if (cellText.contains(",") || cellText.contains("\n") || cellText.contains("\"")) {
+                            "\"${cellText.replace("\"", "\"\"")}\""
+                        } else {
+                            cellText
+                        }
+                    }
+                    if (cells.any { it.isNotBlank() }) {
+                        content.append(cells.joinToString(",")).append("\n")
+                    }
+                }
+            }
+
+            document.close()
+            inputStream.close()
+
+            val csvContent = content.toString()
+            if (csvContent.isBlank()) {
+                return BillParseResult.Error("Word文件内容为空")
+            }
+
+            // 检测账单类型并解析
+            val source = detectBillSource(csvContent)
+            when (source) {
+                BillSource.WECHAT -> parseWechatBill(csvContent)
+                BillSource.ALIPAY -> parseAlipayBill(csvContent)
+                BillSource.UNKNOWN -> BillParseResult.Error("无法识别Word账单格式，请确保文件包含有效的账单数据")
+            }
+        } catch (e: Exception) {
+            BillParseResult.Error("Word解析失败: ${e.message}")
         }
     }
 
