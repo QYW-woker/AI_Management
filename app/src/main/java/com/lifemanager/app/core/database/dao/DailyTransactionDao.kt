@@ -173,6 +173,25 @@ interface DailyTransactionDao {
         AND type = 'EXPENSE'
     """)
     suspend fun getTotalByCategoryInRange(startDate: Int, endDate: Int, categoryId: Long): Double
+
+    /**
+     * 获取所有交易记录用于导出
+     */
+    @Query("""
+        SELECT * FROM daily_transactions
+        ORDER BY date DESC, createdAt DESC
+    """)
+    suspend fun getAllForExport(): List<DailyTransactionEntity>
+
+    /**
+     * 获取指定日期范围的交易记录用于导出
+     */
+    @Query("""
+        SELECT * FROM daily_transactions
+        WHERE date BETWEEN :startDate AND :endDate
+        ORDER BY date DESC, createdAt DESC
+    """)
+    suspend fun getByDateRangeForExport(startDate: Int, endDate: Int): List<DailyTransactionEntity>
 }
 
 /**

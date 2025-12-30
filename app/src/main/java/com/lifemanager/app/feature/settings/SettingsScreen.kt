@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.BuildConfig
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * 设置页面
@@ -36,6 +38,13 @@ fun SettingsScreen(
     val showLanguagePicker by viewModel.showLanguagePicker.collectAsState()
     val showClearDataDialog by viewModel.showClearDataDialog.collectAsState()
     val showBackupSuccessDialog by viewModel.showBackupSuccessDialog.collectAsState()
+    val showLogoutDialog by viewModel.showLogoutDialog.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val showExportDialog by viewModel.showExportDialog.collectAsState()
+    val showExportSuccessDialog by viewModel.showExportSuccessDialog.collectAsState()
+    val exportStartDate by viewModel.exportStartDate.collectAsState()
+    val exportEndDate by viewModel.exportEndDate.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -153,6 +162,13 @@ fun SettingsScreen(
                     )
                     Divider(modifier = Modifier.padding(start = 56.dp))
                     ClickableSettingItem(
+                        icon = Icons.Outlined.FileDownload,
+                        title = "导出记账数据",
+                        value = "",
+                        onClick = { viewModel.showExportDialog() }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    ClickableSettingItem(
                         icon = Icons.Outlined.Delete,
                         title = "清除所有数据",
                         value = "",
@@ -191,12 +207,31 @@ fun SettingsScreen(
             // 账户
             item {
                 SettingsSection(title = "账户") {
-                    ClickableSettingItem(
-                        icon = Icons.Outlined.Login,
-                        title = "登录/注册",
-                        value = "",
-                        onClick = onNavigateToLogin
-                    )
+                    if (isLoggedIn && currentUser != null) {
+                        // 已登录 - 显示用户信息和退出按钮
+                        ClickableSettingItem(
+                            icon = Icons.Outlined.Person,
+                            title = currentUser?.nickname ?: currentUser?.username ?: "用户",
+                            value = currentUser?.email ?: "",
+                            onClick = { }
+                        )
+                        Divider(modifier = Modifier.padding(start = 56.dp))
+                        ClickableSettingItem(
+                            icon = Icons.Outlined.Logout,
+                            title = "退出登录",
+                            value = "",
+                            isDanger = true,
+                            onClick = { viewModel.showLogoutConfirmation() }
+                        )
+                    } else {
+                        // 未登录 - 显示登录按钮
+                        ClickableSettingItem(
+                            icon = Icons.Outlined.Login,
+                            title = "登录/注册",
+                            value = "",
+                            onClick = onNavigateToLogin
+                        )
+                    }
                 }
             }
         }
@@ -274,6 +309,58 @@ fun SettingsScreen(
                 }
             },
             confirmButton = { }
+        )
+    }
+
+    // 退出登录确认对话框
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.hideLogoutConfirmation() },
+            icon = { Icon(Icons.Outlined.Logout, contentDescription = null) },
+            title = { Text("退出登录") },
+            text = { Text("确定要退出当前账号吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmLogout() },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("退出")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideLogoutConfirmation() }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 数据导出对话框
+    if (showExportDialog) {
+        ExportDataDialog(
+            startDate = exportStartDate,
+            endDate = exportEndDate,
+            onStartDateChange = { viewModel.setExportStartDate(it) },
+            onEndDateChange = { viewModel.setExportEndDate(it) },
+            onConfirm = { viewModel.exportFinanceData() },
+            onDismiss = { viewModel.hideExportDialog() }
+        )
+    }
+
+    // 导出成功对话框
+    showExportSuccessDialog?.let { exportPath ->
+        AlertDialog(
+            onDismissRequest = { viewModel.hideExportSuccessDialog() },
+            icon = { Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("导出成功") },
+            text = { Text("数据已导出到:\n$exportPath") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.hideExportSuccessDialog() }) {
+                    Text("确定")
+                }
+            }
         )
     }
 }
@@ -494,4 +581,202 @@ private fun TimePickerDialog(
             }
         }
     )
+}
+
+/**
+ * 数据导出对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportDataDialog(
+    startDate: LocalDate,
+    endDate: LocalDate,
+    onStartDateChange: (LocalDate) -> Unit,
+    onEndDateChange: (LocalDate) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.FileDownload, contentDescription = null) },
+        title = { Text("导出记账数据") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "选择导出的日期范围，数据将导出为CSV格式",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // 开始日期
+                OutlinedCard(
+                    onClick = { showStartDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "开始日期",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = startDate.format(dateFormatter),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // 结束日期
+                OutlinedCard(
+                    onClick = { showEndDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "结束日期",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = endDate.format(dateFormatter),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // 快捷选项
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssistChip(
+                        onClick = {
+                            val now = LocalDate.now()
+                            onStartDateChange(now.withDayOfMonth(1))
+                            onEndDateChange(now)
+                        },
+                        label = { Text("本月") }
+                    )
+                    AssistChip(
+                        onClick = {
+                            val now = LocalDate.now()
+                            onStartDateChange(now.minusMonths(3))
+                            onEndDateChange(now)
+                        },
+                        label = { Text("近3月") }
+                    )
+                    AssistChip(
+                        onClick = {
+                            val now = LocalDate.now()
+                            onStartDateChange(now.withDayOfYear(1))
+                            onEndDateChange(now)
+                        },
+                        label = { Text("今年") }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("导出")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+
+    // 开始日期选择器
+    if (showStartDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = startDate.toEpochDay() * 24 * 60 * 60 * 1000
+        )
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000))
+                            onStartDateChange(selectedDate)
+                        }
+                        showStartDatePicker = false
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    // 结束日期选择器
+    if (showEndDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = endDate.toEpochDay() * 24 * 60 * 60 * 1000
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000))
+                            onEndDateChange(selectedDate)
+                        }
+                        showEndDatePicker = false
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }

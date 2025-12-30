@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.data.repository.AppSettings
 import com.lifemanager.app.core.data.repository.SettingsRepository
+import com.lifemanager.app.core.data.repository.UserRepository
 import com.lifemanager.app.core.database.AppDatabase
+import com.lifemanager.app.core.database.entity.UserEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +19,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileWriter
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -28,9 +32,23 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val userRepository: UserRepository,
     private val database: AppDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    // 当前用户
+    val currentUser: StateFlow<UserEntity?> = userRepository.currentUser
+
+    // 登录状态
+    val isLoggedIn: StateFlow<Boolean> = userRepository.isLoggedIn
+
+    init {
+        // 加载当前用户
+        viewModelScope.launch {
+            userRepository.loadCurrentUser()
+        }
+    }
 
     // 设置状态
     val settings: StateFlow<AppSettings> = settingsRepository.settingsFlow
@@ -254,6 +272,134 @@ class SettingsViewModel @Inject constructor(
      */
     fun clearUiState() {
         _uiState.value = SettingsUiState.Idle
+    }
+
+    /**
+     * 退出登录
+     */
+    fun logout() {
+        userRepository.logout()
+        _uiState.value = SettingsUiState.Success("已退出登录")
+    }
+
+    // 显示退出登录确认
+    private val _showLogoutDialog = MutableStateFlow(false)
+    val showLogoutDialog: StateFlow<Boolean> = _showLogoutDialog.asStateFlow()
+
+    fun showLogoutConfirmation() {
+        _showLogoutDialog.value = true
+    }
+
+    fun hideLogoutConfirmation() {
+        _showLogoutDialog.value = false
+    }
+
+    fun confirmLogout() {
+        logout()
+        hideLogoutConfirmation()
+    }
+
+    // ============ 数据导出功能 ============
+
+    // 显示导出对话框
+    private val _showExportDialog = MutableStateFlow(false)
+    val showExportDialog: StateFlow<Boolean> = _showExportDialog.asStateFlow()
+
+    // 导出成功对话框
+    private val _showExportSuccessDialog = MutableStateFlow<String?>(null)
+    val showExportSuccessDialog: StateFlow<String?> = _showExportSuccessDialog.asStateFlow()
+
+    // 导出日期范围
+    private val _exportStartDate = MutableStateFlow(LocalDate.now().minusMonths(1))
+    val exportStartDate: StateFlow<LocalDate> = _exportStartDate.asStateFlow()
+
+    private val _exportEndDate = MutableStateFlow(LocalDate.now())
+    val exportEndDate: StateFlow<LocalDate> = _exportEndDate.asStateFlow()
+
+    fun showExportDialog() {
+        _showExportDialog.value = true
+    }
+
+    fun hideExportDialog() {
+        _showExportDialog.value = false
+    }
+
+    fun setExportStartDate(date: LocalDate) {
+        _exportStartDate.value = date
+    }
+
+    fun setExportEndDate(date: LocalDate) {
+        _exportEndDate.value = date
+    }
+
+    fun hideExportSuccessDialog() {
+        _showExportSuccessDialog.value = null
+    }
+
+    /**
+     * 导出记账数据为CSV
+     */
+    fun exportFinanceData() {
+        viewModelScope.launch {
+            _uiState.value = SettingsUiState.Loading("正在导出数据...")
+            try {
+                val exportPath = withContext(Dispatchers.IO) {
+                    performExport()
+                }
+                hideExportDialog()
+                _uiState.value = SettingsUiState.Idle
+                _showExportSuccessDialog.value = exportPath
+            } catch (e: Exception) {
+                _uiState.value = SettingsUiState.Error("导出失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 执行数据导出
+     */
+    private suspend fun performExport(): String {
+        val startEpochDay = _exportStartDate.value.toEpochDay().toInt()
+        val endEpochDay = _exportEndDate.value.toEpochDay().toInt()
+
+        // 获取交易记录
+        val transactions = database.dailyTransactionDao().getByDateRangeForExport(startEpochDay, endEpochDay)
+
+        // 创建导出目录
+        val exportDir = File(context.getExternalFilesDir(null), "exports")
+        if (!exportDir.exists()) {
+            exportDir.mkdirs()
+        }
+
+        // 创建导出文件
+        val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+        val timestamp = dateFormat.format(Date())
+        val exportFile = File(exportDir, "finance_export_$timestamp.csv")
+
+        // 写入CSV
+        FileWriter(exportFile).use { writer ->
+            // CSV头
+            writer.append("日期,时间,类型,金额,备注,来源\n")
+
+            // 写入数据
+            transactions.forEach { tx ->
+                val date = LocalDate.ofEpochDay(tx.date.toLong())
+                val dateStr = "${date.year}-${String.format("%02d", date.monthValue)}-${String.format("%02d", date.dayOfMonth)}"
+                val typeStr = if (tx.type == "INCOME") "收入" else "支出"
+                val sourceStr = when (tx.source) {
+                    "MANUAL" -> "手动输入"
+                    "VOICE" -> "语音识别"
+                    "SCREENSHOT" -> "截图识别"
+                    "IMPORT" -> "导入"
+                    else -> tx.source
+                }
+                // 对备注中的逗号和引号进行处理
+                val noteEscaped = "\"${tx.note.replace("\"", "\"\"")}\""
+                writer.append("$dateStr,${tx.time},$typeStr,${tx.amount},$noteEscaped,$sourceStr\n")
+            }
+        }
+
+        return exportFile.absolutePath
     }
 }
 
