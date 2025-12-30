@@ -45,7 +45,7 @@ import com.lifemanager.app.core.database.entity.*
         SavingsPlanEntity::class,
         SavingsRecordEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
