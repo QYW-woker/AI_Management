@@ -97,7 +97,7 @@ class BudgetViewModel @Inject constructor(
      */
     private fun loadExpenseCategories() {
         viewModelScope.launch {
-            customFieldDao.getFieldsByModuleType("EXPENSE_CATEGORY")
+            customFieldDao.getFieldsByModule("EXPENSE_CATEGORY")
                 .collectLatest { categories ->
                     _expenseCategories.value = categories
                 }

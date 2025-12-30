@@ -76,11 +76,11 @@ class RecurringTransactionViewModel @Inject constructor(
      */
     private fun loadCategories() {
         viewModelScope.launch {
-            customFieldDao.getFieldsByModuleType("INCOME_CATEGORY")
+            customFieldDao.getFieldsByModule("INCOME_CATEGORY")
                 .collectLatest { _incomeCategories.value = it }
         }
         viewModelScope.launch {
-            customFieldDao.getFieldsByModuleType("EXPENSE_CATEGORY")
+            customFieldDao.getFieldsByModule("EXPENSE_CATEGORY")
                 .collectLatest { _expenseCategories.value = it }
         }
     }
@@ -421,8 +421,8 @@ class RecurringTransactionViewModel @Inject constructor(
                     amount = transaction.amount,
                     categoryId = transaction.categoryId,
                     note = "自动记账: ${transaction.name}",
-                    paymentMethod = null,
-                    ledgerId = transaction.ledgerId
+                    ledgerId = transaction.ledgerId,
+                    source = "IMPORT"
                 )
                 dailyTransactionDao.insert(dailyTransaction)
 

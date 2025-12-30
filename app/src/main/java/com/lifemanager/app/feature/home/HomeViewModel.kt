@@ -7,7 +7,6 @@ import com.lifemanager.app.core.database.dao.GoalDao
 import com.lifemanager.app.core.database.dao.HabitDao
 import com.lifemanager.app.core.database.dao.TodoDao
 import com.lifemanager.app.core.database.entity.GoalEntity
-import com.lifemanager.app.core.database.entity.GoalStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -125,7 +124,7 @@ class HomeViewModel @Inject constructor(
      */
     private suspend fun loadTopGoals() {
         try {
-            goalDao.getGoalsByStatus(GoalStatus.ACTIVE).collectLatest { goals ->
+            goalDao.getActiveGoals().collectLatest { goals ->
                 val topGoals = goals.take(3).map { goal ->
                     val progress = calculateGoalProgress(goal)
                     GoalProgressData(
