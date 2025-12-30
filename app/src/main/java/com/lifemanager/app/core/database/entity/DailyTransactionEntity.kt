@@ -26,6 +26,12 @@ import androidx.room.PrimaryKey
             parentColumns = ["id"],
             childColumns = ["ledgerId"],
             onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = FundAccountEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["accountId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [
@@ -33,10 +39,12 @@ import androidx.room.PrimaryKey
         Index(value = ["categoryId"]),
         Index(value = ["type"]),
         Index(value = ["ledgerId"]),
+        Index(value = ["accountId"]),
         // 复合索引优化常用查询
         Index(value = ["date", "type"]),
         Index(value = ["ledgerId", "date"]),
-        Index(value = ["categoryId", "date"])
+        Index(value = ["categoryId", "date"]),
+        Index(value = ["accountId", "date"])
     ]
 )
 data class DailyTransactionEntity(
@@ -46,6 +54,9 @@ data class DailyTransactionEntity(
 
     // 账本ID（可选，null表示默认账本）
     val ledgerId: Long? = null,
+
+    // 资金账户ID（可选，用于追踪资金来源/去向）
+    val accountId: Long? = null,
 
     // 类型: INCOME(收入) 或 EXPENSE(支出)
     val type: String,

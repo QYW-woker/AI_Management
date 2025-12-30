@@ -60,6 +60,9 @@ sealed class Screen(val route: String) {
     /** 周期记账 */
     object RecurringTransaction : Screen("recurring_transaction")
 
+    /** 资金账户 */
+    object FundAccount : Screen("fund_account")
+
     // ==================== 详情/编辑页面 ====================
 
     /** 添加收支记录 */

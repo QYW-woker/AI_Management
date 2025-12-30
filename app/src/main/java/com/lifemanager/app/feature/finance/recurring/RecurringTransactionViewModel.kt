@@ -76,11 +76,11 @@ class RecurringTransactionViewModel @Inject constructor(
      */
     private fun loadCategories() {
         viewModelScope.launch {
-            customFieldDao.getFieldsByModule("INCOME_CATEGORY")
+            customFieldDao.getFieldsByModule("INCOME")
                 .collectLatest { _incomeCategories.value = it }
         }
         viewModelScope.launch {
-            customFieldDao.getFieldsByModule("EXPENSE_CATEGORY")
+            customFieldDao.getFieldsByModule("EXPENSE")
                 .collectLatest { _expenseCategories.value = it }
         }
     }

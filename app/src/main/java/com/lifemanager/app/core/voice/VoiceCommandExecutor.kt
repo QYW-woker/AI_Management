@@ -4,11 +4,16 @@ import com.lifemanager.app.core.ai.model.*
 import com.lifemanager.app.core.database.entity.DailyTransactionEntity
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.DiaryEntity
+import com.lifemanager.app.core.database.entity.GoalEntity
+import com.lifemanager.app.core.database.entity.GoalType
+import com.lifemanager.app.core.database.entity.GoalCategory
+import com.lifemanager.app.core.database.entity.ProgressType
 import com.lifemanager.app.core.database.entity.TransactionSource
 import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import com.lifemanager.app.domain.repository.TodoRepository
 import com.lifemanager.app.domain.repository.DiaryRepository
+import com.lifemanager.app.domain.repository.GoalRepository
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -23,7 +28,8 @@ import javax.inject.Singleton
 class VoiceCommandExecutor @Inject constructor(
     private val transactionRepository: DailyTransactionRepository,
     private val todoRepository: TodoRepository,
-    private val diaryRepository: DiaryRepository
+    private val diaryRepository: DiaryRepository,
+    private val goalRepository: GoalRepository
 ) {
 
     /**
@@ -275,15 +281,65 @@ class VoiceCommandExecutor @Inject constructor(
      */
     private suspend fun executeGoal(intent: CommandIntent.Goal): ExecutionResult {
         return when (intent.action) {
-            GoalAction.CREATE -> ExecutionResult.NeedMoreInfo(
-                intent = intent,
-                missingFields = listOf("goalName", "targetAmount", "deadline"),
-                prompt = "请提供目标详情"
-            )
-            GoalAction.UPDATE -> ExecutionResult.Success(
-                message = "目标已更新",
-                data = emptyMap<String, Any>()
-            )
+            GoalAction.CREATE -> {
+                val goalName = intent.goalName
+                if (goalName.isNullOrBlank()) {
+                    return ExecutionResult.NeedMoreInfo(
+                        intent = intent,
+                        missingFields = listOf("goalName"),
+                        prompt = "请提供目标名称"
+                    )
+                }
+
+                // 解析目标类型和周期
+                val (goalType, endDate) = parseGoalTypeAndEndDate(goalName)
+
+                // 解析目标分类
+                val category = parseGoalCategory(goalName)
+
+                // 解析目标数值
+                val (targetValue, unit) = parseGoalTarget(goalName)
+
+                val now = LocalDate.now()
+                val entity = GoalEntity(
+                    id = 0,
+                    title = goalName,
+                    description = "",
+                    goalType = goalType,
+                    category = category,
+                    startDate = now.toEpochDay().toInt(),
+                    endDate = endDate,
+                    progressType = if (targetValue != null) ProgressType.NUMERIC else ProgressType.PERCENTAGE,
+                    targetValue = targetValue,
+                    currentValue = 0.0,
+                    unit = unit
+                )
+
+                goalRepository.insert(entity)
+
+                ExecutionResult.Success(
+                    message = "已创建目标: $goalName",
+                    data = mapOf(
+                        "goalName" to goalName,
+                        "targetValue" to (targetValue ?: 0.0),
+                        "unit" to unit
+                    )
+                )
+            }
+            GoalAction.UPDATE -> {
+                val progress = intent.progress
+                if (progress != null) {
+                    ExecutionResult.Success(
+                        message = "目标进度已更新为 ${progress.toInt()}%",
+                        data = mapOf("progress" to progress)
+                    )
+                } else {
+                    ExecutionResult.Success(
+                        message = "目标已更新",
+                        data = emptyMap<String, Any>()
+                    )
+                }
+            }
             GoalAction.CHECK -> ExecutionResult.Success(
                 message = "目标查看功能开发中",
                 data = emptyMap<String, Any>()
@@ -304,6 +360,84 @@ class VoiceCommandExecutor @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * 解析目标类型和结束日期
+     */
+    private fun parseGoalTypeAndEndDate(goalName: String): Pair<String, Int?> {
+        val now = LocalDate.now()
+        return when {
+            goalName.contains("这个月") || goalName.contains("本月") -> {
+                val endOfMonth = now.withDayOfMonth(now.lengthOfMonth())
+                GoalType.MONTHLY to endOfMonth.toEpochDay().toInt()
+            }
+            goalName.contains("这个季度") || goalName.contains("本季度") -> {
+                val endOfQuarter = now.plusMonths((3 - now.monthValue % 3).toLong())
+                    .withDayOfMonth(1).minusDays(1)
+                GoalType.QUARTERLY to endOfQuarter.toEpochDay().toInt()
+            }
+            goalName.contains("今年") || goalName.contains("本年") -> {
+                val endOfYear = now.withDayOfYear(now.lengthOfYear())
+                GoalType.YEARLY to endOfYear.toEpochDay().toInt()
+            }
+            else -> GoalType.LONG_TERM to null
+        }
+    }
+
+    /**
+     * 解析目标分类
+     */
+    private fun parseGoalCategory(goalName: String): String {
+        return when {
+            goalName.contains("减肥") || goalName.contains("健身") ||
+            goalName.contains("运动") || goalName.contains("体重") ||
+            goalName.contains("锻炼") || goalName.contains("跑步") -> GoalCategory.HEALTH
+
+            goalName.contains("存钱") || goalName.contains("赚") ||
+            goalName.contains("收入") || goalName.contains("储蓄") ||
+            goalName.contains("万元") || goalName.contains("元") -> GoalCategory.FINANCE
+
+            goalName.contains("学习") || goalName.contains("读书") ||
+            goalName.contains("看书") || goalName.contains("课程") ||
+            goalName.contains("考试") || goalName.contains("证书") -> GoalCategory.LEARNING
+
+            goalName.contains("工作") || goalName.contains("升职") ||
+            goalName.contains("项目") || goalName.contains("业绩") -> GoalCategory.CAREER
+
+            else -> GoalCategory.LIFESTYLE
+        }
+    }
+
+    /**
+     * 解析目标数值和单位
+     */
+    private fun parseGoalTarget(goalName: String): Pair<Double?, String> {
+        // 匹配数字+单位的模式
+        val patterns = listOf(
+            Regex("(\\d+(?:\\.\\d+)?)(斤|公斤|kg|KG)") to { v: Double -> v to "斤" },
+            Regex("(\\d+(?:\\.\\d+)?)(公里|km|KM)") to { v: Double -> v to "公里" },
+            Regex("(\\d+(?:\\.\\d+)?)(万元|万)") to { v: Double -> v * 10000 to "元" },
+            Regex("(\\d+(?:\\.\\d+)?)(元|块)") to { v: Double -> v to "元" },
+            Regex("(\\d+(?:\\.\\d+)?)(本|篇|个|次|天)") to { v: Double -> v to goalName.let {
+                when {
+                    it.contains("书") || it.contains("本") -> "本"
+                    it.contains("天") -> "天"
+                    it.contains("次") -> "次"
+                    else -> "个"
+                }
+            }}
+        )
+
+        for ((regex, transform) in patterns) {
+            val match = regex.find(goalName)
+            if (match != null) {
+                val value = match.groupValues[1].toDoubleOrNull() ?: continue
+                return transform(value)
+            }
+        }
+
+        return null to ""
     }
 
     /**

@@ -183,4 +183,10 @@ object DatabaseModule {
     fun provideGoalRecordDao(database: AppDatabase): GoalRecordDao {
         return database.goalRecordDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideFundAccountDao(database: AppDatabase): FundAccountDao {
+        return database.fundAccountDao()
+    }
 }

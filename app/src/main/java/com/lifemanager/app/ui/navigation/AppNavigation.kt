@@ -42,6 +42,7 @@ import com.lifemanager.app.feature.finance.accounting.AccountingCalendarScreen
 import com.lifemanager.app.feature.finance.accounting.AccountingSearchScreen
 import com.lifemanager.app.feature.finance.ledger.LedgerManagementScreen
 import com.lifemanager.app.feature.finance.recurring.RecurringTransactionScreen
+import com.lifemanager.app.feature.finance.account.FundAccountScreen
 
 /**
  * 窗口尺寸类型
@@ -316,7 +317,8 @@ fun AppNavHost(
                 onNavigateToBudget = { navController.navigate(Screen.Budget.route) },
                 onNavigateToImport = { navController.navigate(Screen.BillImport.route) },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                onNavigateToDailyTransaction = { navController.navigate(Screen.DailyTransaction.route) }
+                onNavigateToDailyTransaction = { navController.navigate(Screen.DailyTransaction.route) },
+                onNavigateToFundAccount = { navController.navigate(Screen.FundAccount.route) }
             )
         }
 
@@ -345,6 +347,13 @@ fun AppNavHost(
         // 周期记账
         composable(Screen.RecurringTransaction.route) {
             RecurringTransactionScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 资金账户
+        composable(Screen.FundAccount.route) {
+            FundAccountScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

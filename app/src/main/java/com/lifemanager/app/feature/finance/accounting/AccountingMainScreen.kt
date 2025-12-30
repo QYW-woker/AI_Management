@@ -54,6 +54,7 @@ fun AccountingMainScreen(
     onNavigateToImport: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToDailyTransaction: () -> Unit,
+    onNavigateToFundAccount: () -> Unit = {},
     viewModel: AccountingMainViewModel = hiltViewModel()
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -112,6 +113,10 @@ fun AccountingMainScreen(
                 onNavigateToSettings = {
                     scope.launch { drawerState.close() }
                     onNavigateToSettings()
+                },
+                onNavigateToFundAccount = {
+                    scope.launch { drawerState.close() }
+                    onNavigateToFundAccount()
                 }
             )
         }
@@ -199,10 +204,11 @@ fun AccountingMainScreen(
     if (showQuickAddDialog) {
         QuickAddTransactionDialog(
             onDismiss = { viewModel.hideQuickAdd() },
-            onConfirm = { type, amount, categoryId, note, date, time ->
-                viewModel.quickAddTransaction(type, amount, categoryId, note, date, time)
+            onConfirm = { type, amount, categoryId, note, date, time, accountId ->
+                viewModel.quickAddTransaction(type, amount, categoryId, note, date, time, accountId)
             },
-            categories = viewModel.categories.collectAsState().value
+            categories = viewModel.categories.collectAsState().value,
+            accounts = viewModel.accounts.collectAsState().value
         )
     }
 
@@ -237,7 +243,8 @@ private fun AccountingSidebar(
     onNavigateToCategoryManagement: () -> Unit,
     onNavigateToBudget: () -> Unit,
     onNavigateToImport: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToFundAccount: () -> Unit
 ) {
     ModalDrawerSheet(
         modifier = Modifier.width(280.dp)
@@ -318,6 +325,13 @@ private fun AccountingSidebar(
             label = "多账本管理",
             description = "管理多个账本",
             onClick = onNavigateToLedgerManagement
+        )
+
+        SidebarItem(
+            icon = Icons.Outlined.AccountBalanceWallet,
+            label = "资金账户",
+            description = "管理资金账户余额",
+            onClick = onNavigateToFundAccount
         )
 
         SidebarItem(
@@ -862,12 +876,14 @@ private fun RecentTransactionItem(
 @Composable
 private fun QuickAddTransactionDialog(
     onDismiss: () -> Unit,
-    onConfirm: (type: String, amount: Double, categoryId: Long?, note: String, date: LocalDate, time: String?) -> Unit,
-    categories: List<com.lifemanager.app.core.database.entity.CustomFieldEntity>
+    onConfirm: (type: String, amount: Double, categoryId: Long?, note: String, date: LocalDate, time: String?, accountId: Long?) -> Unit,
+    categories: List<com.lifemanager.app.core.database.entity.CustomFieldEntity>,
+    accounts: List<com.lifemanager.app.core.database.entity.FundAccountEntity> = emptyList()
 ) {
     var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
     var amount by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<Long?>(null) }
+    var selectedAccountId by remember { mutableStateOf<Long?>(null) }
     var note by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTime by remember { mutableStateOf<String?>(null) }
@@ -1008,7 +1024,7 @@ private fun QuickAddTransactionDialog(
 
                 // 分类选择
                 val filteredCategories = categories.filter {
-                    it.moduleType == if (selectedType == TransactionType.EXPENSE) "EXPENSE_CATEGORY" else "INCOME_CATEGORY"
+                    it.moduleType == if (selectedType == TransactionType.EXPENSE) "EXPENSE" else "INCOME"
                 }
 
                 if (filteredCategories.isNotEmpty()) {
@@ -1046,6 +1062,38 @@ private fun QuickAddTransactionDialog(
                     }
                 }
 
+                // 资金账户选择
+                if (accounts.isNotEmpty()) {
+                    Text(
+                        text = "资金账户（选填）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(accounts) { account ->
+                            val isSelected = selectedAccountId == account.id
+                            val icon = com.lifemanager.app.core.database.entity.AccountType.getIcon(account.accountType)
+                            if (isSelected) {
+                                Button(
+                                    onClick = { selectedAccountId = null }, // 点击已选中的取消选择
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { selectedAccountId = account.id },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text("$icon ${account.name}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 备注
                 OutlinedTextField(
                     value = note,
@@ -1061,7 +1109,7 @@ private fun QuickAddTransactionDialog(
                 onClick = {
                     val amountValue = amount.toDoubleOrNull()
                     if (amountValue != null && amountValue > 0) {
-                        onConfirm(selectedType, amountValue, selectedCategoryId, note, selectedDate, selectedTime)
+                        onConfirm(selectedType, amountValue, selectedCategoryId, note, selectedDate, selectedTime, selectedAccountId)
                         onDismiss()
                     }
                 }
@@ -1357,7 +1405,7 @@ private fun EditTransactionDialog(
 
                 // 分类选择
                 val filteredCategories = categories.filter {
-                    it.moduleType == if (selectedType == "EXPENSE") "EXPENSE_CATEGORY" else "INCOME_CATEGORY"
+                    it.moduleType == if (selectedType == "EXPENSE") "EXPENSE" else "INCOME"
                 }
 
                 if (filteredCategories.isNotEmpty()) {

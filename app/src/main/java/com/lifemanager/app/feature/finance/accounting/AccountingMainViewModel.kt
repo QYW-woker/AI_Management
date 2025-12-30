@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.dao.CustomFieldDao
 import com.lifemanager.app.core.database.dao.DailyTransactionDao
+import com.lifemanager.app.core.database.dao.FundAccountDao
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.core.database.entity.DailyTransactionEntity
+import com.lifemanager.app.core.database.entity.FundAccountEntity
 import com.lifemanager.app.domain.model.DailyStats
 import com.lifemanager.app.domain.model.DailyTransactionWithCategory
 import com.lifemanager.app.domain.model.PeriodStats
@@ -30,7 +32,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AccountingMainViewModel @Inject constructor(
     private val transactionDao: DailyTransactionDao,
-    private val customFieldDao: CustomFieldDao
+    private val customFieldDao: CustomFieldDao,
+    private val fundAccountDao: FundAccountDao
 ) : ViewModel() {
 
     // UI状态
@@ -67,6 +70,10 @@ class AccountingMainViewModel @Inject constructor(
     private val _categories = MutableStateFlow<List<CustomFieldEntity>>(emptyList())
     val categories: StateFlow<List<CustomFieldEntity>> = _categories.asStateFlow()
 
+    // 资金账户列表
+    private val _accounts = MutableStateFlow<List<FundAccountEntity>>(emptyList())
+    val accounts: StateFlow<List<FundAccountEntity>> = _accounts.asStateFlow()
+
     // 快速记账对话框显示状态
     private val _showQuickAddDialog = MutableStateFlow(false)
     val showQuickAddDialog: StateFlow<Boolean> = _showQuickAddDialog.asStateFlow()
@@ -81,6 +88,7 @@ class AccountingMainViewModel @Inject constructor(
     init {
         loadData()
         loadCategories()
+        loadAccounts()
     }
 
     /**
@@ -180,9 +188,20 @@ class AccountingMainViewModel @Inject constructor(
     private fun loadCategories() {
         viewModelScope.launch {
             customFieldDao.getFieldsByModuleTypes(
-                listOf("EXPENSE_CATEGORY", "INCOME_CATEGORY")
+                listOf("EXPENSE", "INCOME")
             ).collectLatest { fields ->
                 _categories.value = fields
+            }
+        }
+    }
+
+    /**
+     * 加载资金账户
+     */
+    private fun loadAccounts() {
+        viewModelScope.launch {
+            fundAccountDao.getAllEnabled().collectLatest { accountList ->
+                _accounts.value = accountList
             }
         }
     }
@@ -210,7 +229,8 @@ class AccountingMainViewModel @Inject constructor(
         categoryId: Long?,
         note: String,
         date: LocalDate = LocalDate.now(),
-        time: String? = null
+        time: String? = null,
+        accountId: Long? = null
     ) {
         val now = System.currentTimeMillis()
         val transactionTime = time ?: String.format("%02d:%02d", java.time.LocalTime.now().hour, java.time.LocalTime.now().minute)
@@ -223,11 +243,24 @@ class AccountingMainViewModel @Inject constructor(
                     type = type,
                     amount = amount,
                     categoryId = categoryId,
+                    accountId = accountId,
                     note = note,
                     createdAt = now,
                     updatedAt = now
                 )
                 transactionDao.insert(transaction)
+
+                // 更新账户余额
+                if (accountId != null) {
+                    if (type == "EXPENSE") {
+                        // 支出：减少余额
+                        fundAccountDao.subtractBalance(accountId, amount)
+                    } else {
+                        // 收入：增加余额
+                        fundAccountDao.addBalance(accountId, amount)
+                    }
+                }
+
                 hideQuickAdd()
             } catch (e: Exception) {
                 // Handle error

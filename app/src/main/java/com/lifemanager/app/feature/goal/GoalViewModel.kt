@@ -76,6 +76,7 @@ class GoalViewModel @Inject constructor(
                         val filtered = when (_currentFilter.value) {
                             "ACTIVE" -> allGoals.filter { it.status == GoalStatus.ACTIVE }
                             "COMPLETED" -> allGoals.filter { it.status == GoalStatus.COMPLETED }
+                            "ABANDONED" -> allGoals.filter { it.status == GoalStatus.ABANDONED }
                             else -> allGoals
                         }
                         _goals.value = filtered

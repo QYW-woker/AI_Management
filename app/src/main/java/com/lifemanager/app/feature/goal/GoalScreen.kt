@@ -383,6 +383,7 @@ private fun EnhancedFilterChips(
     val filters = listOf(
         Triple("ACTIVE", "进行中", Icons.Default.PlayCircle),
         Triple("COMPLETED", "已完成", Icons.Default.CheckCircle),
+        Triple("ABANDONED", "已放弃", Icons.Default.Cancel),
         Triple("ALL", "全部", Icons.Default.List)
     )
 
