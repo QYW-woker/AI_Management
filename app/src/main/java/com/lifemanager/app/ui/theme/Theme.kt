@@ -13,9 +13,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * 浅色主题配色
+ * 卡通风格浅色主题配色
  */
-private val LightColorScheme = lightColorScheme(
+private val CartoonLightColorScheme = lightColorScheme(
     primary = AppColors.Primary,
     onPrimary = AppColors.OnPrimary,
     primaryContainer = AppColors.PrimaryContainer,
@@ -43,47 +43,47 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = AppColors.SurfaceVariant,
     onSurfaceVariant = AppColors.OnSurfaceVariant,
 
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0)
+    outline = Color(0xFFB0A0C0),
+    outlineVariant = Color(0xFFE0D8EA)
 )
 
 /**
- * 深色主题配色
+ * 卡通风格深色主题配色
  */
-private val DarkColorScheme = darkColorScheme(
-    primary = AppColors.Primary,
-    onPrimary = AppColors.OnPrimary,
-    primaryContainer = Color(0xFF004A77),
-    onPrimaryContainer = Color(0xFFD0E4FF),
+private val CartoonDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFB8A0E8),
+    onPrimary = Color(0xFF2D1F5B),
+    primaryContainer = Color(0xFF4A3B7C),
+    onPrimaryContainer = Color(0xFFEDE7FB),
 
-    secondary = AppColors.Secondary,
-    onSecondary = Color(0xFF003910),
-    secondaryContainer = Color(0xFF005318),
-    onSecondaryContainer = Color(0xFF8FF89A),
+    secondary = Color(0xFF8FE0CF),
+    onSecondary = Color(0xFF0D3D34),
+    secondaryContainer = Color(0xFF2A5A50),
+    onSecondaryContainer = Color(0xFFD7F5EE),
 
-    tertiary = AppColors.Tertiary,
-    onTertiary = Color(0xFF4D2700),
-    tertiaryContainer = Color(0xFF6D3900),
-    onTertiaryContainer = Color(0xFFFFDCC2),
+    tertiary = Color(0xFFFFCBA4),
+    onTertiary = Color(0xFF3D2314),
+    tertiaryContainer = Color(0xFF6D4A30),
+    onTertiaryContainer = Color(0xFFFFE8D9),
 
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    error = Color(0xFFFF9B9B),
+    onError = Color(0xFF5C1F1F),
+    errorContainer = Color(0xFF8B3030),
+    onErrorContainer = Color(0xFFFFE5E5),
 
     background = AppColors.DarkBackground,
     onBackground = AppColors.DarkOnBackground,
     surface = AppColors.DarkSurface,
     onSurface = AppColors.DarkOnSurface,
     surfaceVariant = AppColors.DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFCAC4D0),
+    onSurfaceVariant = Color(0xFFD0C8DA),
 
-    outline = Color(0xFF938F99),
-    outlineVariant = Color(0xFF49454F)
+    outline = Color(0xFF6A5A7A),
+    outlineVariant = Color(0xFF4A4058)
 )
 
 /**
- * AI智能生活管理APP主题
+ * AI智能生活管理APP主题 - 卡通风格
  *
  * @param darkTheme 是否使用深色主题
  * @param dynamicColor 是否使用动态颜色（Android 12+）
@@ -92,7 +92,7 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun LifeManagerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // 默认关闭动态颜色以保持品牌一致性
+    dynamicColor: Boolean = false, // 默认关闭以保持可爱风格一致性
     content: @Composable () -> Unit
 ) {
     // 选择颜色方案
@@ -102,8 +102,8 @@ fun LifeManagerTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> CartoonDarkColorScheme
+        else -> CartoonLightColorScheme
     }
 
     // 设置状态栏和导航栏颜色
@@ -120,6 +120,7 @@ fun LifeManagerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        shapes = CartoonShapes,
         typography = AppTypography,
         content = content
     )
