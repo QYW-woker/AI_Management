@@ -30,6 +30,10 @@ import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.TodoStatus
 import com.lifemanager.app.domain.model.*
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * 待办记事主界面
@@ -48,6 +52,9 @@ fun TodoScreen(
     val quadrantData by viewModel.quadrantData.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
     val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val calendarTodoCount by viewModel.calendarTodoCount.collectAsState()
+    val selectedDateTodos by viewModel.selectedDateTodos.collectAsState()
 
     Scaffold(
         topBar = {
@@ -61,8 +68,16 @@ fun TodoScreen(
                 actions = {
                     IconButton(onClick = { viewModel.toggleViewMode() }) {
                         Icon(
-                            imageVector = if (viewMode == "LIST") Icons.Filled.GridView else Icons.Filled.List,
-                            contentDescription = if (viewMode == "LIST") "四象限视图" else "列表视图"
+                            imageVector = when (viewMode) {
+                                "LIST" -> Icons.Filled.GridView
+                                "QUADRANT" -> Icons.Filled.CalendarMonth
+                                else -> Icons.Filled.List
+                            },
+                            contentDescription = when (viewMode) {
+                                "LIST" -> "四象限视图"
+                                "QUADRANT" -> "日历视图"
+                                else -> "列表视图"
+                            }
                         )
                     }
                 }
@@ -119,14 +134,22 @@ fun TodoScreen(
                 }
 
                 is TodoUiState.Success -> {
-                    if (viewMode == "LIST") {
-                        TodoListView(
+                    when (viewMode) {
+                        "LIST" -> TodoListView(
                             groups = todoGroups,
                             viewModel = viewModel
                         )
-                    } else {
-                        QuadrantView(
+                        "QUADRANT" -> QuadrantView(
                             data = quadrantData,
+                            viewModel = viewModel
+                        )
+                        "CALENDAR" -> CalendarView(
+                            selectedDate = selectedDate,
+                            todoCount = calendarTodoCount,
+                            todos = selectedDateTodos,
+                            onDateSelect = { viewModel.selectDate(it) },
+                            onPreviousMonth = { viewModel.previousMonth() },
+                            onNextMonth = { viewModel.nextMonth() },
                             viewModel = viewModel
                         )
                     }
@@ -728,6 +751,233 @@ private fun EmptyState() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
+        }
+    }
+}
+
+/**
+ * 日历视图
+ */
+@Composable
+private fun CalendarView(
+    selectedDate: LocalDate,
+    todoCount: Map<Int, Int>,
+    todos: List<TodoEntity>,
+    onDateSelect: (LocalDate) -> Unit,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    viewModel: TodoViewModel
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // 月份导航
+        CalendarHeader(
+            currentMonth = YearMonth.from(selectedDate),
+            onPreviousMonth = onPreviousMonth,
+            onNextMonth = onNextMonth
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 日历网格
+        CalendarGrid(
+            currentMonth = YearMonth.from(selectedDate),
+            selectedDate = selectedDate,
+            todoCount = todoCount,
+            onDateSelect = onDateSelect
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 选中日期的待办列表
+        Text(
+            text = "${selectedDate.monthValue}月${selectedDate.dayOfMonth}日的待办",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (todos.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "当日无待办事项",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(todos, key = { it.id }) { todo ->
+                    TodoItem(
+                        todo = todo,
+                        isOverdue = viewModel.isOverdue(todo),
+                        onToggleComplete = { viewModel.toggleComplete(todo.id) },
+                        onClick = { viewModel.showEditDialog(todo.id) },
+                        onDelete = { viewModel.showDeleteConfirm(todo.id) },
+                        formatDueDate = { viewModel.formatDueDate(it) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarHeader(
+    currentMonth: YearMonth,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onPreviousMonth) {
+            Icon(Icons.Default.ChevronLeft, contentDescription = "上个月")
+        }
+
+        Text(
+            text = "${currentMonth.year}年${currentMonth.monthValue}月",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        IconButton(onClick = onNextMonth) {
+            Icon(Icons.Default.ChevronRight, contentDescription = "下个月")
+        }
+    }
+}
+
+@Composable
+private fun CalendarGrid(
+    currentMonth: YearMonth,
+    selectedDate: LocalDate,
+    todoCount: Map<Int, Int>,
+    onDateSelect: (LocalDate) -> Unit
+) {
+    val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
+    val firstDayOfMonth = currentMonth.atDay(1)
+    val lastDayOfMonth = currentMonth.atEndOfMonth()
+    val startDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
+    val today = LocalDate.now()
+
+    Column {
+        // 星期标题
+        Row(modifier = Modifier.fillMaxWidth()) {
+            daysOfWeek.forEach { day ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = day,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 日期网格
+        var dayCounter = 1
+        val totalDays = lastDayOfMonth.dayOfMonth
+        val weeks = (startDayOfWeek + totalDays + 6) / 7
+
+        repeat(weeks) { week ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                repeat(7) { dayOfWeek ->
+                    val cellIndex = week * 7 + dayOfWeek
+                    val dayNumber = cellIndex - startDayOfWeek + 1
+
+                    if (dayNumber in 1..totalDays) {
+                        val date = currentMonth.atDay(dayNumber)
+                        val epochDay = date.toEpochDay().toInt()
+                        val count = todoCount[epochDay] ?: 0
+                        val isSelected = date == selectedDate
+                        val isToday = date == today
+
+                        CalendarDay(
+                            day = dayNumber,
+                            todoCount = count,
+                            isSelected = isSelected,
+                            isToday = isToday,
+                            onClick = { onDateSelect(date) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarDay(
+    day: Int,
+    todoCount: Int,
+    isSelected: Boolean,
+    isToday: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = when {
+        isSelected -> MaterialTheme.colorScheme.primary
+        isToday -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
+    }
+
+    val textColor = when {
+        isSelected -> MaterialTheme.colorScheme.onPrimary
+        isToday -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .padding(2.dp)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = day.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+                fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal
+            )
+
+            if (todoCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.primary,
+                            CircleShape
+                        )
+                )
+            }
         }
     }
 }

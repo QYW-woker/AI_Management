@@ -168,6 +168,27 @@ interface TodoDao {
      */
     @Query("SELECT COUNT(*) FROM todos WHERE status = 'PENDING'")
     suspend fun countPending(): Int
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE dueDate = :epochDay
+        ORDER BY status ASC, priority DESC
+    """)
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    @Query("""
+        SELECT dueDate as date, COUNT(*) as count
+        FROM todos
+        WHERE dueDate >= :startDate AND dueDate <= :endDate
+        GROUP BY dueDate
+    """)
+    suspend fun getTodoCountByDateRangeRaw(startDate: Int, endDate: Int): List<DateTodoCount>
 }
 
 /**
@@ -177,3 +198,18 @@ data class TodoStats(
     val total: Int,
     val completed: Int
 )
+
+/**
+ * 日期待办数量
+ */
+data class DateTodoCount(
+    val date: Int,
+    val count: Int
+)
+
+/**
+ * 扩展函数：将列表转换为Map
+ */
+suspend fun TodoDao.getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+    return getTodoCountByDateRangeRaw(startDate, endDate).associate { it.date to it.count }
+}

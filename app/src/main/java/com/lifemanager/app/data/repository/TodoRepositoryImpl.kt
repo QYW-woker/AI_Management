@@ -83,4 +83,12 @@ class TodoRepositoryImpl @Inject constructor(
     override suspend fun countPending(): Int {
         return dao.countPending()
     }
+
+    override suspend fun getTodosByDate(epochDay: Int): List<TodoEntity> {
+        return dao.getTodosByDate(epochDay)
+    }
+
+    override suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+        return dao.getTodoCountByDateRange(startDate, endDate)
+    }
 }

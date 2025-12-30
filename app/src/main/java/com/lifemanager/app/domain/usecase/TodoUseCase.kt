@@ -294,4 +294,18 @@ class TodoUseCase @Inject constructor(
         val today = LocalDate.now().toEpochDay().toInt()
         return todo.status == TodoStatus.PENDING && todo.dueDate != null && todo.dueDate < today
     }
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity> {
+        return repository.getTodosByDate(epochDay)
+    }
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+        return repository.getTodoCountByDateRange(startDate, endDate)
+    }
 }

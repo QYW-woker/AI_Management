@@ -93,4 +93,14 @@ interface TodoRepository {
      * 统计待完成数量
      */
     suspend fun countPending(): Int
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int>
 }
