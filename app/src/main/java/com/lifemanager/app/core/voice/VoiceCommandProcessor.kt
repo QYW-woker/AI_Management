@@ -44,6 +44,13 @@ class VoiceCommandProcessor @Inject constructor(
     }
 
     /**
+     * 简单处理语音文本（供悬浮球服务使用）
+     */
+    suspend fun process(text: String): Result<CommandIntent> {
+        return processVoiceText(text, emptyList())
+    }
+
+    /**
      * 处理语音文本
      * @param text 识别到的语音文本
      * @param categories 可用的分类列表（用于智能分类）

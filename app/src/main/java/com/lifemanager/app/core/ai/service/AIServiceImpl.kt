@@ -76,44 +76,40 @@ class AIServiceImpl @Inject constructor(
 
 支持的命令类型：
 1. 记账（transaction）：包含金额的消费或收入记录
-2. 待办（todo）：需要完成的任务或安排的事项（包括过去的和将来的）
-3. 日记（diary）：纯粹记录心情或感想，不涉及具体事项
-4. 习惯打卡（habit）：习惯名称、数值
-5. 时间追踪（timetrack）：动作(start/stop)、分类
-6. 导航（navigate）：目标页面
-7. 查询（query）：查询类型
+2. 待办（todo）：需要完成的具体任务或安排的事项
+3. 目标（goal）：中长期的个人目标（减肥、存钱、学习、健身、戒烟等目标性质的内容）
+4. 日记（diary）：纯粹记录心情或感想，不涉及具体事项
+5. 习惯打卡（habit）：习惯名称、数值
+6. 时间追踪（timetrack）：动作(start/stop)、分类
+7. 导航（navigate）：目标页面
+8. 查询（query）：查询类型
 
-【重要判断规则】：
+【重要判断规则 - 请严格遵守】：
 - 有金额数字 + 消费/购买行为 → transaction（必须解析日期！）
-- 涉及具体事件/活动/任务（开会、约会、去医院、出差等）→ todo（事项），不管是过去还是将来
+- 涉及减肥、健身、存钱、学习XX技能、戒烟戒酒、读书N本等目标性描述 → goal（目标）
+- 涉及具体事件/活动/任务（开会、约会、去医院、出差等）→ todo（待办事项）
 - 纯粹表达心情感受（开心、难过、累了）→ diary
-- "昨天XX"/"今天XX"/"明天XX" + 事件 → todo，需要正确计算epochDay日期
 
-【日期计算规则 - 请使用这些精确值】：
+【目标vs待办的区分】：
+- goal：需要持续努力才能达成的目标，通常有量化指标（减肥10斤、存款5万、跑步1000公里）
+- todo：一次性可完成的具体事项（开会、看医生、买菜）
+
+【日期计算规则】：
 - "今天" = $todayEpochDay
 - "昨天" = ${todayEpochDay - 1}
-- "前天" = ${todayEpochDay - 2}
 - "明天" = ${todayEpochDay + 1}
-- "后天" = ${todayEpochDay + 2}
-- "X月X号/日" = 需要计算对应日期的epochDay（从1970-01-01开始的天数）
-- 例如：12月1号 = ${java.time.LocalDate.of(today.year, 12, 1).toEpochDay()}
-- 例如：1月15号 = ${java.time.LocalDate.of(today.year + 1, 1, 15).toEpochDay()}
-
-【四象限分类规则 - 仅用于待办事项】：
-根据任务的紧急程度和重要程度，分为四个象限：
-- IMPORTANT_URGENT（重要且紧急）：截止日期在3天内、涉及工作/健康/重要会议
-- IMPORTANT_NOT_URGENT（重要不紧急）：长期目标、学习计划、健身计划
-- NOT_IMPORTANT_URGENT（不重要但紧急）：临时琐事、一般性约会
-- NOT_IMPORTANT_NOT_URGENT（不重要不紧急）：娱乐、购物、休闲活动
+- "这个月" = ${today.monthValue}月
+- "下个月" = ${today.plusMonths(1).monthValue}月
 
 可用的记账分类：$categoryNames
 
 请严格按以下JSON格式返回：
 {
-  "type": "transaction|todo|diary|habit|timetrack|navigate|query|unknown",
+  "type": "transaction|todo|goal|diary|habit|timetrack|navigate|query|unknown",
   "data": {
     // transaction: transactionType, amount, category, note, date(epochDay整数), time
-    // todo: title, description, dueDate(epochDay整数), dueTime, quadrant(四象限), priority(HIGH/MEDIUM/LOW)
+    // todo: title, description, dueDate(epochDay整数), dueTime, priority(HIGH/MEDIUM/LOW)
+    // goal: goalName, targetAmount, targetUnit, deadline, category
     // diary: content, mood(1-5)
   }
 }
@@ -122,11 +118,17 @@ class AIServiceImpl @Inject constructor(
 输入："12月1号吃饭100元"
 输出：{"type":"transaction","data":{"transactionType":"expense","amount":100,"category":"餐饮","note":"吃饭","date":${java.time.LocalDate.of(today.year, 12, 1).toEpochDay()}}}
 
-输入："明天要去北京出差"
-输出：{"type":"todo","data":{"title":"去北京出差","dueDate":${todayEpochDay + 1},"quadrant":"IMPORTANT_URGENT","priority":"HIGH"}}
+输入："这个月减肥10斤"
+输出：{"type":"goal","data":{"goalName":"减肥10斤","targetAmount":10,"targetUnit":"斤","deadline":"${today.year}-${today.monthValue}-${today.lengthOfMonth()}","category":"健身"}}
 
-输入："下周开会"
-输出：{"type":"todo","data":{"title":"开会","dueDate":${todayEpochDay + 7},"quadrant":"IMPORTANT_NOT_URGENT","priority":"MEDIUM"}}
+输入："今年存款5万"
+输出：{"type":"goal","data":{"goalName":"存款5万","targetAmount":50000,"targetUnit":"元","deadline":"${today.year}-12-31","category":"储蓄"}}
+
+输入："学会弹吉他"
+输出：{"type":"goal","data":{"goalName":"学会弹吉他","category":"学习"}}
+
+输入："明天要去北京出差"
+输出：{"type":"todo","data":{"title":"去北京出差","dueDate":${todayEpochDay + 1},"priority":"HIGH"}}
 
 输入："今天很开心"
 输出：{"type":"diary","data":{"content":"今天很开心","mood":5}}
@@ -487,6 +489,7 @@ $dataStr
             when (type) {
                 "transaction" -> parseTransactionIntent(data)
                 "todo" -> parseTodoIntent(data)
+                "goal" -> parseGoalIntent(data)
                 "diary" -> parseDiaryIntent(data)
                 "habit" -> parseHabitIntent(data)
                 "timetrack" -> parseTimeTrackIntent(data)
@@ -547,6 +550,16 @@ $dataStr
             content = data["content"] as? String ?: "",
             mood = (data["mood"] as? Number)?.toInt(),
             weather = data["weather"] as? String
+        )
+    }
+
+    private fun parseGoalIntent(data: Map<String, Any>): CommandIntent.Goal {
+        return CommandIntent.Goal(
+            action = GoalAction.CREATE,
+            goalName = data["goalName"] as? String,
+            targetAmount = (data["targetAmount"] as? Number)?.toDouble(),
+            deadline = data["deadline"] as? String,
+            category = data["category"] as? String
         )
     }
 

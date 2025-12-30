@@ -5,11 +5,18 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.*
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.lifemanager.app.MainActivity
 import com.lifemanager.app.R
+import com.lifemanager.app.core.ai.model.CommandIntent
+import com.lifemanager.app.core.ai.model.ExecutionResult
+import com.lifemanager.app.core.voice.VoiceCommandExecutor
+import com.lifemanager.app.core.voice.VoiceCommandProcessor
 import com.lifemanager.app.core.voice.VoiceRecognitionManager
 import com.lifemanager.app.core.voice.VoiceRecognitionState
 import dagger.hilt.android.AndroidEntryPoint
@@ -27,9 +34,19 @@ class FloatingBallService : Service() {
     @Inject
     lateinit var voiceRecognitionManager: VoiceRecognitionManager
 
+    @Inject
+    lateinit var voiceCommandProcessor: VoiceCommandProcessor
+
+    @Inject
+    lateinit var voiceCommandExecutor: VoiceCommandExecutor
+
     private lateinit var windowManager: WindowManager
     private var floatingBallView: FloatingBallView? = null
+    private var confirmationView: FloatingConfirmationView? = null
     private var isListening = false
+    private var pendingIntent: CommandIntent? = null
+    private var pendingText: String = ""
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -86,6 +103,7 @@ class FloatingBallService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        hideConfirmationDialog()
         hideFloatingBall()
         serviceScope.cancel()
     }
@@ -280,9 +298,15 @@ class FloatingBallService : Service() {
                     hasError = state is VoiceRecognitionState.Error
                 )
 
-                // 识别成功后显示结果
+                // 识别成功后处理结果
                 if (state is VoiceRecognitionState.Result) {
                     floatingBallView?.showResult(state.text)
+                    processVoiceResult(state.text)
+                }
+
+                // 识别错误时显示Toast
+                if (state is VoiceRecognitionState.Error) {
+                    showToast("语音识别失败: ${state.message}")
                 }
             }
         }
@@ -292,6 +316,134 @@ class FloatingBallService : Service() {
             voiceRecognitionManager.volumeLevel.collectLatest { level ->
                 floatingBallView?.updateVolumeLevel(level)
             }
+        }
+    }
+
+    /**
+     * 处理语音识别结果
+     */
+    private fun processVoiceResult(text: String) {
+        serviceScope.launch {
+            try {
+                // 使用AI解析语音命令
+                val parseResult = voiceCommandProcessor.process(text)
+
+                parseResult.fold(
+                    onSuccess = { intent ->
+                        pendingIntent = intent
+                        pendingText = text
+                        showConfirmationDialog(text, intent)
+                    },
+                    onFailure = { e ->
+                        showToast("命令解析失败: ${e.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                showToast("处理失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 显示确认弹窗
+     */
+    private fun showConfirmationDialog(originalText: String, intent: CommandIntent) {
+        mainHandler.post {
+            hideConfirmationDialog()
+
+            confirmationView = FloatingConfirmationView(this).apply {
+                updateContent(originalText, intent)
+                setOnConfirmListener {
+                    executeCommand()
+                }
+                setOnCancelListener {
+                    hideConfirmationDialog()
+                    voiceRecognitionManager.resetState()
+                }
+            }
+
+            val layoutParams = WindowManager.LayoutParams().apply {
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+                format = PixelFormat.TRANSLUCENT
+                flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                width = WindowManager.LayoutParams.MATCH_PARENT
+                height = WindowManager.LayoutParams.MATCH_PARENT
+                gravity = Gravity.CENTER
+            }
+
+            try {
+                windowManager.addView(confirmationView, layoutParams)
+            } catch (e: Exception) {
+                showToast("无法显示确认窗口")
+            }
+        }
+    }
+
+    /**
+     * 隐藏确认弹窗
+     */
+    private fun hideConfirmationDialog() {
+        confirmationView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                // 忽略
+            }
+        }
+        confirmationView = null
+    }
+
+    /**
+     * 执行命令
+     */
+    private fun executeCommand() {
+        val intent = pendingIntent ?: return
+        hideConfirmationDialog()
+
+        serviceScope.launch {
+            try {
+                val result = voiceCommandExecutor.execute(intent)
+
+                mainHandler.post {
+                    when (result) {
+                        is ExecutionResult.Success -> {
+                            showToast("✅ ${result.message}")
+                        }
+                        is ExecutionResult.Failure -> {
+                            showToast("❌ ${result.message}")
+                        }
+                        is ExecutionResult.NeedMoreInfo -> {
+                            showToast("⚠️ ${result.prompt}")
+                        }
+                        is ExecutionResult.NotRecognized -> {
+                            showToast("❓ 无法识别: ${result.originalText}")
+                        }
+                    }
+                }
+
+                voiceRecognitionManager.resetState()
+            } catch (e: Exception) {
+                mainHandler.post {
+                    showToast("执行失败: ${e.message}")
+                }
+            }
+        }
+
+        pendingIntent = null
+        pendingText = ""
+    }
+
+    /**
+     * 显示Toast
+     */
+    private fun showToast(message: String) {
+        mainHandler.post {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
 }
