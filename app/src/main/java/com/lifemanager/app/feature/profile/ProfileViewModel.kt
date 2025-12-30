@@ -2,6 +2,8 @@ package com.lifemanager.app.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lifemanager.app.core.data.repository.UserRepository
+import com.lifemanager.app.core.database.entity.UserEntity
 import com.lifemanager.app.domain.repository.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,7 @@ data class UserStatistics(
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
+    private val userRepository: UserRepository,
     private val todoRepository: TodoRepository,
     private val diaryRepository: DiaryRepository,
     private val habitRepository: HabitRepository,
@@ -56,8 +59,16 @@ class ProfileViewModel @Inject constructor(
     private val _statistics = MutableStateFlow(UserStatistics())
     val statistics: StateFlow<UserStatistics> = _statistics.asStateFlow()
 
+    // 当前用户
+    val currentUser: StateFlow<UserEntity?> = userRepository.currentUser
+    val isLoggedIn: StateFlow<Boolean> = userRepository.isLoggedIn
+
     init {
         loadStatistics()
+        // 加载当前用户
+        viewModelScope.launch {
+            userRepository.loadCurrentUser()
+        }
     }
 
     /**
