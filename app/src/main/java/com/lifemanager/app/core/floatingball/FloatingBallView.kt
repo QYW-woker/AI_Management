@@ -60,6 +60,7 @@ class FloatingBallView @JvmOverloads constructor(
 
     // 尺寸
     private val ballSizePx: Int
+    private val totalSizePx: Int
     private val centerX: Float
     private val centerY: Float
     private val radius: Float
@@ -69,11 +70,11 @@ class FloatingBallView @JvmOverloads constructor(
         ballSizePx = (BALL_SIZE_DP * density).toInt()
 
         // 设置视图大小（包含波纹空间）
-        val totalSize = (ballSizePx * RIPPLE_MAX_SCALE).toInt()
-        layoutParams = LayoutParams(totalSize, totalSize)
+        totalSizePx = (ballSizePx * RIPPLE_MAX_SCALE).toInt()
+        layoutParams = LayoutParams(totalSizePx, totalSizePx)
 
-        centerX = totalSize / 2f
-        centerY = totalSize / 2f
+        centerX = totalSizePx / 2f
+        centerY = totalSizePx / 2f
         radius = ballSizePx / 2f
 
         setWillNotDraw(false)
@@ -82,6 +83,11 @@ class FloatingBallView @JvmOverloads constructor(
 
         // 设置背景透明
         setBackgroundColor(Color.TRANSPARENT)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        // 确保视图有固定大小，不受WRAP_CONTENT影响
+        setMeasuredDimension(totalSizePx, totalSizePx)
     }
 
     override fun onDraw(canvas: Canvas) {

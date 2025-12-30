@@ -153,6 +153,10 @@ class FloatingBallService : Service() {
             }
         }
 
+        // 计算悬浮球尺寸 (56dp * 1.5 波纹空间)
+        val density = resources.displayMetrics.density
+        val ballSizePx = (56 * 1.5f * density).toInt()
+
         val layoutParams = WindowManager.LayoutParams().apply {
             type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -164,9 +168,11 @@ class FloatingBallService : Service() {
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
             gravity = Gravity.TOP or Gravity.START
-            width = WindowManager.LayoutParams.WRAP_CONTENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
-            x = resources.displayMetrics.widthPixels - 200
+            // 使用固定尺寸确保悬浮球可见
+            width = ballSizePx
+            height = ballSizePx
+            // 初始位置：屏幕右侧中间
+            x = resources.displayMetrics.widthPixels - ballSizePx - 20
             y = resources.displayMetrics.heightPixels / 3
         }
 

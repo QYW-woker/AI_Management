@@ -190,6 +190,7 @@ fun AIAssistantScreen(
                                     showImageRecognition = true
                                 }
                             },
+                            onStartListening = { viewModel.startListening() },
                             imageRecognitionEnabled = featureConfig?.imageRecognitionEnabled == true,
                             modifier = Modifier.align(Alignment.Center)
                         )
@@ -477,6 +478,7 @@ private fun VoiceUnavailableContent(
 @Composable
 private fun IdleStateContent(
     onOpenImageRecognition: () -> Unit,
+    onStartListening: () -> Unit,
     imageRecognitionEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -484,12 +486,21 @@ private fun IdleStateContent(
         modifier = modifier.padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = Icons.Default.Mic,
-            contentDescription = null,
-            modifier = Modifier.size(72.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
+        // 大麦克风图标 - 点击开始语音识别
+        FilledIconButton(
+            onClick = onStartListening,
+            modifier = Modifier.size(96.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = "点击开始语音输入",
+                modifier = Modifier.size(48.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "点击麦克风开始语音输入",
