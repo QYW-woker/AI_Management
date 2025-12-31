@@ -126,3 +126,71 @@ data class BudgetChartData(
     val spentValue: Float,
     val percentage: Int
 )
+
+/**
+ * 周预算分析
+ */
+data class WeeklyBudgetAnalysis(
+    val weekNumber: Int,           // 第几周
+    val weekLabel: String,         // 如 "12/23 - 12/29"
+    val budgetAmount: Double,      // 本周预算
+    val spentAmount: Double,       // 本周支出
+    val isCurrentWeek: Boolean     // 是否当前周
+) {
+    val remaining: Double
+        get() = budgetAmount - spentAmount
+
+    val usagePercentage: Int
+        get() = if (budgetAmount > 0) ((spentAmount / budgetAmount) * 100).toInt() else 0
+
+    val status: BudgetStatus
+        get() = when {
+            usagePercentage >= 100 -> BudgetStatus.EXCEEDED
+            usagePercentage >= 80 -> BudgetStatus.WARNING
+            else -> BudgetStatus.NORMAL
+        }
+}
+
+/**
+ * 预算概览统计
+ */
+data class BudgetOverviewStats(
+    val monthlyAvgBudget: Double,      // 月均预算
+    val monthlyAvgSpending: Double,    // 月均支出
+    val savingsRate: Double,           // 平均节省率
+    val bestMonth: Int,                // 最佳月份（节省最多）
+    val worstMonth: Int,               // 最差月份（超支最多）
+    val consecutiveUnderBudget: Int,   // 连续未超支月数
+    val totalMonthsTracked: Int        // 总跟踪月数
+)
+
+/**
+ * 分类支出排名
+ */
+data class CategorySpendingRank(
+    val categoryId: Long,
+    val categoryName: String,
+    val categoryColor: String,
+    val spentAmount: Double,
+    val budgetAmount: Double,
+    val rank: Int,
+    val percentOfTotal: Double    // 占总支出的百分比
+)
+
+/**
+ * 每日预算追踪
+ */
+data class DailyBudgetTracking(
+    val date: Int,
+    val dateLabel: String,
+    val dailyBudget: Double,       // 当日分配预算
+    val dailySpent: Double,        // 当日支出
+    val cumulativeBudget: Double,  // 累计预算
+    val cumulativeSpent: Double    // 累计支出
+) {
+    val dailyRemaining: Double
+        get() = dailyBudget - dailySpent
+
+    val isOverDailyBudget: Boolean
+        get() = dailySpent > dailyBudget
+}

@@ -46,6 +46,10 @@ fun BudgetScreen(
     val aiAdvice by viewModel.aiAdvice.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
     val categoryBudgetStatuses by viewModel.categoryBudgetStatuses.collectAsState()
+    val weeklyAnalysis by viewModel.weeklyAnalysis.collectAsState()
+    val budgetStats by viewModel.budgetStats.collectAsState()
+    val predictedSpending by viewModel.predictedSpending.collectAsState()
+    val budgetSuccessRate by viewModel.budgetSuccessRate.collectAsState()
 
     Scaffold(
         topBar = {
@@ -139,6 +143,26 @@ fun BudgetScreen(
                             CategoryBudgetsCard(
                                 categoryBudgets = categoryBudgetStatuses,
                                 onEditBudgets = { viewModel.showEditDialog() }
+                            )
+                        }
+                    }
+
+                    // 周预算分析卡片
+                    if (weeklyAnalysis.isNotEmpty()) {
+                        item {
+                            WeeklyBudgetCard(weeklyAnalysis = weeklyAnalysis)
+                        }
+                    }
+
+                    // 预算统计卡片
+                    if (budgetStats != null && budgetStats!!.totalMonthsTracked > 0) {
+                        item {
+                            BudgetStatsCard(
+                                stats = budgetStats!!,
+                                successRate = budgetSuccessRate,
+                                predictedSpending = predictedSpending,
+                                currentBudget = budgetWithSpending?.budget?.totalBudget ?: 0.0,
+                                formatYearMonth = { viewModel.formatYearMonth(it) }
                             )
                         }
                     }
@@ -991,5 +1015,297 @@ private fun parseColor(colorString: String): Color {
         Color(android.graphics.Color.parseColor(colorString))
     } catch (e: Exception) {
         Color(0xFF2196F3)
+    }
+}
+
+/**
+ * 周预算分析卡片
+ */
+@Composable
+private fun WeeklyBudgetCard(weeklyAnalysis: List<WeeklyBudgetAnalysis>) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Text(
+                text = "周预算分析",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            weeklyAnalysis.forEach { week ->
+                WeekBudgetItem(
+                    week = week,
+                    numberFormat = numberFormat
+                )
+                if (week != weeklyAnalysis.last()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekBudgetItem(
+    week: WeeklyBudgetAnalysis,
+    numberFormat: NumberFormat
+) {
+    val progress = (week.usagePercentage / 100f).coerceIn(0f, 1f)
+    val progressColor = when (week.status) {
+        BudgetStatus.NORMAL -> Color(0xFF4CAF50)
+        BudgetStatus.WARNING -> Color(0xFFFF9800)
+        BudgetStatus.EXCEEDED -> Color(0xFFF44336)
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "第${week.weekNumber}周",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (week.isCurrentWeek) FontWeight.Bold else FontWeight.Normal
+                )
+                if (week.isCurrentWeek) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Text(
+                            text = "本周",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "¥${numberFormat.format(week.spentAmount)} / ¥${numberFormat.format(week.budgetAmount)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = week.weekLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * 预算统计卡片
+ */
+@Composable
+private fun BudgetStatsCard(
+    stats: BudgetOverviewStats,
+    successRate: Double,
+    predictedSpending: Double,
+    currentBudget: Double,
+    formatYearMonth: (Int) -> String
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "预算执行统计",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = when {
+                        successRate >= 80 -> Color(0xFF4CAF50).copy(alpha = 0.1f)
+                        successRate >= 50 -> Color(0xFFFF9800).copy(alpha = 0.1f)
+                        else -> Color(0xFFF44336).copy(alpha = 0.1f)
+                    }
+                ) {
+                    Text(
+                        text = "达标率 ${String.format("%.0f", successRate)}%",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = when {
+                            successRate >= 80 -> Color(0xFF4CAF50)
+                            successRate >= 50 -> Color(0xFFFF9800)
+                            else -> Color(0xFFF44336)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 统计数据网格
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatItem(
+                    label = "月均预算",
+                    value = "¥${numberFormat.format(stats.monthlyAvgBudget.toLong())}",
+                    icon = Icons.Filled.AccountBalanceWallet
+                )
+                StatItem(
+                    label = "月均支出",
+                    value = "¥${numberFormat.format(stats.monthlyAvgSpending.toLong())}",
+                    icon = Icons.Filled.TrendingUp
+                )
+                StatItem(
+                    label = "节省率",
+                    value = "${String.format("%.1f", stats.savingsRate)}%",
+                    icon = Icons.Filled.Savings
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 连续达标和预测
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "连续达标",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${stats.consecutiveUnderBudget}个月",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (stats.consecutiveUnderBudget > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (predictedSpending > 0 && currentBudget > 0) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "预测月末支出",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${numberFormat.format(predictedSpending.toLong())}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (predictedSpending > currentBudget) Color(0xFFF44336) else Color(0xFF4CAF50)
+                        )
+                    }
+                }
+            }
+
+            // 最佳/最差月份
+            if (stats.bestMonth > 0 && stats.worstMonth > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.EmojiEvents,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFFFD700)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "最佳: ${formatYearMonth(stats.bestMonth)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFF44336)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "待改进: ${formatYearMonth(stats.worstMonth)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

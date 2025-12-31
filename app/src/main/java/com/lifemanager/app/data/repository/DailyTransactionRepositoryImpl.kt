@@ -76,4 +76,8 @@ class DailyTransactionRepositoryImpl @Inject constructor(
     override suspend fun countInRange(startDate: Int, endDate: Int): Int {
         return dao.countInRange(startDate, endDate)
     }
+
+    override suspend fun getTotalByCategoryInRange(startDate: Int, endDate: Int, categoryId: Long): Double {
+        return dao.getTotalByCategoryInRange(startDate, endDate, categoryId)
+    }
 }

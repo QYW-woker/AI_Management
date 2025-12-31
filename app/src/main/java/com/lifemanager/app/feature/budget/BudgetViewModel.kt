@@ -65,10 +65,31 @@ class BudgetViewModel @Inject constructor(
     private val _showAddCategoryBudgetDialog = MutableStateFlow(false)
     val showAddCategoryBudgetDialog: StateFlow<Boolean> = _showAddCategoryBudgetDialog.asStateFlow()
 
+    // 周预算分析
+    private val _weeklyAnalysis = MutableStateFlow<List<WeeklyBudgetAnalysis>>(emptyList())
+    val weeklyAnalysis: StateFlow<List<WeeklyBudgetAnalysis>> = _weeklyAnalysis.asStateFlow()
+
+    // 预算概览统计
+    private val _budgetStats = MutableStateFlow<BudgetOverviewStats?>(null)
+    val budgetStats: StateFlow<BudgetOverviewStats?> = _budgetStats.asStateFlow()
+
+    // 智能预算建议
+    private val _smartBudgetSuggestion = MutableStateFlow(0.0)
+    val smartBudgetSuggestion: StateFlow<Double> = _smartBudgetSuggestion.asStateFlow()
+
+    // 预测月末支出
+    private val _predictedSpending = MutableStateFlow(0.0)
+    val predictedSpending: StateFlow<Double> = _predictedSpending.asStateFlow()
+
+    // 预算达标率
+    private val _budgetSuccessRate = MutableStateFlow(0.0)
+    val budgetSuccessRate: StateFlow<Double> = _budgetSuccessRate.asStateFlow()
+
     init {
         loadData()
         observeBudget()
         loadExpenseCategories()
+        loadAdvancedAnalysis()
     }
 
     /**
@@ -101,6 +122,32 @@ class BudgetViewModel @Inject constructor(
                 .collectLatest { categories ->
                     _expenseCategories.value = categories
                 }
+        }
+    }
+
+    /**
+     * 加载高级分析数据
+     */
+    private fun loadAdvancedAnalysis() {
+        viewModelScope.launch {
+            try {
+                // 加载周预算分析
+                _weeklyAnalysis.value = budgetUseCase.getWeeklyBudgetAnalysis(_currentYearMonth.value)
+
+                // 加载预算概览统计
+                _budgetStats.value = budgetUseCase.getBudgetOverviewStats()
+
+                // 加载智能预算建议
+                _smartBudgetSuggestion.value = budgetUseCase.getSmartBudgetSuggestion()
+
+                // 加载预算达标率
+                _budgetSuccessRate.value = budgetUseCase.getBudgetSuccessRate()
+
+                // 加载预测月末支出
+                _predictedSpending.value = budgetUseCase.predictMonthEndSpending(_currentYearMonth.value)
+            } catch (e: Exception) {
+                // 高级分析失败不影响主功能
+            }
         }
     }
 
@@ -165,6 +212,7 @@ class BudgetViewModel @Inject constructor(
      */
     fun refresh() {
         loadData()
+        loadAdvancedAnalysis()
     }
 
     /**
@@ -179,7 +227,7 @@ class BudgetViewModel @Inject constructor(
         } else {
             year * 100 + (month - 1)
         }
-        refreshAIAdvice()
+        refreshMonthData()
     }
 
     /**
@@ -194,15 +242,17 @@ class BudgetViewModel @Inject constructor(
         } else {
             year * 100 + (month + 1)
         }
-        refreshAIAdvice()
+        refreshMonthData()
     }
 
     /**
-     * 刷新AI建议
+     * 刷新月份相关数据
      */
-    private fun refreshAIAdvice() {
+    private fun refreshMonthData() {
         viewModelScope.launch {
             _aiAdvice.value = budgetUseCase.generateAIBudgetAdvice(_currentYearMonth.value)
+            _weeklyAnalysis.value = budgetUseCase.getWeeklyBudgetAnalysis(_currentYearMonth.value)
+            _predictedSpending.value = budgetUseCase.predictMonthEndSpending(_currentYearMonth.value)
         }
     }
 
@@ -415,6 +465,18 @@ class BudgetViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = BudgetUiState.Error(e.message ?: "复制失败")
             }
+        }
+    }
+
+    /**
+     * 应用智能预算建议
+     */
+    fun applySmartSuggestion() {
+        val suggestion = _smartBudgetSuggestion.value
+        if (suggestion > 0) {
+            _editState.value = _editState.value.copy(
+                totalBudget = String.format("%.0f", suggestion)
+            )
         }
     }
 }
