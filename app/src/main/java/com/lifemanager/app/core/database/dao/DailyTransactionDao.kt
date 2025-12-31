@@ -191,6 +191,16 @@ interface DailyTransactionDao {
     suspend fun getTotalByCategoryInRange(startDate: Int, endDate: Int, categoryId: Long): Double
 
     /**
+     * 同步获取指定日期的交易记录（用于AI服务）
+     */
+    @Query("""
+        SELECT * FROM daily_transactions
+        WHERE date = :date
+        ORDER BY createdAt DESC
+    """)
+    fun getByDateSync(date: Int): List<DailyTransactionEntity>
+
+    /**
      * 获取所有交易记录用于导出
      */
     @Query("""

@@ -118,7 +118,19 @@ interface HabitRecordDao {
         WHERE date BETWEEN :startDate AND :endDate
         ORDER BY date DESC
     """)
-    suspend fun getRecordsInRangeSync(startDate: Int, endDate: Int): List<HabitRecordEntity>
+    fun getRecordsInRangeSync(startDate: Int, endDate: Int): List<HabitRecordEntity>
+
+    /**
+     * 同步获取指定日期的所有习惯打卡记录（用于AI服务）
+     */
+    @Query("SELECT * FROM habit_records WHERE date = :date")
+    fun getByDateSync(date: Int): List<HabitRecordEntity>
+
+    /**
+     * 同步获取指定习惯指定日期的打卡记录（用于AI服务）
+     */
+    @Query("SELECT * FROM habit_records WHERE habitId = :habitId AND date = :date")
+    fun getByHabitAndDateSync(habitId: Long, date: Int): HabitRecordEntity?
 }
 
 /**

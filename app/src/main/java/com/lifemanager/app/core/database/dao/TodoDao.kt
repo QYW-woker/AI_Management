@@ -186,6 +186,26 @@ interface TodoDao {
     suspend fun getTodosByDate(epochDay: Int): List<TodoEntity>
 
     /**
+     * 同步获取指定日期的待办（用于AI服务）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE dueDate = :epochDay
+        ORDER BY status ASC, priority DESC
+    """)
+    fun getByDateSync(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 同步获取逾期待办（用于AI服务）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE status = 'PENDING' AND dueDate < :today
+        ORDER BY dueDate ASC
+    """)
+    fun getOverdueSync(today: Int): List<TodoEntity>
+
+    /**
      * 获取日期范围内每天的待办数量
      */
     @Query("""
