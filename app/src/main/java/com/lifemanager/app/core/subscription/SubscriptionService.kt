@@ -99,7 +99,7 @@ class SubscriptionService @Inject constructor(
                 reminderEnabled = reminderDays > 0,
                 reminderDays = reminderDays,
                 note = note,
-                iconName = iconName.ifEmpty { getDefaultIcon(type) },
+                icon = iconName.ifEmpty { getDefaultIcon(type) },
                 color = color.ifEmpty { getDefaultColor(type) }
             )
         )
@@ -174,9 +174,7 @@ class SubscriptionService @Inject constructor(
             SubscriptionPaymentEntity(
                 subscriptionId = subscriptionId,
                 amount = amount,
-                paymentDate = today,
-                billingPeriodStart = subscription.nextBillingDate,
-                billingPeriodEnd = calculateNextBillingDate(subscription.nextBillingDate, subscription.billingCycle)
+                paymentDate = today
             )
         )
 

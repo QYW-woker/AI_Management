@@ -162,6 +162,12 @@ dependencies {
     // ==================== 权限处理 (Accompanist) ====================
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
+    // ==================== 生物识别认证 (Biometric) ====================
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // ==================== 安全加密存储 (Security Crypto) ====================
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // ==================== Apache POI (Excel/Word解析) ====================
     implementation("org.apache.poi:poi:5.2.5")
     implementation("org.apache.poi:poi-ooxml:5.2.5") {

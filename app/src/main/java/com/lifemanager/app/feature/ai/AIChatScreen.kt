@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,8 +43,8 @@ fun AIChatScreen(
     val conversationContext by viewModel.conversationContext.collectAsState()
     val aiMode by viewModel.aiMode.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
-    val suggestions by viewModel.suggestions.collectAsState()
-    val quickActions by viewModel.quickActions.collectAsState()
+    val suggestions by viewModel.suggestions.collectAsState(initial = emptyList())
+    val quickActions by viewModel.quickActions.collectAsState(initial = emptyList())
     val uiState by viewModel.uiState.collectAsState()
     val pendingIntent by viewModel.pendingIntent.collectAsState()
     val queryResult by viewModel.queryResult.collectAsState()
@@ -562,7 +561,7 @@ private fun ChatInputArea(
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        imageVector = Icons.Filled.Send,
                         contentDescription = "发送"
                     )
                 }

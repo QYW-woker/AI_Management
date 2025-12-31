@@ -85,8 +85,7 @@ class CurrencyService @Inject constructor(
                     currencyCode = currency.code,
                     currencyName = currency.name,
                     symbol = currency.symbol,
-                    rateToBase = DEFAULT_RATES[currency.code] ?: 1.0,
-                    country = currency.country
+                    rateToBaseCurrency = DEFAULT_RATES[currency.code] ?: 1.0
                 )
             }
             currencyRateDao.insertAll(rates)
@@ -101,10 +100,9 @@ class CurrencyService @Inject constructor(
             userCurrencySettingDao.insert(
                 UserCurrencySettingEntity(
                     id = 1,
-                    baseCurrency = "CNY",
-                    displayCurrencies = "CNY,USD,EUR,JPY",
-                    autoConvert = true,
-                    showOriginalAmount = true
+                    primaryCurrency = "CNY",
+                    enabledCurrencies = "[\"CNY\",\"USD\",\"EUR\",\"JPY\"]",
+                    showConversion = true
                 )
             )
         }
@@ -120,8 +118,8 @@ class CurrencyService @Inject constructor(
     ): Double {
         if (fromCurrency == toCurrency) return amount
 
-        val fromRate = currencyRateDao.getByCode(fromCurrency)?.rateToBase ?: 1.0
-        val toRate = currencyRateDao.getByCode(toCurrency)?.rateToBase ?: 1.0
+        val fromRate = currencyRateDao.getByCode(fromCurrency)?.rateToBaseCurrency ?: 1.0
+        val toRate = currencyRateDao.getByCode(toCurrency)?.rateToBaseCurrency ?: 1.0
 
         // 先转换为基准货币，再转换为目标货币
         val baseAmount = amount / fromRate
@@ -146,8 +144,8 @@ class CurrencyService @Inject constructor(
     suspend fun getRate(fromCurrency: String, toCurrency: String): Double {
         if (fromCurrency == toCurrency) return 1.0
 
-        val fromRate = currencyRateDao.getByCode(fromCurrency)?.rateToBase ?: 1.0
-        val toRate = currencyRateDao.getByCode(toCurrency)?.rateToBase ?: 1.0
+        val fromRate = currencyRateDao.getByCode(fromCurrency)?.rateToBaseCurrency ?: 1.0
+        val toRate = currencyRateDao.getByCode(toCurrency)?.rateToBaseCurrency ?: 1.0
 
         return toRate / fromRate
     }
@@ -178,7 +176,7 @@ class CurrencyService @Inject constructor(
             if (existing != null) {
                 currencyRateDao.insert(
                     existing.copy(
-                        rateToBase = rate,
+                        rateToBaseCurrency = rate,
                         updatedAt = System.currentTimeMillis()
                     )
                 )
@@ -209,7 +207,7 @@ class CurrencyService @Inject constructor(
         if (settings != null) {
             userCurrencySettingDao.update(
                 settings.copy(
-                    baseCurrency = currencyCode,
+                    primaryCurrency = currencyCode,
                     updatedAt = System.currentTimeMillis()
                 )
             )
@@ -221,12 +219,13 @@ class CurrencyService @Inject constructor(
      */
     suspend fun addDisplayCurrency(currencyCode: String) {
         val settings = userCurrencySettingDao.getSettingsSync() ?: return
-        val currencies = settings.displayCurrencies.split(",").toMutableList()
+        val currenciesJson = settings.enabledCurrencies
+        val currencies = parseCurrencyList(currenciesJson).toMutableList()
         if (!currencies.contains(currencyCode)) {
             currencies.add(currencyCode)
             userCurrencySettingDao.update(
                 settings.copy(
-                    displayCurrencies = currencies.joinToString(","),
+                    enabledCurrencies = formatCurrencyList(currencies),
                     updatedAt = System.currentTimeMillis()
                 )
             )
@@ -238,15 +237,27 @@ class CurrencyService @Inject constructor(
      */
     suspend fun removeDisplayCurrency(currencyCode: String) {
         val settings = userCurrencySettingDao.getSettingsSync() ?: return
-        val currencies = settings.displayCurrencies.split(",").toMutableList()
+        val currenciesJson = settings.enabledCurrencies
+        val currencies = parseCurrencyList(currenciesJson).toMutableList()
         if (currencies.remove(currencyCode)) {
             userCurrencySettingDao.update(
                 settings.copy(
-                    displayCurrencies = currencies.joinToString(","),
+                    enabledCurrencies = formatCurrencyList(currencies),
                     updatedAt = System.currentTimeMillis()
                 )
             )
         }
+    }
+
+    private fun parseCurrencyList(json: String): List<String> {
+        return json.removeSurrounding("[", "]")
+            .split(",")
+            .map { it.trim().removeSurrounding("\"") }
+            .filter { it.isNotEmpty() }
+    }
+
+    private fun formatCurrencyList(currencies: List<String>): String {
+        return currencies.joinToString(",", "[", "]") { "\"$it\"" }
     }
 
     /**

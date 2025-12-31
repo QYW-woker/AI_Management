@@ -74,13 +74,11 @@ class WidgetDataProvider @Inject constructor(
      */
     suspend fun getBudgetProgress(): BudgetWidgetData {
         val today = LocalDate.now()
-        val year = today.year
-        val month = today.monthValue
+        val yearMonth = today.year * 100 + today.monthValue
 
-        val budgets = database.budgetDao().getByMonth(year, month).first()
-        val activeBudgets = budgets.filter { it.isEnabled }
+        val budget = database.budgetDao().getByYearMonth(yearMonth)
 
-        if (activeBudgets.isEmpty()) {
+        if (budget == null) {
             return BudgetWidgetData(
                 totalBudget = 0.0,
                 totalSpent = 0.0,
@@ -89,8 +87,16 @@ class WidgetDataProvider @Inject constructor(
             )
         }
 
-        val totalBudget = activeBudgets.sumOf { it.amount }
-        val totalSpent = activeBudgets.sumOf { it.spent }
+        // 计算本月已花费
+        val monthStart = today.withDayOfMonth(1).toEpochDay().toInt()
+        val monthEnd = today.toEpochDay().toInt()
+        val transactions = database.dailyTransactionDao()
+            .getByDateRange(monthStart, monthEnd).first()
+        val totalSpent = transactions
+            .filter { it.type == "EXPENSE" }
+            .sumOf { it.amount }
+
+        val totalBudget = budget.totalBudget
         val percentage = if (totalBudget > 0) ((totalSpent / totalBudget) * 100).toInt() else 0
 
         return BudgetWidgetData(

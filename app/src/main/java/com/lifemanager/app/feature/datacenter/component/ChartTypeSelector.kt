@@ -75,14 +75,14 @@ private val ChartType.icon: ImageVector
         ChartType.PIE -> Icons.Default.PieChart
         ChartType.BAR -> Icons.Default.BarChart
         ChartType.LINE -> Icons.Default.ShowChart
-        ChartType.STACKED_BAR -> Icons.Default.StackedBarChart
-        ChartType.AREA -> Icons.Default.AreaChart
-        ChartType.RADAR -> Icons.Default.Radar
+        ChartType.STACKED_BAR -> Icons.Default.BarChart // StackedBarChart not available
+        ChartType.AREA -> Icons.Default.Timeline // AreaChart not available
+        ChartType.RADAR -> Icons.Default.Explore // Radar not available
         ChartType.HEATMAP -> Icons.Default.GridOn
         ChartType.TREEMAP -> Icons.Default.ViewModule
-        ChartType.WATERFALL -> Icons.Default.Waterfall
-        ChartType.DONUT -> Icons.Default.DonutLarge
-        ChartType.SCATTER -> Icons.Default.ScatterPlot
+        ChartType.WATERFALL -> Icons.Default.Leaderboard
+        ChartType.DONUT -> Icons.Default.Circle // DonutLarge not available
+        ChartType.SCATTER -> Icons.Default.Grain // ScatterPlot not available
         ChartType.FUNNEL -> Icons.Default.FilterAlt
     }
 

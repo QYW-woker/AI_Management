@@ -70,8 +70,7 @@ class HealthTrackingService @Inject constructor(
      */
     suspend fun recordWaterIntake(
         amount: Int,
-        type: String = "水",
-        note: String = ""
+        drinkType: String = DrinkType.WATER
     ): Long {
         val now = LocalTime.now()
         val today = LocalDate.now().toEpochDay().toInt()
@@ -81,8 +80,7 @@ class HealthTrackingService @Inject constructor(
                 date = today,
                 time = "%02d:%02d".format(now.hour, now.minute),
                 amount = amount,
-                type = type,
-                note = note
+                drinkType = drinkType
             )
         )
     }
@@ -162,8 +160,7 @@ class HealthTrackingService @Inject constructor(
         wakeTime: String,
         quality: Int,
         isNap: Boolean = false,
-        note: String = "",
-        tags: String = ""
+        note: String = ""
     ): Long {
         val today = LocalDate.now().toEpochDay().toInt()
         val duration = calculateSleepDuration(sleepTime, wakeTime)
@@ -176,8 +173,7 @@ class HealthTrackingService @Inject constructor(
                 duration = duration,
                 quality = quality,
                 isNap = isNap,
-                note = note,
-                tags = tags
+                note = note
             )
         )
     }
@@ -223,14 +219,15 @@ class HealthTrackingService @Inject constructor(
     suspend fun getSleepProgress(): SleepProgress {
         val todaySleep = getTodaySleepRecord()
         val goals = healthGoalDao.getGoalsSync()
-        val target = goals?.dailySleepGoal ?: DEFAULT_SLEEP_GOAL
+        // dailySleepGoal is in hours, convert to minutes for comparison
+        val targetMinutes = ((goals?.dailySleepGoal ?: 8.0) * 60).toInt()
 
         val current = todaySleep?.duration ?: 0
 
         return SleepProgress(
             current = current,
-            target = target,
-            percentage = minOf(100, current * 100 / target),
+            target = targetMinutes,
+            percentage = if (targetMinutes > 0) minOf(100, current * 100 / targetMinutes) else 0,
             quality = todaySleep?.quality ?: 0,
             sleepTime = todaySleep?.sleepTime,
             wakeTime = todaySleep?.wakeTime
@@ -251,16 +248,17 @@ class HealthTrackingService @Inject constructor(
         val trend = sleepRecordDao.getSleepTrend(startDate, endDate)
 
         val goals = healthGoalDao.getGoalsSync()
-        val target = goals?.dailySleepGoal ?: DEFAULT_SLEEP_GOAL
+        // dailySleepGoal is in hours, convert to minutes for comparison
+        val targetMinutes = ((goals?.dailySleepGoal ?: 8.0) * 60).toInt()
 
-        val daysReachedGoal = trend.count { it.duration >= target }
+        val daysReachedGoal = trend.count { it.duration >= targetMinutes }
 
         return WeeklySleepStats(
             averageDuration = avgDuration.toInt(),
             averageQuality = avgQuality,
             daysReachedGoal = daysReachedGoal,
             trend = trend.map { DailySleepData(it.date, it.duration, it.quality) },
-            goalTarget = target
+            goalTarget = targetMinutes
         )
     }
 
@@ -280,10 +278,9 @@ class HealthTrackingService @Inject constructor(
                 HealthGoalEntity(
                     id = 1,
                     dailyWaterGoal = DEFAULT_WATER_GOAL,
-                    dailySleepGoal = DEFAULT_SLEEP_GOAL,
+                    dailySleepGoal = 8.0, // hours
                     dailyStepsGoal = DEFAULT_STEPS_GOAL,
-                    targetWeight = null,
-                    targetBMI = null
+                    targetWeight = null
                 )
             )
         }
@@ -312,11 +309,11 @@ class HealthTrackingService @Inject constructor(
     /**
      * 设置睡眠目标
      */
-    suspend fun setSleepGoal(minutes: Int) {
+    suspend fun setSleepGoal(hours: Double) {
         val goals = healthGoalDao.getGoalsSync() ?: return
         healthGoalDao.update(
             goals.copy(
-                dailySleepGoal = minutes,
+                dailySleepGoal = hours,
                 updatedAt = System.currentTimeMillis()
             )
         )

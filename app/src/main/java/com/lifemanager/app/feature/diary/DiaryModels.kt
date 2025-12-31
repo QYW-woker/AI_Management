@@ -165,48 +165,7 @@ data class DiaryStatsData(
     val weatherDistribution: Map<String, Int>
 )
 
-/**
- * 日记编辑界面状态
- */
-data class DiaryEditState(
-    // 日记数据
-    val id: Long = 0,
-    val date: LocalDate = LocalDate.now(),
-    val title: String = "",
-    val content: String = "",
-    val moodScore: Int? = null,
-    val weather: String? = null,
-    val location: DiaryLocation? = null,
-    val attachments: List<AttachmentItem> = emptyList(),
-    val isFavorite: Boolean = false,
-    val isPrivate: Boolean = false,
-
-    // 编辑状态
-    val isNewDiary: Boolean = true,
-    val hasChanges: Boolean = false,
-    val isSaving: Boolean = false,
-    val isDeleting: Boolean = false,
-    val autoSaveEnabled: Boolean = true,
-    val lastSavedAt: Long? = null,
-
-    // 位置选择
-    val isLocationPickerVisible: Boolean = false,
-    val isLoadingLocation: Boolean = false,
-
-    // 心情/天气选择
-    val isMoodPickerVisible: Boolean = false,
-    val isWeatherPickerVisible: Boolean = false,
-
-    // 附件
-    val isAttachmentPickerVisible: Boolean = false,
-
-    // 字数统计
-    val wordCount: Int = 0,
-
-    // 错误信息
-    val error: String? = null,
-    val saveSuccess: Boolean = false
-)
+// Note: DiaryEditState is defined in com.lifemanager.app.domain.model.DiaryModels
 
 /**
  * 附件项

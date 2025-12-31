@@ -2,7 +2,10 @@ package com.lifemanager.app.core.ai.service
 
 import com.google.gson.Gson
 import com.lifemanager.app.core.ai.model.*
-import com.lifemanager.app.core.ai.service.api.*
+import com.lifemanager.app.core.ai.service.api.ChatRequest
+import com.lifemanager.app.core.ai.service.api.ChatResponse
+import com.lifemanager.app.core.ai.service.api.DeepSeekApi
+import com.lifemanager.app.core.ai.service.api.ChatMessage as ApiChatMessage
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.data.repository.AIConfigRepository
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +37,7 @@ class AIServiceImpl @Inject constructor(
             val request = ChatRequest(
                 model = config.model,
                 messages = listOf(
-                    ChatMessage("user", "你好，请回复「连接成功」")
+                    ApiChatMessage("user", "你好，请回复「连接成功」")
                 ),
                 maxTokens = 20
             )
@@ -151,8 +154,8 @@ class AIServiceImpl @Inject constructor(
             val request = ChatRequest(
                 model = config.model,
                 messages = listOf(
-                    ChatMessage("system", systemPrompt),
-                    ChatMessage("user", text)
+                    ApiChatMessage("system", systemPrompt),
+                    ApiChatMessage("user", text)
                 ),
                 temperature = 0.1,
                 maxTokens = 300
@@ -198,7 +201,7 @@ $categoryList
 
             val request = ChatRequest(
                 model = config.model,
-                messages = listOf(ChatMessage("user", prompt)),
+                messages = listOf(ApiChatMessage("user", prompt)),
                 temperature = 0.1,
                 maxTokens = 10
             )
@@ -276,7 +279,7 @@ $categoryList
 
             val request = ChatRequest(
                 model = "deepseek-chat",  // 使用支持视觉的模型
-                messages = listOf(ChatMessage("user", contentParts)),
+                messages = listOf(ApiChatMessage("user", contentParts)),
                 temperature = 0.1,
                 maxTokens = 500
             )
@@ -322,7 +325,7 @@ $ocrText
 
                 val request = ChatRequest(
                     model = config.model,
-                    messages = listOf(ChatMessage("user", prompt)),
+                    messages = listOf(ApiChatMessage("user", prompt)),
                     temperature = 0.1,
                     maxTokens = 200
                 )
@@ -375,7 +378,7 @@ $notificationText
 
             val request = ChatRequest(
                 model = config.model,
-                messages = listOf(ChatMessage("user", prompt)),
+                messages = listOf(ApiChatMessage("user", prompt)),
                 temperature = 0.1,
                 maxTokens = 150
             )
@@ -427,7 +430,7 @@ $breakdown
 
             val request = ChatRequest(
                 model = config.model,
-                messages = listOf(ChatMessage("user", prompt)),
+                messages = listOf(ApiChatMessage("user", prompt)),
                 temperature = 0.5,
                 maxTokens = 200
             )
@@ -466,7 +469,7 @@ $dataStr
 
             val request = ChatRequest(
                 model = config.model,
-                messages = listOf(ChatMessage("user", prompt)),
+                messages = listOf(ApiChatMessage("user", prompt)),
                 temperature = 0.5,
                 maxTokens = 100
             )

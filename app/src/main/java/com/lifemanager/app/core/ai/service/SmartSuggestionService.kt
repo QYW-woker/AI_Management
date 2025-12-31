@@ -80,62 +80,57 @@ class SmartSuggestionService @Inject constructor(
      */
     private suspend fun checkBudgetStatus(): List<AISuggestion> {
         val suggestions = mutableListOf<AISuggestion>()
-        val budgets = budgetDao.getAllSync()
         val today = LocalDate.now()
+        val currentYearMonth = today.year * 100 + today.monthValue
+        val budget = budgetDao.getByYearMonth(currentYearMonth) ?: return suggestions
+
         val monthStart = YearMonth.now().atDay(1).toEpochDay().toInt()
         val todayEpoch = today.toEpochDay().toInt()
 
-        for (budget in budgets) {
-            val transactions = transactionDao.getTransactionsBetweenDatesSync(monthStart, todayEpoch)
-                .filter { it.type == "EXPENSE" }
+        val transactions = transactionDao.getTransactionsBetweenDatesSync(monthStart, todayEpoch)
+            .filter { it.type == "EXPENSE" }
 
-            val spent = if (budget.categoryId != null) {
-                transactions.filter { it.categoryId == budget.categoryId }.sumOf { it.amount }
-            } else {
-                transactions.sumOf { it.amount }
+        val spent = transactions.sumOf { it.amount }
+        val usageRate = if (budget.totalBudget > 0) (spent / budget.totalBudget * 100) else 0.0
+        val daysInMonth = today.lengthOfMonth()
+        val daysPassed = today.dayOfMonth
+        val expectedRate = (daysPassed.toDouble() / daysInMonth) * 100
+
+        when {
+            usageRate >= 100 -> {
+                suggestions.add(
+                    AISuggestion(
+                        id = "budget_exceeded_${budget.id}",
+                        type = SuggestionType.BUDGET_WARNING,
+                        title = "预算已超支",
+                        description = "本月预算已使用${String.format("%.0f", usageRate)}%，超出预算¥${String.format("%.2f", spent - budget.totalBudget)}",
+                        priority = 95,
+                        action = SuggestionAction.ViewReport("budget")
+                    )
+                )
             }
-
-            val usageRate = if (budget.totalBudget > 0) (spent / budget.totalBudget * 100) else 0.0
-            val daysInMonth = today.lengthOfMonth()
-            val daysPassed = today.dayOfMonth
-            val expectedRate = (daysPassed.toDouble() / daysInMonth) * 100
-
-            when {
-                usageRate >= 100 -> {
-                    suggestions.add(
-                        AISuggestion(
-                            id = "budget_exceeded_${budget.id}",
-                            type = SuggestionType.BUDGET_WARNING,
-                            title = "预算已超支",
-                            description = "${budget.name}已使用${String.format("%.0f", usageRate)}%，超出预算¥${String.format("%.2f", spent - budget.totalBudget)}",
-                            priority = 95,
-                            action = SuggestionAction.ViewReport("budget")
-                        )
+            usageRate >= 80 -> {
+                suggestions.add(
+                    AISuggestion(
+                        id = "budget_warning_${budget.id}",
+                        type = SuggestionType.BUDGET_WARNING,
+                        title = "预算即将用尽",
+                        description = "本月预算已使用${String.format("%.0f", usageRate)}%，剩余¥${String.format("%.2f", budget.totalBudget - spent)}",
+                        priority = 80,
+                        action = SuggestionAction.ViewReport("budget")
                     )
-                }
-                usageRate >= 80 -> {
-                    suggestions.add(
-                        AISuggestion(
-                            id = "budget_warning_${budget.id}",
-                            type = SuggestionType.BUDGET_WARNING,
-                            title = "预算即将用尽",
-                            description = "${budget.name}已使用${String.format("%.0f", usageRate)}%，剩余¥${String.format("%.2f", budget.totalBudget - spent)}",
-                            priority = 80,
-                            action = SuggestionAction.ViewReport("budget")
-                        )
+                )
+            }
+            usageRate > expectedRate + 15 -> {
+                suggestions.add(
+                    AISuggestion(
+                        id = "budget_ahead_${budget.id}",
+                        type = SuggestionType.SPENDING_ALERT,
+                        title = "消费进度超前",
+                        description = "本月消费进度比预期快${String.format("%.0f", usageRate - expectedRate)}%，建议适当控制",
+                        priority = 60
                     )
-                }
-                usageRate > expectedRate + 15 -> {
-                    suggestions.add(
-                        AISuggestion(
-                            id = "budget_ahead_${budget.id}",
-                            type = SuggestionType.SPENDING_ALERT,
-                            title = "消费进度超前",
-                            description = "${budget.name}消费进度比预期快${String.format("%.0f", usageRate - expectedRate)}%，建议适当控制",
-                            priority = 60
-                        )
-                    )
-                }
+                )
             }
         }
         return suggestions
@@ -369,7 +364,7 @@ class SmartSuggestionService @Inject constructor(
             if (topCategory != null) {
                 val categoryAmount = topCategory.value.sumOf { it.amount }
                 val categoryName = topCategory.key?.let {
-                    customFieldDao.getById(it)?.name
+                    customFieldDao.getFieldById(it)?.name
                 } ?: "未分类"
 
                 if (categoryAmount > totalWeek * 0.4) {

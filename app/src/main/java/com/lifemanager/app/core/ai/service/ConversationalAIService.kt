@@ -203,13 +203,12 @@ $dataContext
         val goals = goalDao.getActiveGoalsSync()
 
         // 预算
-        val budgets = budgetDao.getAllSync()
-        val budgetUsage = budgets.map { budget ->
-            val spent = transactions.filter {
-                it.type == "EXPENSE" && (budget.categoryId == null || it.categoryId == budget.categoryId)
-            }.sumOf { it.amount }
-            "${budget.name}: ${String.format("%.0f", spent / budget.totalBudget * 100)}%"
-        }.joinToString(", ")
+        val currentYearMonth = today.year * 100 + today.monthValue
+        val budget = budgetDao.getByYearMonth(currentYearMonth)
+        val budgetUsage = if (budget != null) {
+            val spent = transactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+            "已用${String.format("%.0f", if (budget.totalBudget > 0) spent / budget.totalBudget * 100 else 0.0)}%"
+        } else "未设置"
 
         // 分类
         val categories = customFieldDao.getAllFieldsSync()
@@ -413,13 +412,12 @@ $dataContext
             }
 
         // 预算
-        val budgets = budgetDao.getAllSync()
-        val budgetInfo = budgets.map { budget ->
-            val spent = thisMonthTransactions.filter {
-                it.type == "EXPENSE" && (budget.categoryId == null || it.categoryId == budget.categoryId)
-            }.sumOf { it.amount }
-            "${budget.name}: 已用¥${String.format("%.2f", spent)}/${String.format("%.2f", budget.totalBudget)}"
-        }
+        val budgetYearMonth = today.year * 100 + today.monthValue
+        val currentBudget = budgetDao.getByYearMonth(budgetYearMonth)
+        val budgetInfo = if (currentBudget != null) {
+            val spent = thisMonthTransactions.filter { it.type == "EXPENSE" }.sumOf { it.amount }
+            listOf("本月预算: 已用¥${String.format("%.2f", spent)}/¥${String.format("%.2f", currentBudget.totalBudget)}")
+        } else emptyList()
 
         // 习惯
         val habits = habitDao.getEnabledSync()
