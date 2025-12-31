@@ -31,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
 import com.lifemanager.app.domain.model.GoalUiState
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.domain.model.getCategoryDisplayName
 import com.lifemanager.app.domain.model.getGoalTypeDisplayName
 import com.lifemanager.app.ui.component.PremiumTextField
@@ -53,6 +54,12 @@ fun GoalScreen(
     val showProgressDialog by viewModel.showProgressDialog.collectAsState()
     val goalAnalysis by viewModel.goalAnalysis.collectAsState()
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
+
+    // 多级目标相关状态
+    val showSubGoalDialog by viewModel.showSubGoalDialog.collectAsState()
+    val subGoalEditState by viewModel.subGoalEditState.collectAsState()
+    val childCounts by viewModel.childCounts.collectAsState()
+    val expandedGoalIds by viewModel.expandedGoalIds.collectAsState()
 
     Scaffold(
         topBar = {
@@ -153,16 +160,77 @@ fun GoalScreen(
                             EnhancedEmptyState(currentFilter = currentFilter)
                         }
                     } else {
-                        items(goals, key = { it.id }) { goal ->
-                            EnhancedGoalCard(
-                                goal = goal,
-                                progress = viewModel.calculateProgress(goal),
-                                remainingDays = viewModel.getRemainingDays(goal),
-                                onEdit = { viewModel.showEditDialog(goal.id) },
-                                onUpdateProgress = { viewModel.showProgressDialog(goal) },
-                                onComplete = { viewModel.completeGoal(goal.id) },
-                                onDelete = { viewModel.showDeleteConfirm(goal.id) }
-                            )
+                        // 获取顶级目标
+                        val topLevelGoals = goals.filter { it.parentId == null }
+                        topLevelGoals.forEach { goal ->
+                            item(key = goal.id) {
+                                val childCount = childCounts[goal.id] ?: 0
+                                val isExpanded = goal.id in expandedGoalIds
+
+                                EnhancedGoalCard(
+                                    goal = goal,
+                                    progress = viewModel.calculateProgress(goal),
+                                    remainingDays = viewModel.getRemainingDays(goal),
+                                    childCount = childCount,
+                                    isExpanded = isExpanded,
+                                    indentLevel = 0,
+                                    onEdit = { viewModel.showEditDialog(goal.id) },
+                                    onUpdateProgress = { viewModel.showProgressDialog(goal) },
+                                    onComplete = { viewModel.completeGoal(goal.id) },
+                                    onDelete = { viewModel.showDeleteConfirm(goal.id) },
+                                    onAddSubGoal = { viewModel.showAddSubGoalDialog(goal.id) },
+                                    onToggleExpand = { viewModel.toggleGoalExpanded(goal.id) }
+                                )
+                            }
+
+                            // 显示子目标（如果展开）
+                            if (goal.id in expandedGoalIds) {
+                                val childGoals = goals.filter { it.parentId == goal.id }
+                                childGoals.forEach { childGoal ->
+                                    item(key = childGoal.id) {
+                                        val subChildCount = childCounts[childGoal.id] ?: 0
+                                        val isSubExpanded = childGoal.id in expandedGoalIds
+
+                                        EnhancedGoalCard(
+                                            goal = childGoal,
+                                            progress = viewModel.calculateProgress(childGoal),
+                                            remainingDays = viewModel.getRemainingDays(childGoal),
+                                            childCount = subChildCount,
+                                            isExpanded = isSubExpanded,
+                                            indentLevel = 1,
+                                            onEdit = { viewModel.showEditDialog(childGoal.id) },
+                                            onUpdateProgress = { viewModel.showProgressDialog(childGoal) },
+                                            onComplete = { viewModel.completeGoal(childGoal.id) },
+                                            onDelete = { viewModel.showDeleteConfirm(childGoal.id) },
+                                            onAddSubGoal = { viewModel.showAddSubGoalDialog(childGoal.id) },
+                                            onToggleExpand = { viewModel.toggleGoalExpanded(childGoal.id) }
+                                        )
+                                    }
+
+                                    // 二级子目标
+                                    if (childGoal.id in expandedGoalIds) {
+                                        val grandChildGoals = goals.filter { it.parentId == childGoal.id }
+                                        grandChildGoals.forEach { grandChild ->
+                                            item(key = grandChild.id) {
+                                                EnhancedGoalCard(
+                                                    goal = grandChild,
+                                                    progress = viewModel.calculateProgress(grandChild),
+                                                    remainingDays = viewModel.getRemainingDays(grandChild),
+                                                    childCount = 0,
+                                                    isExpanded = false,
+                                                    indentLevel = 2,
+                                                    onEdit = { viewModel.showEditDialog(grandChild.id) },
+                                                    onUpdateProgress = { viewModel.showProgressDialog(grandChild) },
+                                                    onComplete = { viewModel.completeGoal(grandChild.id) },
+                                                    onDelete = { viewModel.showDeleteConfirm(grandChild.id) },
+                                                    onAddSubGoal = null,
+                                                    onToggleExpand = null
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -213,6 +281,17 @@ fun GoalScreen(
             goal = viewModel.getProgressGoal(),
             onDismiss = { viewModel.hideProgressDialog() },
             onConfirm = { viewModel.updateProgress(it) }
+        )
+    }
+
+    // 添加子目标对话框
+    if (showSubGoalDialog) {
+        AddSubGoalDialog(
+            state = subGoalEditState,
+            onTitleChange = { viewModel.updateSubGoalTitle(it) },
+            onDescriptionChange = { viewModel.updateSubGoalDescription(it) },
+            onDismiss = { viewModel.hideSubGoalDialog() },
+            onConfirm = { viewModel.saveSubGoal() }
         )
     }
 }
@@ -454,10 +533,15 @@ private fun EnhancedGoalCard(
     goal: GoalEntity,
     progress: Float,
     remainingDays: Int?,
+    childCount: Int = 0,
+    isExpanded: Boolean = false,
+    indentLevel: Int = 0,
     onEdit: () -> Unit,
     onUpdateProgress: () -> Unit,
     onComplete: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onAddSubGoal: (() -> Unit)? = null,
+    onToggleExpand: (() -> Unit)? = null
 ) {
     val categoryColor = getCategoryColor(goal.category)
     val categoryIcon = getCategoryIcon(goal.category)
@@ -469,10 +553,13 @@ private fun EnhancedGoalCard(
         label = "progress"
     )
 
+    // 计算缩进
+    val startPadding = 16.dp + (indentLevel * 24).dp
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(start = startPadding, end = 16.dp, top = 6.dp, bottom = 6.dp)
             .shadow(
                 elevation = 4.dp,
                 shape = RoundedCornerShape(20.dp),
@@ -562,24 +649,61 @@ private fun EnhancedGoalCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 标题
-            Text(
-                text = goal.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            // 标题行（含展开/收起按钮）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = goal.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-            if (goal.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = goal.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    if (goal.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = goal.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // 子目标展开/收起指示器
+                if (childCount > 0 && onToggleExpand != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        onClick = onToggleExpand,
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isExpanded) "收起" else "展开",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$childCount个子目标",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -669,40 +793,62 @@ private fun EnhancedGoalCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(
-                        onClick = onUpdateProgress,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = categoryColor
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.TrendingUp,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("更新进度")
-                    }
-
-                    if (progress >= 1f || goal.progressType == "PERCENTAGE") {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        FilledTonalButton(
-                            onClick = onComplete,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                                contentColor = Color(0xFF4CAF50)
+                    // 添加子目标按钮（仅限前两级目标）
+                    if (onAddSubGoal != null && indentLevel < 2) {
+                        TextButton(
+                            onClick = onAddSubGoal,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.secondary
                             )
                         ) {
                             Icon(
-                                Icons.Default.Check,
+                                Icons.Default.AddTask,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("完成")
+                            Text("添加子目标")
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    Row {
+                        TextButton(
+                            onClick = onUpdateProgress,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = categoryColor
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.TrendingUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("更新进度")
+                        }
+
+                        if (progress >= 1f || goal.progressType == "PERCENTAGE") {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            FilledTonalButton(
+                                onClick = onComplete,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                                    contentColor = Color(0xFF4CAF50)
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("完成")
+                            }
                         }
                     }
                 }
@@ -846,6 +992,90 @@ private fun UpdateProgressDialog(
                 }
             ) {
                 Text("确认")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 添加子目标对话框
+ */
+@Composable
+private fun AddSubGoalDialog(
+    state: SubGoalEditState,
+    onTitleChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AddTask,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("添加子目标")
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "为主目标添加可拆分的子目标，完成所有子目标后主目标将自动完成",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                PremiumTextField(
+                    value = state.title,
+                    onValueChange = onTitleChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "子目标标题",
+                    placeholder = "例如：完成技术方案评审",
+                    singleLine = true,
+                    isError = state.error != null
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                PremiumTextField(
+                    value = state.description,
+                    onValueChange = onDescriptionChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "描述（可选）",
+                    placeholder = "详细说明这个子目标",
+                    singleLine = false,
+                    minLines = 2
+                )
+                if (state.error != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = state.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(
+                onClick = onConfirm,
+                enabled = !state.isSaving
+            ) {
+                if (state.isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text("添加")
             }
         },
         dismissButton = {

@@ -2,10 +2,13 @@ package com.lifemanager.app.domain.usecase
 
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
+import com.lifemanager.app.core.database.entity.ProgressType
 import com.lifemanager.app.domain.model.GoalStatistics
+import com.lifemanager.app.domain.model.GoalWithChildren
 import com.lifemanager.app.domain.repository.GoalRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -28,6 +31,38 @@ class GoalUseCase @Inject constructor(
      */
     fun getAllGoals(): Flow<List<GoalEntity>> {
         return repository.getAllGoals()
+    }
+
+    /**
+     * 获取顶级目标（用于层级显示）
+     */
+    fun getTopLevelGoals(): Flow<List<GoalEntity>> {
+        return repository.getTopLevelGoals()
+    }
+
+    /**
+     * 获取子目标
+     */
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
+        return repository.getChildGoals(parentId)
+    }
+
+    /**
+     * 获取目标及其子目标的完整结构
+     */
+    suspend fun getGoalWithChildren(goalId: Long): GoalWithChildren? {
+        val goal = repository.getGoalById(goalId) ?: return null
+        val children = repository.getChildGoalsSync(goalId)
+        val childCount = children.size
+        val completedChildCount = children.count { it.status == GoalStatus.COMPLETED }
+
+        return GoalWithChildren(
+            goal = goal,
+            children = children,
+            childCount = childCount,
+            completedChildCount = completedChildCount,
+            childProgress = if (childCount > 0) completedChildCount.toFloat() / childCount else 0f
+        )
     }
 
     /**
@@ -63,8 +98,15 @@ class GoalUseCase @Inject constructor(
         endDate: Int?,
         progressType: String,
         targetValue: Double?,
-        unit: String
+        unit: String,
+        parentId: Long? = null
     ): Long {
+        // 如果有父目标，计算层级
+        val level = if (parentId != null) {
+            val parentGoal = repository.getGoalById(parentId)
+            (parentGoal?.level ?: 0) + 1
+        } else 0
+
         val goal = GoalEntity(
             title = title,
             description = description,
@@ -74,9 +116,41 @@ class GoalUseCase @Inject constructor(
             endDate = endDate,
             progressType = progressType,
             targetValue = targetValue,
-            unit = unit
+            unit = unit,
+            parentId = parentId,
+            level = level
         )
         return repository.insert(goal)
+    }
+
+    /**
+     * 创建子目标
+     */
+    suspend fun createSubGoal(
+        parentId: Long,
+        title: String,
+        description: String = ""
+    ): Long {
+        val parentGoal = repository.getGoalById(parentId)
+            ?: throw IllegalArgumentException("Parent goal not found")
+
+        val subGoal = GoalEntity(
+            title = title,
+            description = description,
+            goalType = parentGoal.goalType,
+            category = parentGoal.category,
+            startDate = parentGoal.startDate,
+            endDate = parentGoal.endDate,
+            progressType = ProgressType.PERCENTAGE,  // 子目标默认使用百分比进度
+            parentId = parentId,
+            level = parentGoal.level + 1
+        )
+
+        val subGoalId = repository.insert(subGoal)
+
+        // 如果父目标还没有子目标，将其进度类型设置为基于子目标
+        // 父目标的进度将由子目标完成情况自动计算
+        return subGoalId
     }
 
     /**
@@ -84,6 +158,11 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun updateGoal(goal: GoalEntity) {
         repository.update(goal.copy(updatedAt = System.currentTimeMillis()))
+
+        // 如果有父目标，更新父目标进度
+        goal.parentId?.let { parentId ->
+            updateParentGoalProgress(parentId)
+        }
     }
 
     /**
@@ -96,6 +175,11 @@ class GoalUseCase @Inject constructor(
         val goal = repository.getGoalById(id)
         if (goal != null && goal.targetValue != null && value >= goal.targetValue) {
             repository.updateStatus(id, GoalStatus.COMPLETED)
+
+            // 如果有父目标，更新父目标进度
+            goal.parentId?.let { parentId ->
+                updateParentGoalProgress(parentId)
+            }
         }
     }
 
@@ -104,6 +188,59 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun completeGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.COMPLETED)
+
+        // 如果有父目标，更新父目标进度
+        val goal = repository.getGoalById(id)
+        goal?.parentId?.let { parentId ->
+            updateParentGoalProgress(parentId)
+        }
+    }
+
+    /**
+     * 更新父目标进度（基于子目标完成情况）
+     * 当子目标状态变化时调用此方法
+     */
+    suspend fun updateParentGoalProgress(parentId: Long) {
+        val childCount = repository.countChildGoals(parentId)
+        if (childCount == 0) return
+
+        val completedCount = repository.countCompletedChildGoals(parentId)
+        val progressPercentage = (completedCount.toDouble() / childCount) * 100
+
+        // 更新父目标进度
+        repository.updateProgress(parentId, progressPercentage)
+
+        // 如果所有子目标都完成了，自动完成父目标
+        if (completedCount >= childCount) {
+            repository.updateStatus(parentId, GoalStatus.COMPLETED)
+
+            // 递归检查更上层的父目标
+            val parentGoal = repository.getGoalById(parentId)
+            parentGoal?.parentId?.let { grandParentId ->
+                updateParentGoalProgress(grandParentId)
+            }
+        }
+    }
+
+    /**
+     * 获取子目标数量
+     */
+    suspend fun getChildCount(goalId: Long): Int {
+        return repository.countChildGoals(goalId)
+    }
+
+    /**
+     * 获取已完成的子目标数量
+     */
+    suspend fun getCompletedChildCount(goalId: Long): Int {
+        return repository.countCompletedChildGoals(goalId)
+    }
+
+    /**
+     * 检查目标是否有子目标
+     */
+    suspend fun hasChildren(goalId: Long): Boolean {
+        return repository.countChildGoals(goalId) > 0
     }
 
     /**
@@ -111,6 +248,12 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun abandonGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.ABANDONED)
+
+        // 如果有父目标，更新父目标进度（放弃不算完成，但可能影响整体进度显示）
+        val goal = repository.getGoalById(id)
+        goal?.parentId?.let { parentId ->
+            updateParentGoalProgress(parentId)
+        }
     }
 
     /**
@@ -125,13 +268,33 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun reactivateGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.ACTIVE)
+
+        // 如果有父目标，更新父目标进度
+        val goal = repository.getGoalById(id)
+        goal?.parentId?.let { parentId ->
+            updateParentGoalProgress(parentId)
+        }
     }
 
     /**
      * 删除目标
      */
     suspend fun deleteGoal(id: Long) {
-        repository.delete(id)
+        val goal = repository.getGoalById(id)
+        val parentId = goal?.parentId
+
+        // 如果有子目标，一并删除
+        val childCount = repository.countChildGoals(id)
+        if (childCount > 0) {
+            repository.deleteWithChildren(id)
+        } else {
+            repository.delete(id)
+        }
+
+        // 如果有父目标，更新父目标进度
+        parentId?.let {
+            updateParentGoalProgress(it)
+        }
     }
 
     /**
@@ -154,7 +317,7 @@ class GoalUseCase @Inject constructor(
     }
 
     /**
-     * 计算目标进度
+     * 计算目标进度（简单版本，用于列表展示）
      */
     fun calculateProgress(goal: GoalEntity): Float {
         return when {
@@ -167,6 +330,24 @@ class GoalUseCase @Inject constructor(
             }
             else -> 0f
         }
+    }
+
+    /**
+     * 计算目标进度（完整版本，考虑子目标）
+     * 如果目标有子目标，进度基于子目标完成情况计算
+     */
+    suspend fun calculateProgressWithChildren(goal: GoalEntity): Float {
+        if (goal.status == GoalStatus.COMPLETED) return 1f
+
+        // 检查是否有子目标
+        val childCount = repository.countChildGoals(goal.id)
+        if (childCount > 0) {
+            val completedCount = repository.countCompletedChildGoals(goal.id)
+            return (completedCount.toFloat() / childCount).coerceIn(0f, 1f)
+        }
+
+        // 无子目标时使用原有逻辑
+        return calculateProgress(goal)
     }
 
     /**

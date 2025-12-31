@@ -9,6 +9,8 @@ import com.lifemanager.app.core.database.entity.GoalStatus
 import com.lifemanager.app.domain.model.GoalEditState
 import com.lifemanager.app.domain.model.GoalStatistics
 import com.lifemanager.app.domain.model.GoalUiState
+import com.lifemanager.app.domain.model.GoalWithChildren
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.domain.usecase.GoalUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,6 +70,21 @@ class GoalViewModel @Inject constructor(
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
 
+    // 子目标相关状态
+    private val _subGoalEditState = MutableStateFlow(SubGoalEditState())
+    val subGoalEditState: StateFlow<SubGoalEditState> = _subGoalEditState.asStateFlow()
+
+    private val _showSubGoalDialog = MutableStateFlow(false)
+    val showSubGoalDialog: StateFlow<Boolean> = _showSubGoalDialog.asStateFlow()
+
+    // 子目标数量缓存（goalId -> childCount）
+    private val _childCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val childCounts: StateFlow<Map<Long, Int>> = _childCounts.asStateFlow()
+
+    // 展开的目标ID列表（用于层级显示）
+    private val _expandedGoalIds = MutableStateFlow<Set<Long>>(emptySet())
+    val expandedGoalIds: StateFlow<Set<Long>> = _expandedGoalIds.asStateFlow()
+
     init {
         loadGoals()
         loadAIAnalysis()
@@ -94,10 +111,27 @@ class GoalViewModel @Inject constructor(
                         _goals.value = filtered
                         _uiState.value = GoalUiState.Success(filtered)
                         loadStatistics()
+                        loadChildCounts(allGoals)
                     }
             } catch (e: Exception) {
                 _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
             }
+        }
+    }
+
+    /**
+     * 加载所有目标的子目标数量
+     */
+    private fun loadChildCounts(goals: List<GoalEntity>) {
+        viewModelScope.launch {
+            val counts = mutableMapOf<Long, Int>()
+            goals.forEach { goal ->
+                val count = useCase.getChildCount(goal.id)
+                if (count > 0) {
+                    counts[goal.id] = count
+                }
+            }
+            _childCounts.value = counts
         }
     }
 
@@ -402,5 +436,128 @@ class GoalViewModel @Inject constructor(
                 _isAnalyzing.value = false
             }
         }
+    }
+
+    // ============ 多级目标相关方法 ============
+
+    /**
+     * 显示添加子目标对话框
+     */
+    fun showAddSubGoalDialog(parentId: Long) {
+        _subGoalEditState.value = SubGoalEditState(parentId = parentId)
+        _showSubGoalDialog.value = true
+    }
+
+    /**
+     * 隐藏子目标对话框
+     */
+    fun hideSubGoalDialog() {
+        _showSubGoalDialog.value = false
+        _subGoalEditState.value = SubGoalEditState()
+    }
+
+    /**
+     * 更新子目标标题
+     */
+    fun updateSubGoalTitle(title: String) {
+        _subGoalEditState.value = _subGoalEditState.value.copy(title = title, error = null)
+    }
+
+    /**
+     * 更新子目标描述
+     */
+    fun updateSubGoalDescription(description: String) {
+        _subGoalEditState.value = _subGoalEditState.value.copy(description = description)
+    }
+
+    /**
+     * 保存子目标
+     */
+    fun saveSubGoal() {
+        val state = _subGoalEditState.value
+
+        // 验证
+        if (state.title.isBlank()) {
+            _subGoalEditState.value = state.copy(error = "请输入子目标标题")
+            return
+        }
+
+        viewModelScope.launch {
+            _subGoalEditState.value = state.copy(isSaving = true, error = null)
+            try {
+                useCase.createSubGoal(
+                    parentId = state.parentId,
+                    title = state.title.trim(),
+                    description = state.description.trim()
+                )
+                hideSubGoalDialog()
+            } catch (e: Exception) {
+                _subGoalEditState.value = _subGoalEditState.value.copy(
+                    isSaving = false,
+                    error = e.message ?: "保存失败"
+                )
+            }
+        }
+    }
+
+    /**
+     * 切换目标展开/收起状态
+     */
+    fun toggleGoalExpanded(goalId: Long) {
+        val current = _expandedGoalIds.value
+        _expandedGoalIds.value = if (goalId in current) {
+            current - goalId
+        } else {
+            current + goalId
+        }
+    }
+
+    /**
+     * 检查目标是否展开
+     */
+    fun isGoalExpanded(goalId: Long): Boolean {
+        return goalId in _expandedGoalIds.value
+    }
+
+    /**
+     * 获取目标的子目标数量
+     */
+    fun getChildCount(goalId: Long): Int {
+        return _childCounts.value[goalId] ?: 0
+    }
+
+    /**
+     * 检查目标是否有子目标
+     */
+    fun hasChildren(goalId: Long): Boolean {
+        return getChildCount(goalId) > 0
+    }
+
+    /**
+     * 获取目标的子目标列表
+     */
+    fun getChildGoals(parentId: Long): List<GoalEntity> {
+        return _goals.value.filter { it.parentId == parentId }
+    }
+
+    /**
+     * 获取顶级目标列表（用于层级显示）
+     */
+    fun getTopLevelGoals(): List<GoalEntity> {
+        return _goals.value.filter { it.parentId == null }
+    }
+
+    /**
+     * 获取目标的层级缩进（用于UI显示）
+     */
+    fun getGoalIndentLevel(goal: GoalEntity): Int {
+        return goal.level
+    }
+
+    /**
+     * 获取目标及其子目标的详情
+     */
+    suspend fun getGoalWithChildren(goalId: Long): GoalWithChildren? {
+        return useCase.getGoalWithChildren(goalId)
     }
 }

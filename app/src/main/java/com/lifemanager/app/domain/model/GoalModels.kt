@@ -41,6 +41,50 @@ data class GoalStatistics(
 )
 
 /**
+ * 目标及其子目标的完整结构
+ */
+data class GoalWithChildren(
+    val goal: GoalEntity,
+    val children: List<GoalEntity> = emptyList(),
+    val childCount: Int = 0,
+    val completedChildCount: Int = 0,
+    val childProgress: Float = 0f  // 子目标完成进度 0-1
+) {
+    /**
+     * 是否有子目标
+     */
+    fun hasChildren(): Boolean = childCount > 0
+
+    /**
+     * 是否所有子目标都已完成
+     */
+    fun allChildrenCompleted(): Boolean = childCount > 0 && completedChildCount >= childCount
+
+    /**
+     * 获取子目标进度百分比文本
+     */
+    fun getChildProgressText(): String {
+        return if (childCount > 0) {
+            "$completedChildCount/$childCount"
+        } else {
+            ""
+        }
+    }
+}
+
+/**
+ * 子目标编辑状态
+ */
+data class SubGoalEditState(
+    val parentId: Long = 0,
+    val title: String = "",
+    val description: String = "",
+    val isEditing: Boolean = false,
+    val isSaving: Boolean = false,
+    val error: String? = null
+)
+
+/**
  * 目标类型选项
  */
 val goalTypeOptions = listOf(

@@ -18,4 +18,36 @@ interface GoalRepository {
     suspend fun updateStatus(id: Long, status: String)
     suspend fun delete(id: Long)
     suspend fun countActiveGoals(): Int
+
+    // ============ 多级目标相关 ============
+
+    /**
+     * 获取顶级目标
+     */
+    fun getTopLevelGoals(): Flow<List<GoalEntity>>
+
+    /**
+     * 获取子目标
+     */
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>>
+
+    /**
+     * 获取子目标（同步版本）
+     */
+    suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity>
+
+    /**
+     * 统计子目标数量
+     */
+    suspend fun countChildGoals(parentId: Long): Int
+
+    /**
+     * 统计已完成的子目标数量
+     */
+    suspend fun countCompletedChildGoals(parentId: Long): Int
+
+    /**
+     * 删除目标及其所有子目标
+     */
+    suspend fun deleteWithChildren(id: Long)
 }
