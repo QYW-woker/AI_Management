@@ -73,7 +73,7 @@ import com.lifemanager.app.core.database.entity.*
         // 健康记录
         HealthRecordEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

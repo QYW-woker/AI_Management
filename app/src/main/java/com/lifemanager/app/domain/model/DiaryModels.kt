@@ -18,14 +18,37 @@ data class DiaryEditState(
     val id: Long = 0,
     val isEditing: Boolean = false,
     val date: Int = 0,
+    val title: String = "",
     val content: String = "",
     val moodScore: Int? = null,
     val weather: String? = null,
+
+    // 位置信息
+    val locationName: String? = null,
+    val locationAddress: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val poiName: String? = null,
+
+    // 旧字段保留兼容
     val location: String? = null,
+
     val attachments: List<String> = emptyList(),
     val isSaving: Boolean = false,
+    val isFavorite: Boolean = false,
+    val isPrivate: Boolean = false,
     val error: String? = null
-)
+) {
+    /**
+     * 是否有位置
+     */
+    fun hasLocation(): Boolean = latitude != null && longitude != null
+
+    /**
+     * 获取位置显示名称
+     */
+    fun getLocationDisplayName(): String? = poiName ?: locationName
+}
 
 /**
  * 日记统计

@@ -3,6 +3,7 @@ package com.lifemanager.app.feature.diary
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.DiaryEntity
+import com.lifemanager.app.core.database.entity.DiaryLocation
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.usecase.DiaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,6 +66,30 @@ class DiaryViewModel @Inject constructor(
     // 视图模式: LIST, CALENDAR
     private val _viewMode = MutableStateFlow("LIST")
     val viewMode: StateFlow<String> = _viewMode.asStateFlow()
+
+    // 位置选择器显示状态
+    private val _showLocationPicker = MutableStateFlow(false)
+    val showLocationPicker: StateFlow<Boolean> = _showLocationPicker.asStateFlow()
+
+    // 位置加载状态
+    private val _isLoadingLocation = MutableStateFlow(false)
+    val isLoadingLocation: StateFlow<Boolean> = _isLoadingLocation.asStateFlow()
+
+    // 搜索关键词
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // 搜索结果
+    private val _searchResults = MutableStateFlow<List<DiaryEntity>>(emptyList())
+    val searchResults: StateFlow<List<DiaryEntity>> = _searchResults.asStateFlow()
+
+    // 筛选条件
+    private val _filterMood = MutableStateFlow<Int?>(null)
+    val filterMood: StateFlow<Int?> = _filterMood.asStateFlow()
+
+    // 收藏筛选
+    private val _showFavoritesOnly = MutableStateFlow(false)
+    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
 
     init {
         loadData()
@@ -340,5 +365,239 @@ class DiaryViewModel @Inject constructor(
                 // 处理错误
             }
         }
+    }
+
+    // ==================== 位置功能 ====================
+
+    /**
+     * 显示位置选择器
+     */
+    fun showLocationPicker() {
+        _showLocationPicker.value = true
+    }
+
+    /**
+     * 隐藏位置选择器
+     */
+    fun hideLocationPicker() {
+        _showLocationPicker.value = false
+    }
+
+    /**
+     * 设置位置
+     */
+    fun setLocation(location: DiaryLocation?) {
+        _editState.value = _editState.value.copy(
+            locationName = location?.name,
+            locationAddress = location?.address,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            poiName = location?.poiName
+        )
+        hideLocationPicker()
+    }
+
+    /**
+     * 清除位置
+     */
+    fun clearLocation() {
+        _editState.value = _editState.value.copy(
+            locationName = null,
+            locationAddress = null,
+            latitude = null,
+            longitude = null,
+            poiName = null
+        )
+    }
+
+    /**
+     * 请求当前位置
+     */
+    fun requestCurrentLocation() {
+        _isLoadingLocation.value = true
+        // 位置请求由UI层处理，获取到位置后调用setLocation
+    }
+
+    /**
+     * 位置获取完成
+     */
+    fun onLocationResult(location: DiaryLocation?) {
+        _isLoadingLocation.value = false
+        if (location != null) {
+            setLocation(location)
+        }
+    }
+
+    // ==================== 搜索功能 ====================
+
+    /**
+     * 搜索日记
+     */
+    fun search(query: String) {
+        _searchQuery.value = query
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                diaryUseCase.searchDiaries(query).collect { results ->
+                    _searchResults.value = results
+                }
+            } catch (e: Exception) {
+                // 搜索错误处理
+            }
+        }
+    }
+
+    /**
+     * 清除搜索
+     */
+    fun clearSearch() {
+        _searchQuery.value = ""
+        _searchResults.value = emptyList()
+    }
+
+    // ==================== 筛选功能 ====================
+
+    /**
+     * 按心情筛选
+     */
+    fun filterByMood(moodScore: Int?) {
+        _filterMood.value = moodScore
+        applyFilters()
+    }
+
+    /**
+     * 切换收藏筛选
+     */
+    fun toggleFavoritesFilter() {
+        _showFavoritesOnly.value = !_showFavoritesOnly.value
+        applyFilters()
+    }
+
+    /**
+     * 应用筛选条件
+     */
+    private fun applyFilters() {
+        viewModelScope.launch {
+            val mood = _filterMood.value
+            val favoritesOnly = _showFavoritesOnly.value
+
+            if (mood == null && !favoritesOnly) {
+                observeDiaries()
+                return@launch
+            }
+
+            try {
+                diaryUseCase.filterDiaries(
+                    moodScore = mood,
+                    favoritesOnly = favoritesOnly
+                ).collect { filtered ->
+                    _diaries.value = filtered
+                }
+            } catch (e: Exception) {
+                // 筛选错误处理
+            }
+        }
+    }
+
+    /**
+     * 清除所有筛选
+     */
+    fun clearFilters() {
+        _filterMood.value = null
+        _showFavoritesOnly.value = false
+        observeDiaries()
+    }
+
+    // ==================== 收藏功能 ====================
+
+    /**
+     * 切换收藏状态
+     */
+    fun toggleFavorite(diaryId: Long) {
+        viewModelScope.launch {
+            try {
+                diaryUseCase.toggleFavorite(diaryId)
+                // 刷新当前日记
+                if (_currentDiary.value?.id == diaryId) {
+                    _currentDiary.value = diaryUseCase.getDiaryByDate(_selectedDate.value)
+                }
+                refresh()
+            } catch (e: Exception) {
+                // 错误处理
+            }
+        }
+    }
+
+    // ==================== 导出功能 ====================
+
+    /**
+     * 获取日记用于导出
+     */
+    suspend fun getDiaryForExport(id: Long): DiaryEntity? {
+        return diaryUseCase.getDiaryById(id)
+    }
+
+    /**
+     * 获取月份日记用于导出
+     */
+    suspend fun getMonthDiariesForExport(yearMonth: Int): List<DiaryEntity> {
+        return diaryUseCase.getDiariesByMonthSync(yearMonth)
+    }
+
+    // ==================== 日期跳转 ====================
+
+    /**
+     * 跳转到今天
+     */
+    fun goToToday() {
+        val today = LocalDate.now()
+        _currentYearMonth.value = today.year * 100 + today.monthValue
+        _selectedDate.value = today.toEpochDay().toInt()
+        viewModelScope.launch {
+            _currentDiary.value = diaryUseCase.getDiaryByDate(_selectedDate.value)
+        }
+    }
+
+    /**
+     * 跳转到指定年月
+     */
+    fun goToYearMonth(yearMonth: Int) {
+        _currentYearMonth.value = yearMonth
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 获取当前位置信息
+     */
+    fun getCurrentLocation(): DiaryLocation? {
+        val state = _editState.value
+        if (state.latitude == null || state.longitude == null) return null
+        return DiaryLocation(
+            name = state.locationName ?: "",
+            address = state.locationAddress,
+            latitude = state.latitude,
+            longitude = state.longitude,
+            poiName = state.poiName
+        )
+    }
+
+    /**
+     * 检查是否有位置
+     */
+    fun hasLocation(): Boolean {
+        return _editState.value.latitude != null && _editState.value.longitude != null
+    }
+
+    /**
+     * 获取位置显示文本
+     */
+    fun getLocationDisplayText(): String? {
+        val state = _editState.value
+        return state.poiName ?: state.locationName
     }
 }
