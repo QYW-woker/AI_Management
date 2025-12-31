@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 字段管理界面
@@ -325,11 +326,11 @@ private fun FieldEditDialog(
                 }
 
                 // 名称输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.name,
                     onValueChange = { viewModel.updateName(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("类别名称") },
+                    label = "类别名称",
                     placeholder = { Text("请输入类别名称") },
                     singleLine = true,
                     enabled = !editState.isPreset // 预设类别不能修改名称

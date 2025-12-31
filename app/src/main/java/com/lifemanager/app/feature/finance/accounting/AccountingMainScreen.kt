@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.ui.component.PremiumTextField
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -1025,10 +1026,10 @@ private fun QuickAddTransactionDialog(
                 }
 
                 // 金额输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = amount,
                     onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("金额") },
+                    label = "金额",
                     leadingIcon = { Text("¥") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -1179,10 +1180,10 @@ private fun QuickAddTransactionDialog(
                 }
 
                 // 备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("备注（选填）") },
+                    label = "备注（选填）",
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -1418,10 +1419,10 @@ private fun EditTransactionDialog(
                 }
 
                 // 金额输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = amount,
                     onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("金额") },
+                    label = "金额",
                     leadingIcon = { Text("¥") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -1538,10 +1539,10 @@ private fun EditTransactionDialog(
                 }
 
                 // 备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("备注（选填）") },
+                    label = "备注（选填）",
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -1751,13 +1752,13 @@ private fun TransferDialog(
                     }
 
                     // 转账金额
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = amount,
                         onValueChange = {
                             amount = it.filter { c -> c.isDigit() || c == '.' }
                             error = null
                         },
-                        label = { Text("转账金额") },
+                        label = "转账金额",
                         leadingIcon = { Text("¥") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -1765,20 +1766,20 @@ private fun TransferDialog(
                     )
 
                     // 手续费（可选）
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = fee,
                         onValueChange = { fee = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("手续费（选填）") },
+                        label = "手续费（选填）",
                         leadingIcon = { Text("¥") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
 
                     // 备注
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text("备注（选填）") },
+                        label = "备注（选填）",
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )

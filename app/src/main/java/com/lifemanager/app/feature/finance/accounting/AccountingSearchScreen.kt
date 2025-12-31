@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.util.Locale
@@ -60,7 +61,7 @@ fun AccountingSearchScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = searchQuery,
                         onValueChange = { viewModel.updateQuery(it) },
                         placeholder = { Text("搜索交易记录...") },
@@ -68,10 +69,6 @@ fun AccountingSearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent
-                        ),
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null)
                         },

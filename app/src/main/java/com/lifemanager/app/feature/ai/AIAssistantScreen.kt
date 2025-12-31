@@ -27,6 +27,7 @@ import com.lifemanager.app.core.ai.model.TransactionType
 import com.lifemanager.app.core.voice.CommandProcessState
 import com.lifemanager.app.core.voice.VoiceRecognitionState
 import com.lifemanager.app.feature.ai.component.*
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * AI助手页面
@@ -316,10 +317,10 @@ private fun PaymentEditDialog(
                 )
 
                 // 金额输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = { Text("金额") },
+                    label = "金额",
                     leadingIcon = { Text("¥") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -327,10 +328,10 @@ private fun PaymentEditDialog(
                 )
 
                 // 商户/备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = payee,
                     onValueChange = { payee = it },
-                    label = { Text("商户/备注") },
+                    label = "商户/备注",
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -597,7 +598,7 @@ private fun BottomInputArea(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 文本输入框
-            OutlinedTextField(
+            PremiumTextField(
                 value = textInput,
                 onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),

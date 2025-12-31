@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -718,11 +719,11 @@ private fun EditBudgetDialog(
                 }
 
                 // 预算金额
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.totalBudget,
                     onValueChange = { viewModel.updateBudgetAmount(it) },
-                    label = { Text("月度预算总额") },
-                    prefix = { Text("¥") },
+                    label = "月度预算总额",
+                    leadingIcon = { Text("¥") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -807,10 +808,10 @@ private fun EditBudgetDialog(
                 }
 
                 // 备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.note,
                     onValueChange = { viewModel.updateNote(it) },
-                    label = { Text("备注（可选）") },
+                    label = "备注（可选）",
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 2
                 )
@@ -889,11 +890,11 @@ private fun CategoryBudgetEditItem(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        OutlinedTextField(
+        PremiumTextField(
             value = categoryBudget.budgetAmount,
             onValueChange = onAmountChange,
             modifier = Modifier.width(100.dp),
-            prefix = { Text("¥", style = MaterialTheme.typography.bodySmall) },
+            leadingIcon = { Text("¥", style = MaterialTheme.typography.bodySmall) },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodySmall
         )
@@ -954,11 +955,11 @@ private fun AddCategoryBudgetDialog(
                     }
                 }
 
-                OutlinedTextField(
+                PremiumTextField(
                     value = amount,
                     onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("预算金额") },
-                    prefix = { Text("¥") },
+                    label = "预算金额",
+                    leadingIcon = { Text("¥") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -30,6 +30,7 @@ import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalRecordEntity
 import com.lifemanager.app.core.database.entity.GoalRecordType
 import com.lifemanager.app.core.database.entity.GoalStatus
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -758,19 +759,19 @@ private fun AddRecordDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
+                PremiumTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("标题") },
+                    label = "标题",
                     placeholder = { Text("如：完成第一阶段") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
+                PremiumTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("详细内容（可选）") },
+                    label = "详细内容（可选）",
                     placeholder = { Text("记录更多细节...") },
                     minLines = 2,
                     maxLines = 4,
@@ -778,12 +779,12 @@ private fun AddRecordDialog(
                 )
 
                 if (goal?.progressType == "NUMERIC") {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = progressValue,
                         onValueChange = { progressValue = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("进度增加值") },
+                        label = "进度增加值",
                         placeholder = { Text("如：10") },
-                        suffix = { Text(goal.unit) },
+                        trailingIcon = { Text(goal.unit) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -834,10 +835,10 @@ private fun AbandonGoalDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                OutlinedTextField(
+                PremiumTextField(
                     value = reason,
                     onValueChange = { reason = it },
-                    label = { Text("放弃原因（必填）") },
+                    label = "放弃原因（必填）",
                     placeholder = { Text("请说明放弃的原因...") },
                     minLines = 2,
                     maxLines = 4,
@@ -884,19 +885,19 @@ private fun AddSubGoalDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
+                PremiumTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("子目标标题") },
+                    label = "子目标标题",
                     placeholder = { Text("如：完成第一章") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
+                PremiumTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("描述（可选）") },
+                    label = "描述（可选）",
                     placeholder = { Text("详细说明...") },
                     minLines = 2,
                     maxLines = 3,
@@ -904,12 +905,12 @@ private fun AddSubGoalDialog(
                 )
 
                 if (parentGoal?.progressType == "NUMERIC") {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = targetValue,
                         onValueChange = { targetValue = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("目标值") },
+                        label = "目标值",
                         placeholder = { Text("如：100") },
-                        suffix = { Text(parentGoal.unit) },
+                        trailingIcon = { Text(parentGoal.unit) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

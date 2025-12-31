@@ -28,6 +28,7 @@ import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.domain.model.TransactionType
 import com.lifemanager.app.ui.component.DatePickerButton
 import com.lifemanager.app.ui.component.DatePickerDialog
+import com.lifemanager.app.ui.component.PremiumTextField
 import com.lifemanager.app.ui.component.TimePickerButton
 import com.lifemanager.app.ui.component.TimePickerDialog
 import java.time.LocalDate
@@ -183,7 +184,7 @@ fun AddEditTransactionDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = amountText,
                         onValueChange = { value ->
                             val filtered = value.filter { it.isDigit() || it == '.' }
@@ -198,7 +199,7 @@ fun AddEditTransactionDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("0.00") },
-                        prefix = { Text("¥ ") },
+                        leadingIcon = { Text("¥ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.headlineMedium.copy(
@@ -310,7 +311,7 @@ fun AddEditTransactionDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.note,
                         onValueChange = { viewModel.updateEditNote(it) },
                         modifier = Modifier.fillMaxWidth(),

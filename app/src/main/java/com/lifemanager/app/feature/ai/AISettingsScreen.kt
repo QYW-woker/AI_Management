@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * AI设置页面
@@ -387,11 +388,11 @@ private fun ApiKeyDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
+                PremiumTextField(
                     value = apiKey,
                     onValueChange = onApiKeyChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("API Key") },
+                    label = "API Key",
                     placeholder = { Text("sk-...") },
                     singleLine = true,
                     visualTransformation = if (showKey)

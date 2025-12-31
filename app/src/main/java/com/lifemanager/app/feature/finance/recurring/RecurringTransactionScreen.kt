@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.RecurringFrequency
 import com.lifemanager.app.core.database.entity.RecurringTransactionEntity
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.util.Locale
@@ -440,10 +441,10 @@ private fun EditRecurringDialog(
 
                 // 名称
                 item {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.name,
                         onValueChange = { viewModel.updateName(it) },
-                        label = { Text("名称") },
+                        label = "名称",
                         placeholder = { Text("例如：房租、工资") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -481,11 +482,11 @@ private fun EditRecurringDialog(
 
                 // 金额
                 item {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.amount,
                         onValueChange = { viewModel.updateAmount(it.filter { c -> c.isDigit() || c == '.' }) },
-                        label = { Text("金额") },
-                        prefix = { Text("¥") },
+                        label = "金额",
+                        leadingIcon = { Text("¥") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
@@ -568,13 +569,13 @@ private fun EditRecurringDialog(
                 // 每月几号（仅MONTHLY显示）
                 if (editState.frequency == RecurringFrequency.MONTHLY) {
                     item {
-                        OutlinedTextField(
+                        PremiumTextField(
                             value = (editState.dayOfMonth ?: 1).toString(),
                             onValueChange = {
                                 val day = it.filter { c -> c.isDigit() }.toIntOrNull()?.coerceIn(1, 31)
                                 viewModel.updateDayOfMonth(day)
                             },
-                            label = { Text("每月几号") },
+                            label = "每月几号",
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth()
@@ -609,10 +610,10 @@ private fun EditRecurringDialog(
 
                 // 备注
                 item {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.note,
                         onValueChange = { viewModel.updateNote(it) },
-                        label = { Text("备注（可选）") },
+                        label = "备注（可选）",
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 2
                     )

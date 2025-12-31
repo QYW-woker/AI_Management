@@ -33,6 +33,7 @@ import com.lifemanager.app.core.database.entity.GoalStatus
 import com.lifemanager.app.domain.model.GoalUiState
 import com.lifemanager.app.domain.model.getCategoryDisplayName
 import com.lifemanager.app.domain.model.getGoalTypeDisplayName
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 目标管理页面
@@ -816,16 +817,12 @@ private fun UpdateProgressDialog(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
+                PremiumTextField(
                     value = value,
                     onValueChange = { value = it.filter { c -> c.isDigit() || c == '.' } },
                     modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text(
-                            if (goal.progressType == "NUMERIC") "当前数值" else "完成百分比"
-                        )
-                    },
-                    suffix = {
+                    label = if (goal.progressType == "NUMERIC") "当前数值" else "完成百分比",
+                    trailingIcon = {
                         Text(
                             if (goal.progressType == "NUMERIC") goal.unit else "%"
                         )

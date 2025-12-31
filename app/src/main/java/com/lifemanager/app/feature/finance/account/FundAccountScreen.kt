@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.AccountType
 import com.lifemanager.app.core.database.entity.FundAccountEntity
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -505,10 +506,10 @@ private fun EditAccountDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 账户名称
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.name,
                     onValueChange = onNameChange,
-                    label = { Text("账户名称") },
+                    label = "账户名称",
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     isError = editState.error != null && editState.name.isBlank()
@@ -547,58 +548,58 @@ private fun EditAccountDialog(
                 }
 
                 // 余额/欠款
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.balance,
                     onValueChange = onBalanceChange,
-                    label = { Text(if (isDebt) "当前欠款" else "当前余额") },
+                    label = if (isDebt) "当前欠款" else "当前余额",
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    prefix = { Text("¥") }
+                    leadingIcon = { Text("¥") }
                 )
 
                 // 信用额度（仅信贷账户）
                 if (isDebt) {
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.creditLimit,
                         onValueChange = onCreditLimitChange,
-                        label = { Text("信用额度") },
+                        label = "信用额度",
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        prefix = { Text("¥") }
+                        leadingIcon = { Text("¥") }
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
+                        PremiumTextField(
                             value = editState.billDay,
                             onValueChange = onBillDayChange,
-                            label = { Text("账单日") },
+                            label = "账单日",
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            suffix = { Text("日") }
+                            trailingIcon = { Text("日") }
                         )
-                        OutlinedTextField(
+                        PremiumTextField(
                             value = editState.repaymentDay,
                             onValueChange = onRepaymentDayChange,
-                            label = { Text("还款日") },
+                            label = "还款日",
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            suffix = { Text("日") }
+                            trailingIcon = { Text("日") }
                         )
                     }
                 }
 
                 // 备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.note,
                     onValueChange = onNoteChange,
-                    label = { Text("备注") },
+                    label = "备注",
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

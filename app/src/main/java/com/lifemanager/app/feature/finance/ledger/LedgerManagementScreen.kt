@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.LedgerEntity
 import com.lifemanager.app.core.database.entity.LedgerType
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -455,19 +456,19 @@ private fun EditLedgerDialog(
                 }
 
                 // 账本名称
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.name,
                     onValueChange = { viewModel.updateName(it) },
-                    label = { Text("账本名称") },
+                    label = "账本名称",
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 // 账本描述
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.description,
                     onValueChange = { viewModel.updateDescription(it) },
-                    label = { Text("描述（可选）") },
+                    label = "描述（可选）",
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 2
                 )
@@ -531,11 +532,11 @@ private fun EditLedgerDialog(
                 }
 
                 // 预算金额
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.budgetAmount,
                     onValueChange = { viewModel.updateBudgetAmount(it.filter { c -> c.isDigit() || c == '.' }) },
-                    label = { Text("月预算（可选）") },
-                    prefix = { Text("¥") },
+                    label = "月预算（可选）",
+                    leadingIcon = { Text("¥") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
