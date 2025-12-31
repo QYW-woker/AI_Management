@@ -5,11 +5,18 @@ import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.ai.service.AIDataAnalysisService
 import com.lifemanager.app.core.database.entity.AIAnalysisEntity
 import com.lifemanager.app.core.database.entity.HabitEntity
+import com.lifemanager.app.domain.model.HabitAchievement
 import com.lifemanager.app.domain.model.HabitEditState
+import com.lifemanager.app.domain.model.HabitRankItem
 import com.lifemanager.app.domain.model.HabitStats
 import com.lifemanager.app.domain.model.HabitUiState
 import com.lifemanager.app.domain.model.HabitWithStatus
+import com.lifemanager.app.domain.model.MonthlyHabitStats
+import com.lifemanager.app.domain.model.RetroCheckinState
+import com.lifemanager.app.domain.model.WeeklyHabitStats
+import com.lifemanager.app.domain.model.getMotivationalMessage
 import com.lifemanager.app.domain.usecase.HabitUseCase
+import java.time.YearMonth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,9 +67,40 @@ class HabitViewModel @Inject constructor(
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
 
+    // 成就徽章
+    private val _achievements = MutableStateFlow<List<HabitAchievement>>(emptyList())
+    val achievements: StateFlow<List<HabitAchievement>> = _achievements.asStateFlow()
+
+    // 周度统计
+    private val _weeklyStats = MutableStateFlow<WeeklyHabitStats?>(null)
+    val weeklyStats: StateFlow<WeeklyHabitStats?> = _weeklyStats.asStateFlow()
+
+    // 月度统计
+    private val _monthlyStats = MutableStateFlow<MonthlyHabitStats?>(null)
+    val monthlyStats: StateFlow<MonthlyHabitStats?> = _monthlyStats.asStateFlow()
+
+    // 习惯排行
+    private val _habitRanking = MutableStateFlow<List<HabitRankItem>>(emptyList())
+    val habitRanking: StateFlow<List<HabitRankItem>> = _habitRanking.asStateFlow()
+
+    // 激励语
+    private val _motivationalMessage = MutableStateFlow("")
+    val motivationalMessage: StateFlow<String> = _motivationalMessage.asStateFlow()
+
+    // 当前月份（用于日历和统计）
+    private val _currentYearMonth = MutableStateFlow(
+        YearMonth.now().let { it.year * 100 + it.monthValue }
+    )
+    val currentYearMonth: StateFlow<Int> = _currentYearMonth.asStateFlow()
+
+    // 补打卡状态
+    private val _retroCheckinState = MutableStateFlow(RetroCheckinState())
+    val retroCheckinState: StateFlow<RetroCheckinState> = _retroCheckinState.asStateFlow()
+
     init {
         loadHabits()
         loadAIAnalysis()
+        loadEnhancedData()
     }
 
     /**
@@ -355,5 +393,153 @@ class HabitViewModel @Inject constructor(
                 _isAnalyzing.value = false
             }
         }
+    }
+
+    /**
+     * 加载增强数据（成就、统计、排行等）
+     */
+    private fun loadEnhancedData() {
+        viewModelScope.launch {
+            try {
+                // 加载成就
+                _achievements.value = habitUseCase.getAchievements()
+
+                // 加载周度统计
+                _weeklyStats.value = habitUseCase.getWeeklyStats()
+
+                // 加载月度统计
+                _monthlyStats.value = habitUseCase.getMonthlyStats(_currentYearMonth.value)
+
+                // 加载习惯排行
+                _habitRanking.value = habitUseCase.getHabitRanking()
+
+                // 获取最长连续打卡天数并生成激励语
+                val longestStreak = habitUseCase.getLongestStreak()
+                _motivationalMessage.value = getMotivationalMessage(longestStreak)
+            } catch (e: Exception) {
+                // 增强数据加载失败不影响主功能
+            }
+        }
+    }
+
+    /**
+     * 刷新增强数据
+     */
+    fun refreshEnhancedData() {
+        loadEnhancedData()
+    }
+
+    /**
+     * 切换到上个月
+     */
+    fun previousMonth() {
+        val current = _currentYearMonth.value
+        val year = current / 100
+        val month = current % 100
+        _currentYearMonth.value = if (month == 1) {
+            (year - 1) * 100 + 12
+        } else {
+            year * 100 + (month - 1)
+        }
+        loadMonthlyData()
+    }
+
+    /**
+     * 切换到下个月
+     */
+    fun nextMonth() {
+        val current = _currentYearMonth.value
+        val year = current / 100
+        val month = current % 100
+        _currentYearMonth.value = if (month == 12) {
+            (year + 1) * 100 + 1
+        } else {
+            year * 100 + (month + 1)
+        }
+        loadMonthlyData()
+    }
+
+    /**
+     * 加载月度相关数据
+     */
+    private fun loadMonthlyData() {
+        viewModelScope.launch {
+            try {
+                _monthlyStats.value = habitUseCase.getMonthlyStats(_currentYearMonth.value)
+            } catch (e: Exception) {
+                // 忽略错误
+            }
+        }
+    }
+
+    /**
+     * 格式化年月显示
+     */
+    fun formatYearMonth(yearMonth: Int): String {
+        val year = yearMonth / 100
+        val month = yearMonth % 100
+        return "${year}年${month}月"
+    }
+
+    /**
+     * 显示补打卡对话框
+     */
+    fun showRetroCheckinDialog(habitId: Long, date: Int) {
+        _retroCheckinState.value = RetroCheckinState(
+            habitId = habitId,
+            selectedDate = date,
+            isShowing = true
+        )
+    }
+
+    /**
+     * 隐藏补打卡对话框
+     */
+    fun hideRetroCheckinDialog() {
+        _retroCheckinState.value = RetroCheckinState()
+    }
+
+    /**
+     * 更新补打卡备注
+     */
+    fun updateRetroCheckinNote(note: String) {
+        _retroCheckinState.value = _retroCheckinState.value.copy(note = note)
+    }
+
+    /**
+     * 执行补打卡
+     */
+    fun performRetroCheckin() {
+        val state = _retroCheckinState.value
+        if (state.habitId == 0L || state.selectedDate == 0) return
+
+        viewModelScope.launch {
+            _retroCheckinState.value = state.copy(isSaving = true, error = null)
+            try {
+                habitUseCase.retroCheckin(state.habitId, state.selectedDate, state.note)
+                hideRetroCheckinDialog()
+                refresh()
+                loadEnhancedData()
+            } catch (e: Exception) {
+                _retroCheckinState.value = state.copy(
+                    isSaving = false,
+                    error = e.message ?: "补打卡失败"
+                )
+            }
+        }
+    }
+
+    /**
+     * 获取已解锁的成就数量
+     */
+    fun getUnlockedAchievementsCount(): Int {
+        return _achievements.value.count { it.isUnlocked }
+    }
+
+    /**
+     * 获取总成就数量
+     */
+    fun getTotalAchievementsCount(): Int {
+        return _achievements.value.size
     }
 }
