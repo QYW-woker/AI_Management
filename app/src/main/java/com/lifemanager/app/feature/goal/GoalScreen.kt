@@ -696,7 +696,7 @@ private fun EnhancedGoalCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "$childCount个子目标",
+                                text = "${childCount}个子目标",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
