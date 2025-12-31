@@ -11,12 +11,14 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +39,10 @@ import com.lifemanager.app.ui.component.PremiumDialog
 import com.lifemanager.app.ui.component.PremiumConfirmButton
 import com.lifemanager.app.ui.component.PremiumDismissButton
 import com.lifemanager.app.ui.theme.AppColors
+import com.lifemanager.app.core.database.entity.RecordType
+import com.lifemanager.app.domain.model.SavingsPlanWithDetails
+import com.lifemanager.app.domain.model.quickDepositAmounts
+import java.time.LocalDate
 
 /**
  * 添加/编辑存钱计划对话框
@@ -375,5 +381,392 @@ fun DepositDialog(
             label = "备注（可选）",
             singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 快速存款金额
+        Text(
+            text = "快速选择",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            quickDepositAmounts.take(3).forEach { (amount, label) ->
+                OutlinedButton(
+                    onClick = {
+                        amountText = amount.toInt().toString()
+                        viewModel.updateDepositAmount(amount)
+                    },
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(label, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            quickDepositAmounts.drop(3).forEach { (amount, label) ->
+                OutlinedButton(
+                    onClick = {
+                        amountText = amount.toInt().toString()
+                        viewModel.updateDepositAmount(amount)
+                    },
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(label, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 取款对话框
+ */
+@Composable
+fun WithdrawDialog(
+    viewModel: SavingsPlanViewModel,
+    maxAmount: Double,
+    onDismiss: () -> Unit
+) {
+    val editState by viewModel.recordEditState.collectAsState()
+
+    var amountText by remember { mutableStateOf("") }
+
+    PremiumDialog(
+        onDismissRequest = onDismiss,
+        icon = "💸",
+        iconBackgroundColor = Color(0xFFF44336).copy(alpha = 0.1f),
+        title = "取款",
+        confirmButton = {
+            if (editState.isSaving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                PremiumConfirmButton(
+                    text = "确认取款",
+                    onClick = { viewModel.confirmWithdraw() }
+                )
+            }
+        },
+        dismissButton = {
+            PremiumDismissButton(text = "取消", onClick = onDismiss)
+        }
+    ) {
+        editState.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // 可取余额提示
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "可取余额：",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "¥${String.format("%,.2f", maxAmount)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.Primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PremiumTextField(
+            value = amountText,
+            onValueChange = { value ->
+                val filtered = value.filter { it.isDigit() || it == '.' }
+                amountText = filtered
+                filtered.toDoubleOrNull()?.let {
+                    viewModel.updateDepositAmount(it)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = "取款金额 (¥)",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PremiumTextField(
+            value = editState.note,
+            onValueChange = { viewModel.updateDepositNote(it) },
+            modifier = Modifier.fillMaxWidth(),
+            label = "取款原因（可选）",
+            placeholder = "如：紧急用钱、购物等",
+            singleLine = true
+        )
+    }
+}
+
+/**
+ * 存取记录历史对话框
+ */
+@Composable
+fun RecordHistoryDialog(
+    planDetails: SavingsPlanWithDetails,
+    onDismiss: () -> Unit,
+    formatDate: (Int) -> String
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.1f),
+                            AppColors.Primary.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                ),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 标题栏
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📊",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${planDetails.plan.name} - 记录",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "共 ${planDetails.records.size} 条记录",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.Close,
+                            contentDescription = "关闭"
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // 统计信息
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "存款",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${String.format("%,.0f", planDetails.totalDeposits)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4CAF50)
+                        )
+                        Text(
+                            text = "${planDetails.depositCount}次",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "取款",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${String.format("%,.0f", planDetails.totalWithdrawals)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF44336)
+                        )
+                        Text(
+                            text = "${planDetails.withdrawalCount}次",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "净存",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${String.format("%,.0f", planDetails.plan.currentAmount)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = AppColors.Primary
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // 记录列表
+                if (planDetails.records.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("📭", style = MaterialTheme.typography.displaySmall)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "暂无记录",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.foundation.lazy.items(
+                            items = planDetails.records,
+                            key = { it.id }
+                        ) { record ->
+                            RecordItem(
+                                record = record,
+                                formatDate = formatDate
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordItem(
+    record: com.lifemanager.app.core.database.entity.SavingsRecordEntity,
+    formatDate: (Int) -> String
+) {
+    val isDeposit = record.type == RecordType.DEPOSIT
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDeposit)
+                Color(0xFF4CAF50).copy(alpha = 0.08f)
+            else
+                Color(0xFFF44336).copy(alpha = 0.08f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isDeposit) Color(0xFF4CAF50).copy(alpha = 0.2f)
+                        else Color(0xFFF44336).copy(alpha = 0.2f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isDeposit) "💰" else "💸",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 信息
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isDeposit) "存款" else "取款",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = formatDate(record.date),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (record.note.isNotBlank()) {
+                    Text(
+                        text = record.note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // 金额
+            Text(
+                text = "${if (isDeposit) "+" else "-"}¥${String.format("%,.2f", record.amount)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isDeposit) Color(0xFF4CAF50) else Color(0xFFF44336)
+            )
+        }
     }
 }

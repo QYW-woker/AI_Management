@@ -52,11 +52,22 @@ class SavingsPlanViewModel @Inject constructor(
     private val _showDepositDialog = MutableStateFlow(false)
     val showDepositDialog: StateFlow<Boolean> = _showDepositDialog.asStateFlow()
 
+    private val _showWithdrawDialog = MutableStateFlow(false)
+    val showWithdrawDialog: StateFlow<Boolean> = _showWithdrawDialog.asStateFlow()
+
     private val _showDeleteDialog = MutableStateFlow(false)
     val showDeleteDialog: StateFlow<Boolean> = _showDeleteDialog.asStateFlow()
 
+    private val _showHistoryDialog = MutableStateFlow(false)
+    val showHistoryDialog: StateFlow<Boolean> = _showHistoryDialog.asStateFlow()
+
+    // 当前查看历史的计划
+    private val _currentHistoryPlan = MutableStateFlow<SavingsPlanWithDetails?>(null)
+    val currentHistoryPlan: StateFlow<SavingsPlanWithDetails?> = _currentHistoryPlan.asStateFlow()
+
     private var planToDelete: Long? = null
     private var currentDepositPlanId: Long? = null
+    private var currentWithdrawPlanId: Long? = null
 
     init {
         loadPlans()
@@ -288,6 +299,97 @@ class SavingsPlanViewModel @Inject constructor(
                     isSaving = false,
                     error = e.message ?: "存款失败"
                 )
+            }
+        }
+    }
+
+    /**
+     * 显示取款对话框
+     */
+    fun showWithdrawDialog(planId: Long) {
+        currentWithdrawPlanId = planId
+        _recordEditState.value = RecordEditState(
+            planId = planId,
+            date = useCase.getToday(),
+            isWithdrawal = true
+        )
+        _showWithdrawDialog.value = true
+    }
+
+    /**
+     * 隐藏取款对话框
+     */
+    fun hideWithdrawDialog() {
+        _showWithdrawDialog.value = false
+        _recordEditState.value = RecordEditState()
+        currentWithdrawPlanId = null
+    }
+
+    /**
+     * 确认取款
+     */
+    fun confirmWithdraw() {
+        val state = _recordEditState.value
+        val planId = currentWithdrawPlanId ?: return
+
+        if (state.amount <= 0) {
+            _recordEditState.value = state.copy(error = "请输入取款金额")
+            return
+        }
+
+        viewModelScope.launch {
+            _recordEditState.value = state.copy(isSaving = true, error = null)
+            try {
+                val success = useCase.withdraw(planId, state.amount, state.note)
+                if (success) {
+                    hideWithdrawDialog()
+                    loadStats()
+                } else {
+                    _recordEditState.value = _recordEditState.value.copy(
+                        isSaving = false,
+                        error = "余额不足"
+                    )
+                }
+            } catch (e: Exception) {
+                _recordEditState.value = _recordEditState.value.copy(
+                    isSaving = false,
+                    error = e.message ?: "取款失败"
+                )
+            }
+        }
+    }
+
+    /**
+     * 显示历史记录对话框
+     */
+    fun showHistoryDialog(planId: Long) {
+        viewModelScope.launch {
+            val planDetails = useCase.getPlanDetails(planId)
+            if (planDetails != null) {
+                _currentHistoryPlan.value = planDetails
+                _showHistoryDialog.value = true
+            }
+        }
+    }
+
+    /**
+     * 隐藏历史记录对话框
+     */
+    fun hideHistoryDialog() {
+        _showHistoryDialog.value = false
+        _currentHistoryPlan.value = null
+    }
+
+    /**
+     * 快速存款（预设金额）
+     */
+    fun quickDeposit(planId: Long, amount: Double) {
+        viewModelScope.launch {
+            try {
+                useCase.deposit(planId, amount, "快速存款")
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "存款失败")
             }
         }
     }

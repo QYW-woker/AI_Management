@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lifemanager.app.domain.model.Milestone
 import com.lifemanager.app.domain.model.SavingsPlanWithDetails
 import com.lifemanager.app.domain.model.SavingsStats
 import com.lifemanager.app.domain.model.SavingsUiState
@@ -40,7 +41,10 @@ fun SavingsPlanScreen(
     val stats by viewModel.stats.collectAsState()
     val showPlanDialog by viewModel.showPlanDialog.collectAsState()
     val showDepositDialog by viewModel.showDepositDialog.collectAsState()
+    val showWithdrawDialog by viewModel.showWithdrawDialog.collectAsState()
+    val showHistoryDialog by viewModel.showHistoryDialog.collectAsState()
     val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
+    val currentHistoryPlan by viewModel.currentHistoryPlan.collectAsState()
 
     Scaffold(
         topBar = {
@@ -126,6 +130,8 @@ fun SavingsPlanScreen(
                             PlanItem(
                                 planWithDetails = planWithDetails,
                                 onDeposit = { viewModel.showDepositDialog(planWithDetails.plan.id) },
+                                onWithdraw = { viewModel.showWithdrawDialog(planWithDetails.plan.id) },
+                                onShowHistory = { viewModel.showHistoryDialog(planWithDetails.plan.id) },
                                 onClick = { viewModel.showEditPlanDialog(planWithDetails.plan.id) },
                                 onDelete = { viewModel.showDeleteConfirm(planWithDetails.plan.id) },
                                 formatDate = { viewModel.formatDate(it) }
@@ -176,6 +182,25 @@ fun SavingsPlanScreen(
             }
         )
     }
+
+    // 取款对话框
+    if (showWithdrawDialog) {
+        val currentPlan = plans.find { viewModel.recordEditState.value.planId == it.plan.id }
+        WithdrawDialog(
+            viewModel = viewModel,
+            maxAmount = currentPlan?.plan?.currentAmount ?: 0.0,
+            onDismiss = { viewModel.hideWithdrawDialog() }
+        )
+    }
+
+    // 历史记录对话框
+    if (showHistoryDialog && currentHistoryPlan != null) {
+        RecordHistoryDialog(
+            planDetails = currentHistoryPlan!!,
+            onDismiss = { viewModel.hideHistoryDialog() },
+            formatDate = { viewModel.formatDate(it) }
+        )
+    }
 }
 
 @Composable
@@ -216,7 +241,7 @@ private fun SavingsStatsCard(stats: SavingsStats) {
 
             // 进度条
             LinearProgressIndicator(
-                progress = stats.overallProgress,
+                progress = { stats.overallProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
@@ -224,7 +249,7 @@ private fun SavingsStatsCard(stats: SavingsStats) {
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(
@@ -271,6 +296,52 @@ private fun SavingsStatsCard(stats: SavingsStats) {
                     )
                 }
             }
+
+            // 本月存款统计
+            if (stats.thisMonthDeposit > 0 || stats.lastMonthDeposit > 0) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "本月存款",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${numberFormat.format(stats.thisMonthDeposit)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+
+                    // 月度变化
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val isPositive = stats.isPositiveChange()
+                        val changeColor = if (isPositive) Color(0xFF4CAF50) else Color(0xFFF44336)
+                        Icon(
+                            imageVector = if (isPositive) Icons.Filled.TrendingUp else Icons.Filled.TrendingDown,
+                            contentDescription = null,
+                            tint = changeColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stats.getMonthlyChangeText(),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = changeColor
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -279,6 +350,8 @@ private fun SavingsStatsCard(stats: SavingsStats) {
 private fun PlanItem(
     planWithDetails: SavingsPlanWithDetails,
     onDeposit: () -> Unit,
+    onWithdraw: () -> Unit,
+    onShowHistory: () -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     formatDate: (Int) -> String
@@ -387,7 +460,7 @@ private fun PlanItem(
             Spacer(modifier = Modifier.height(8.dp))
 
             LinearProgressIndicator(
-                progress = planWithDetails.progress,
+                progress = { planWithDetails.progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
@@ -395,50 +468,113 @@ private fun PlanItem(
                 color = planColor,
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // 信息和操作
+            // 里程碑进度
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row {
-                    if (!planWithDetails.isOnTrack && plan.status == "ACTIVE") {
-                        Icon(
-                            imageVector = Icons.Filled.Warning,
-                            contentDescription = "进度落后",
-                            tint = Color(0xFFFF9800),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
+                Text(
+                    text = "${planWithDetails.currentMilestone.icon} ${planWithDetails.currentMilestone.label}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = planColor
+                )
+                planWithDetails.nextMilestone?.let { next ->
                     Text(
-                        text = "剩余${planWithDetails.daysRemaining}天",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = " → ${next.icon} ${next.label}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                if (!planWithDetails.isOnTrack && plan.status == "ACTIVE") {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = "进度落后",
+                        tint = Color(0xFFFF9800),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = "剩余${planWithDetails.daysRemaining}天",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                Row {
-                    if (plan.status == "ACTIVE") {
-                        TextButton(onClick = onDeposit) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 操作按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (plan.status == "ACTIVE") {
+                    // 存款按钮
+                    OutlinedButton(
+                        onClick = onDeposit,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("存款", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    // 取款按钮
+                    if (plan.currentAmount > 0) {
+                        OutlinedButton(
+                            onClick = onWithdraw,
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFFF44336)
+                            )
+                        ) {
                             Icon(
-                                imageVector = Icons.Filled.Add,
+                                imageVector = Icons.Filled.Remove,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("存款")
+                            Text("取款", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = "删除",
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                        )
-                    }
+                }
+
+                // 记录按钮
+                OutlinedButton(
+                    onClick = onShowHistory,
+                    modifier = if (plan.status != "ACTIVE") Modifier.weight(1f) else Modifier,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.History,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("记录", style = MaterialTheme.typography.labelMedium)
+                }
+
+                // 删除按钮
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "删除",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
