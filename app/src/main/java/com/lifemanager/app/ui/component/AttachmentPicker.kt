@@ -1,6 +1,9 @@
 package com.lifemanager.app.ui.component
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lifemanager.app.core.util.AttachmentManager
@@ -52,6 +56,39 @@ fun AttachmentPicker(
             val newList = attachments.toMutableList()
             newList.add(tempPhotoFile!!.absolutePath)
             onAttachmentsChanged(newList)
+        }
+    }
+
+    // 相机权限请求
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // 权限已授予，启动相机
+            tempPhotoFile = AttachmentManager.createTempImageFile(context)
+            val uri = AttachmentManager.getFileUri(context, tempPhotoFile!!)
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(context, "需要相机权限才能拍照", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 启动相机的函数（带权限检查）
+    fun launchCamera() {
+        when {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                // 已有权限，直接启动相机
+                tempPhotoFile = AttachmentManager.createTempImageFile(context)
+                val uri = AttachmentManager.getFileUri(context, tempPhotoFile!!)
+                cameraLauncher.launch(uri)
+            }
+            else -> {
+                // 请求权限
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
         }
     }
 
@@ -101,9 +138,7 @@ fun AttachmentPicker(
                             text = { Text("拍照") },
                             onClick = {
                                 showMenu = false
-                                tempPhotoFile = AttachmentManager.createTempImageFile(context)
-                                val uri = AttachmentManager.getFileUri(context, tempPhotoFile!!)
-                                cameraLauncher.launch(uri)
+                                launchCamera()
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.CameraAlt, contentDescription = null)
