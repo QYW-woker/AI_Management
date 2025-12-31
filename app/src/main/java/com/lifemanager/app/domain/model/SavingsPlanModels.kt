@@ -52,9 +52,9 @@ data class SavingsPlanWithDetails(
     }
 
     /**
-     * 获取下一个待达成的里程碑
+     * 计算下一个待达成的里程碑
      */
-    fun getNextMilestone(): Milestone? {
+    fun calculateNextMilestone(): Milestone? {
         val progressPercent = (progress * 100).toInt()
         return when {
             progressPercent >= 100 -> null
@@ -69,7 +69,7 @@ data class SavingsPlanWithDetails(
      * 距离下一个里程碑还需存多少
      */
     fun getAmountToNextMilestone(): Double {
-        val next = getNextMilestone() ?: return 0.0
+        val next = calculateNextMilestone() ?: return 0.0
         val targetForNext = plan.targetAmount * next.percentage / 100
         return maxOf(0.0, targetForNext - plan.currentAmount)
     }
