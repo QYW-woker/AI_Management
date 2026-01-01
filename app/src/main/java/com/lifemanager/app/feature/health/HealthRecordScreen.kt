@@ -140,7 +140,7 @@ fun HealthRecordScreen(
                         onRecordSleep = { viewModel.showAddDialog(HealthRecordType.SLEEP) },
                         onRecordExercise = { viewModel.showAddDialog(HealthRecordType.EXERCISE) },
                         onRecordMood = { viewModel.showAddDialog(HealthRecordType.MOOD) },
-                        onRecordWater = { viewModel.quickRecordWater() },
+                        onRecordWater = { viewModel.showAddDialog(HealthRecordType.WATER) },
                         onRecordSteps = { viewModel.showAddDialog(HealthRecordType.STEPS) }
                     )
                 }

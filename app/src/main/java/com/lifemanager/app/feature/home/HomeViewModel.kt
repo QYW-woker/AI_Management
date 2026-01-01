@@ -7,6 +7,8 @@ import com.lifemanager.app.core.database.dao.DailyTransactionDao
 import com.lifemanager.app.core.database.dao.GoalDao
 import com.lifemanager.app.core.database.dao.TodoDao
 import com.lifemanager.app.core.database.entity.GoalEntity
+import com.lifemanager.app.core.data.repository.HomeCardConfig
+import com.lifemanager.app.core.data.repository.SettingsRepository
 import com.lifemanager.app.domain.repository.HabitRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -26,12 +28,17 @@ class HomeViewModel @Inject constructor(
     private val transactionDao: DailyTransactionDao,
     private val todoDao: TodoDao,
     private val goalDao: GoalDao,
-    private val habitRepository: HabitRepository
+    private val habitRepository: HabitRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     // 加载状态
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    // 首页卡片配置
+    private val _homeCardConfig = MutableStateFlow(HomeCardConfig())
+    val homeCardConfig: StateFlow<HomeCardConfig> = _homeCardConfig.asStateFlow()
 
     // 今日统计
     private val _todayStats = MutableStateFlow(TodayStatsData())
@@ -54,6 +61,18 @@ class HomeViewModel @Inject constructor(
     init {
         loadInitialData()
         observeDataChanges()
+        observeSettings()
+    }
+
+    /**
+     * 观察设置变化
+     */
+    private fun observeSettings() {
+        viewModelScope.launch {
+            settingsRepository.settingsFlow.collectLatest { settings ->
+                _homeCardConfig.value = settings.homeCardConfig
+            }
+        }
     }
 
     /**

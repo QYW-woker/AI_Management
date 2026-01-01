@@ -53,6 +53,7 @@ fun HomeScreen(
     val todayStats by viewModel.todayStats.collectAsState()
     val monthlyFinance by viewModel.monthlyFinance.collectAsState()
     val topGoals by viewModel.topGoals.collectAsState()
+    val homeCardConfig by viewModel.homeCardConfig.collectAsState()
 
     val today = remember { LocalDate.now() }
     val greeting = remember {
@@ -113,29 +114,35 @@ fun HomeScreen(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    // 英雄区域 - 今日概览
-                    item(key = "hero") {
-                        HeroSection(
-                            todayStats = todayStats,
-                            onNavigateToModule = onNavigateToModule
-                        )
+                    // 英雄区域 - 今日概览 (今日统计)
+                    if (homeCardConfig.showTodayStats) {
+                        item(key = "hero") {
+                            HeroSection(
+                                todayStats = todayStats,
+                                onNavigateToModule = onNavigateToModule
+                            )
+                        }
                     }
 
                     // 快捷功能入口
-                    item(key = "quick_access") {
-                        QuickAccessSection(onNavigateToModule = onNavigateToModule)
+                    if (homeCardConfig.showQuickActions) {
+                        item(key = "quick_access") {
+                            QuickAccessSection(onNavigateToModule = onNavigateToModule)
+                        }
                     }
 
                     // 本月财务卡片
-                    item(key = "monthly_finance") {
-                        FinanceCard(
-                            finance = monthlyFinance,
-                            onClick = { onNavigateToModule(Screen.AccountingMain.route) }
-                        )
+                    if (homeCardConfig.showMonthlyFinance) {
+                        item(key = "monthly_finance") {
+                            FinanceCard(
+                                finance = monthlyFinance,
+                                onClick = { onNavigateToModule(Screen.AccountingMain.route) }
+                            )
+                        }
                     }
 
                     // 目标进度
-                    if (topGoals.isNotEmpty()) {
+                    if (homeCardConfig.showTopGoals && topGoals.isNotEmpty()) {
                         item(key = "goals") {
                             GoalsSection(
                                 goals = topGoals,
@@ -145,8 +152,10 @@ fun HomeScreen(
                     }
 
                     // AI 助手卡片
-                    item(key = "ai_card") {
-                        AIAssistantCard(onClick = { onNavigateToModule(Screen.AIAssistant.route) })
+                    if (homeCardConfig.showAIInsight) {
+                        item(key = "ai_card") {
+                            AIAssistantCard(onClick = { onNavigateToModule(Screen.AIAssistant.route) })
+                        }
                     }
 
                     // 底部安全间距
