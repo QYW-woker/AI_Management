@@ -13,17 +13,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import com.lifemanager.app.feature.home.HomeScreen
+import com.lifemanager.app.feature.home.CleanHomeScreen
 import com.lifemanager.app.feature.finance.income.MonthlyIncomeExpenseScreen
 import com.lifemanager.app.feature.finance.income.FieldManagementScreen
 import com.lifemanager.app.feature.finance.asset.MonthlyAssetScreen
 import com.lifemanager.app.feature.finance.expense.MonthlyExpenseScreen
 import com.lifemanager.app.feature.finance.transaction.DailyTransactionScreen
-import com.lifemanager.app.feature.todo.TodoScreen
+import com.lifemanager.app.feature.todo.CleanTodoScreen
 import com.lifemanager.app.feature.todo.TodoDetailScreen
-import com.lifemanager.app.feature.diary.DiaryScreen
+import com.lifemanager.app.feature.diary.CleanDiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
-import com.lifemanager.app.feature.habit.HabitScreen
+import com.lifemanager.app.feature.habit.CleanHabitScreen
 import com.lifemanager.app.feature.savings.SavingsPlanScreen
 import com.lifemanager.app.feature.goal.GoalScreen
 import com.lifemanager.app.feature.datacenter.DataCenterScreen
@@ -246,9 +246,9 @@ fun AppNavHost(
         startDestination = Screen.Home.route,
         modifier = modifier
     ) {
-        // 首页
+        // 首页 - 使用简洁设计版本
         composable(Screen.Home.route) {
-            HomeScreen(
+            CleanHomeScreen(
                 onNavigateToModule = { route ->
                     // 检查是否是底部导航栏的主页面路由
                     val isMainScreenRoute = bottomNavItems.any { it.route == route }
@@ -448,9 +448,9 @@ fun AppNavHost(
             )
         }
 
-        // 待办
+        // 待办 - 使用简洁设计版本
         composable(Screen.Todo.route) {
-            TodoScreen(
+            CleanTodoScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToDetail = { todoId ->
                     navController.navigate(Screen.TodoDetail.createRoute(todoId))
@@ -473,9 +473,9 @@ fun AppNavHost(
             )
         }
 
-        // 日记
+        // 日记 - 使用简洁设计版本
         composable(Screen.Diary.route) {
-            DiaryScreen(
+            CleanDiaryScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -487,9 +487,9 @@ fun AppNavHost(
             )
         }
 
-        // 习惯打卡
+        // 习惯打卡 - 使用简洁设计版本
         composable(Screen.Habit.route) {
-            HabitScreen(
+            CleanHabitScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
