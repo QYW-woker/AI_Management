@@ -12,6 +12,9 @@ import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.core.database.entity.DailyTransactionEntity
 import com.lifemanager.app.core.database.entity.FundAccountEntity
 import com.lifemanager.app.core.database.entity.TransferEntity
+import com.lifemanager.app.core.undo.UndoAction
+import com.lifemanager.app.core.undo.UndoManager
+import com.lifemanager.app.core.undo.UndoType
 import com.lifemanager.app.domain.model.DailyStats
 import com.lifemanager.app.domain.model.DailyTransactionWithCategory
 import com.lifemanager.app.domain.model.PeriodStats
@@ -39,7 +42,8 @@ class AccountingMainViewModel @Inject constructor(
     private val customFieldDao: CustomFieldDao,
     private val fundAccountDao: FundAccountDao,
     private val transferDao: TransferDao,
-    private val aiAnalysisService: AIDataAnalysisService
+    private val aiAnalysisService: AIDataAnalysisService,
+    val undoManager: UndoManager
 ) : ViewModel() {
 
     // UI状态
@@ -362,16 +366,51 @@ class AccountingMainViewModel @Inject constructor(
     }
 
     /**
-     * 删除交易
+     * 删除交易（带撤销功能）
      */
     fun deleteTransaction(id: Long) {
         viewModelScope.launch {
             try {
-                transactionDao.deleteById(id)
+                // 获取待删除的交易（用于撤销恢复）
+                val transaction = transactionDao.getById(id)
+                if (transaction == null) {
+                    hideEditDialog()
+                    return@launch
+                }
+
                 hideEditDialog()
+
+                // 注册撤销操作
+                val typeStr = if (transaction.type == "EXPENSE") "支出" else "收入"
+                val undoAction = UndoAction(
+                    type = UndoType.DELETE_TRANSACTION,
+                    message = "已删除${typeStr} ¥${String.format("%.2f", transaction.amount)}",
+                    undoMessage = "已恢复${typeStr} ¥${String.format("%.2f", transaction.amount)}",
+                    onDelete = {
+                        transactionDao.deleteById(id)
+                    },
+                    onUndo = {
+                        // 重新插入交易（id=0让数据库自动生成新ID）
+                        transactionDao.insert(
+                            transaction.copy(id = 0)
+                        )
+                    }
+                )
+
+                undoManager.registerUndoAction(viewModelScope, undoAction)
+
             } catch (e: Exception) {
                 // Handle error
             }
+        }
+    }
+
+    /**
+     * 执行撤销操作
+     */
+    fun undo() {
+        viewModelScope.launch {
+            undoManager.undo()
         }
     }
 

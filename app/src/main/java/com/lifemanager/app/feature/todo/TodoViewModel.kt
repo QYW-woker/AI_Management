@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.TodoStatus
+import com.lifemanager.app.core.undo.UndoAction
+import com.lifemanager.app.core.undo.UndoEvent
+import com.lifemanager.app.core.undo.UndoManager
+import com.lifemanager.app.core.undo.UndoType
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.usecase.TodoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +22,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class TodoViewModel @Inject constructor(
-    private val todoUseCase: TodoUseCase
+    private val todoUseCase: TodoUseCase,
+    val undoManager: UndoManager
 ) : ViewModel() {
 
     // UI状态
@@ -148,7 +153,7 @@ class TodoViewModel @Inject constructor(
     }
 
     /**
-     * 确认批量删除
+     * 确认批量删除（带撤销功能）
      */
     fun confirmBatchDelete() {
         val idsToDelete = _selectedIds.value.toList()
@@ -156,10 +161,45 @@ class TodoViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                todoUseCase.deleteTodos(idsToDelete)
+                // 获取所有待删除的待办（用于撤销恢复）
+                val todosToDelete = idsToDelete.mapNotNull { todoUseCase.getTodoById(it) }
+                if (todosToDelete.isEmpty()) {
+                    hideBatchDeleteConfirm()
+                    exitSelectionMode()
+                    return@launch
+                }
+
                 hideBatchDeleteConfirm()
                 exitSelectionMode()
-                refresh()
+
+                // 注册撤销操作
+                val undoAction = UndoAction(
+                    type = UndoType.BATCH_DELETE,
+                    message = "已删除 ${todosToDelete.size} 项待办",
+                    undoMessage = "已恢复 ${todosToDelete.size} 项待办",
+                    onDelete = {
+                        todoUseCase.deleteTodos(idsToDelete)
+                    },
+                    onUndo = {
+                        // 恢复所有待办
+                        for (todo in todosToDelete) {
+                            todoUseCase.addTodo(
+                                title = todo.title,
+                                description = todo.description,
+                                priority = todo.priority,
+                                quadrant = todo.quadrant,
+                                dueDate = todo.dueDate,
+                                dueTime = todo.dueTime,
+                                reminderAt = todo.reminderAt,
+                                repeatRule = todo.repeatRule
+                            )
+                        }
+                        refresh()
+                    }
+                )
+
+                undoManager.registerUndoAction(viewModelScope, undoAction)
+
             } catch (e: Exception) {
                 // 处理错误
             }
@@ -485,19 +525,62 @@ class TodoViewModel @Inject constructor(
     }
 
     /**
-     * 确认删除
+     * 确认删除（带撤销功能）
      */
     fun confirmDelete() {
         val id = deleteTodoId ?: return
 
         viewModelScope.launch {
             try {
-                todoUseCase.deleteTodo(id)
+                // 获取待删除的待办（用于撤销恢复）
+                val todo = todoUseCase.getTodoById(id)
+                if (todo == null) {
+                    hideDeleteConfirm()
+                    return@launch
+                }
+
+                // 立即从UI中移除（乐观更新）
                 hideDeleteConfirm()
-                refresh()
+
+                // 注册撤销操作
+                val undoAction = UndoAction(
+                    type = UndoType.DELETE_TODO,
+                    message = "已删除「${todo.title}」",
+                    undoMessage = "已恢复「${todo.title}」",
+                    onDelete = {
+                        todoUseCase.deleteTodo(id)
+                    },
+                    onUndo = {
+                        // 重新插入待办（需要复制一份新的，id=0让数据库自动生成新ID）
+                        todoUseCase.addTodo(
+                            title = todo.title,
+                            description = todo.description,
+                            priority = todo.priority,
+                            quadrant = todo.quadrant,
+                            dueDate = todo.dueDate,
+                            dueTime = todo.dueTime,
+                            reminderAt = todo.reminderAt,
+                            repeatRule = todo.repeatRule
+                        )
+                        refresh()
+                    }
+                )
+
+                undoManager.registerUndoAction(viewModelScope, undoAction)
+
             } catch (e: Exception) {
                 // 处理错误
             }
+        }
+    }
+
+    /**
+     * 执行撤销操作
+     */
+    fun undo() {
+        viewModelScope.launch {
+            undoManager.undo()
+            refresh()
         }
     }
 
