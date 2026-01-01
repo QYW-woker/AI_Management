@@ -43,6 +43,7 @@ import com.lifemanager.app.ui.theme.*
 @Composable
 fun CleanDiaryScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Int) -> Unit = {},
     viewModel: DiaryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,8 +51,12 @@ fun CleanDiaryScreen(
     val statistics by viewModel.statistics.collectAsState()
     val currentYearMonth by viewModel.currentYearMonth.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
-    val showEditDialog by viewModel.showEditDialog.collectAsState()
     val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
+
+    // 获取今日日期用于新建日记
+    val todayDate = remember {
+        java.time.LocalDate.now().toEpochDay().toInt()
+    }
 
     Scaffold(
         containerColor = CleanColors.background,
@@ -89,7 +94,7 @@ fun CleanDiaryScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.showEditDialog() },
+                onClick = { onNavigateToEdit(todayDate) },
                 containerColor = CleanColors.primary,
                 contentColor = CleanColors.onPrimary,
                 shape = RoundedCornerShape(Radius.md)
@@ -145,7 +150,7 @@ fun CleanDiaryScreen(
                             message = "本月还没有日记",
                             icon = Icons.Outlined.Book,
                             actionText = "开始记录",
-                            onActionClick = { viewModel.showEditDialog() }
+                            onActionClick = { onNavigateToEdit(todayDate) }
                         )
                     } else {
                         LazyColumn(
@@ -161,7 +166,7 @@ fun CleanDiaryScreen(
                                     diary = diary,
                                     formatDate = { viewModel.formatDate(it) },
                                     getDayOfWeek = { viewModel.getDayOfWeek(it) },
-                                    onClick = { viewModel.showEditDialog(diary.date) }
+                                    onClick = { onNavigateToEdit(diary.date) }
                                 )
                             }
 
@@ -174,14 +179,6 @@ fun CleanDiaryScreen(
                 }
             }
         }
-    }
-
-    // 编辑对话框
-    if (showEditDialog) {
-        EditDiaryDialog(
-            viewModel = viewModel,
-            onDismiss = { viewModel.hideEditDialog() }
-        )
     }
 
     // 删除确认对话框

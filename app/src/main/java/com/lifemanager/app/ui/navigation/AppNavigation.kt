@@ -22,6 +22,7 @@ import com.lifemanager.app.feature.finance.transaction.DailyTransactionScreen
 import com.lifemanager.app.feature.todo.CleanTodoScreen
 import com.lifemanager.app.feature.todo.CleanTodoDetailScreen
 import com.lifemanager.app.feature.diary.CleanDiaryScreen
+import com.lifemanager.app.feature.diary.CleanEditDiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
 import com.lifemanager.app.feature.habit.CleanHabitScreen
 import com.lifemanager.app.feature.savings.SavingsPlanScreen
@@ -476,6 +477,21 @@ fun AppNavHost(
         // 日记 - 使用简洁设计版本
         composable(Screen.Diary.route) {
             CleanDiaryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { date ->
+                    navController.navigate(Screen.EditDiary.createRoute(date))
+                }
+            )
+        }
+
+        // 日记编辑 - 全屏编辑页面
+        composable(
+            route = Screen.EditDiary.route,
+            arguments = listOf(navArgument("date") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val date = backStackEntry.arguments?.getInt("date") ?: 0
+            CleanEditDiaryScreen(
+                diaryDate = if (date == 0) null else date,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

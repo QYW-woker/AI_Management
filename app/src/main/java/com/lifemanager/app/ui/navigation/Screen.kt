@@ -116,6 +116,12 @@ sealed class Screen(val route: String) {
         fun createRoute(id: Long) = "diary_detail/$id"
     }
 
+    /** 日记编辑 */
+    object EditDiary : Screen("edit_diary/{date}") {
+        fun createRoute(date: Int) = "edit_diary/$date"
+        fun createNewRoute() = "edit_diary/0"
+    }
+
     /** 时间统计 */
     object TimeTrack : Screen("time_track")
 
