@@ -46,6 +46,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun HealthRecordScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit = {},
     viewModel: HealthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -169,7 +170,7 @@ fun HealthRecordScreen(
                     items(filteredRecords, key = { it.id }) { record ->
                         HealthRecordItem(
                             record = record,
-                            onEdit = { viewModel.showEditDialog(record) },
+                            onEdit = { onNavigateToDetail(record.id) },
                             onDelete = { viewModel.showDeleteConfirm(record) }
                         )
                     }

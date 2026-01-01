@@ -51,6 +51,7 @@ import com.lifemanager.app.feature.finance.account.FundAccountScreen
 import com.lifemanager.app.feature.finance.account.FundAccountDetailScreen
 import com.lifemanager.app.feature.finance.statistics.StatisticsScreen
 import com.lifemanager.app.feature.health.HealthRecordScreen
+import com.lifemanager.app.feature.health.CleanHealthRecordDetailScreen
 import com.lifemanager.app.ui.reading.ReadingScreen
 import com.lifemanager.app.ui.reading.BookDetailScreen
 
@@ -574,6 +575,21 @@ fun AppNavHost(
         // 健康记录
         composable(Screen.HealthRecord.route) {
             HealthRecordScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { recordId ->
+                    navController.navigate(Screen.HealthRecordDetail.createRoute(recordId))
+                }
+            )
+        }
+
+        // 健康记录详情
+        composable(
+            route = Screen.HealthRecordDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val recordId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanHealthRecordDetailScreen(
+                recordId = recordId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
