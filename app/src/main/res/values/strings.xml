@@ -110,4 +110,10 @@
     <string name="voice_input">语音输入</string>
     <string name="ai_analysis">AI分析</string>
     <string name="ai_suggestion">AI建议</string>
+
+    <!-- 桌面小组件 -->
+    <string name="widget_goal_description">在桌面显示你的目标进度，随时掌握目标完成情况</string>
+    <string name="widget_todo_description">在桌面显示今日待办事项，轻松管理日程安排</string>
+    <string name="widget_goal_name">目标追踪</string>
+    <string name="widget_todo_name">今日待办</string>
 </resources>

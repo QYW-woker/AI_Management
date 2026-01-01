@@ -98,6 +98,12 @@ interface TodoDao {
     suspend fun getById(id: Long): TodoEntity?
 
     /**
+     * 根据ID获取待办（同步版本，用于Widget）
+     */
+    @Query("SELECT * FROM todos WHERE id = :id")
+    fun getByIdSync(id: Long): TodoEntity?
+
+    /**
      * 获取需要提醒的待办
      */
     @Query("""

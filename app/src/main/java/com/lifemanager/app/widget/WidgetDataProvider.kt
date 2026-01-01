@@ -107,6 +107,80 @@ class WidgetDataProvider @Inject constructor(
         )
     }
 
+    // ==================== 目标Widget数据 ====================
+
+    /**
+     * 获取目标Widget数据
+     */
+    suspend fun getGoalWidgetData(): GoalWidgetData {
+        val goals = database.goalDao().getAllGoalsSync()
+
+        val activeGoals = goals.filter { it.status == "ACTIVE" }
+        val completedGoals = goals.filter { it.status == "COMPLETED" }
+
+        // 计算总进度
+        val avgProgress = if (activeGoals.isNotEmpty()) {
+            activeGoals.map { goal ->
+                when {
+                    goal.progressType == "NUMERIC" && goal.targetValue != null && goal.targetValue > 0 -> {
+                        (goal.currentValue / goal.targetValue).toFloat().coerceIn(0f, 1f)
+                    }
+                    goal.progressType == "PERCENTAGE" -> {
+                        (goal.currentValue / 100.0).toFloat().coerceIn(0f, 1f)
+                    }
+                    else -> 0f
+                }
+            }.average().toFloat()
+        } else 0f
+
+        // 获取最近活跃的目标
+        val displayGoals = activeGoals
+            .sortedByDescending { it.updatedAt }
+            .take(5)
+            .map { goal ->
+                val progress = when {
+                    goal.progressType == "NUMERIC" && goal.targetValue != null && goal.targetValue > 0 -> {
+                        ((goal.currentValue / goal.targetValue) * 100).toInt().coerceIn(0, 100)
+                    }
+                    goal.progressType == "PERCENTAGE" -> {
+                        goal.currentValue.toInt().coerceIn(0, 100)
+                    }
+                    else -> 0
+                }
+                GoalWidgetItem(
+                    id = goal.id,
+                    title = goal.title,
+                    category = goal.category,
+                    progress = progress,
+                    endDate = goal.endDate,
+                    icon = getCategoryIcon(goal.category)
+                )
+            }
+
+        return GoalWidgetData(
+            activeCount = activeGoals.size,
+            completedCount = completedGoals.size,
+            totalProgress = (avgProgress * 100).toInt(),
+            displayGoals = displayGoals
+        )
+    }
+
+    /**
+     * 获取分类图标
+     */
+    private fun getCategoryIcon(category: String): String {
+        return when (category) {
+            "CAREER" -> "💼"
+            "FINANCE" -> "💰"
+            "HEALTH" -> "❤️"
+            "LEARNING" -> "📚"
+            "RELATIONSHIP" -> "👥"
+            "LIFESTYLE" -> "🏠"
+            "HOBBY" -> "🎯"
+            else -> "🎯"
+        }
+    }
+
     // ==================== 待办Widget数据 ====================
 
     /**
@@ -371,4 +445,20 @@ data class DashboardWidgetData(
     val todoProgress: String,
     val habitProgress: String,
     val waterProgress: Int
+)
+
+data class GoalWidgetData(
+    val activeCount: Int,
+    val completedCount: Int,
+    val totalProgress: Int,
+    val displayGoals: List<GoalWidgetItem>
+)
+
+data class GoalWidgetItem(
+    val id: Long,
+    val title: String,
+    val category: String,
+    val progress: Int,
+    val endDate: Int?,
+    val icon: String
 )

@@ -217,4 +217,20 @@ interface GoalDao {
         ORDER BY updatedAt DESC
     """)
     suspend fun getActiveGoalsSync(): List<GoalEntity>
+
+    /**
+     * 获取所有目标（同步版本，用于Widget）
+     */
+    @Query("""
+        SELECT * FROM goals
+        ORDER BY
+            CASE status
+                WHEN 'ACTIVE' THEN 0
+                WHEN 'COMPLETED' THEN 1
+                WHEN 'ABANDONED' THEN 2
+                WHEN 'ARCHIVED' THEN 3
+            END,
+            updatedAt DESC
+    """)
+    suspend fun getAllGoalsSync(): List<GoalEntity>
 }
