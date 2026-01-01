@@ -34,6 +34,7 @@ import java.util.Locale
 @Composable
 fun SavingsPlanScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit = {},
     viewModel: SavingsPlanViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -132,7 +133,7 @@ fun SavingsPlanScreen(
                                 onDeposit = { viewModel.showDepositDialog(planWithDetails.plan.id) },
                                 onWithdraw = { viewModel.showWithdrawDialog(planWithDetails.plan.id) },
                                 onShowHistory = { viewModel.showHistoryDialog(planWithDetails.plan.id) },
-                                onClick = { viewModel.showEditPlanDialog(planWithDetails.plan.id) },
+                                onClick = { onNavigateToDetail(planWithDetails.plan.id) },
                                 onDelete = { viewModel.showDeleteConfirm(planWithDetails.plan.id) },
                                 formatDate = { viewModel.formatDate(it) }
                             )

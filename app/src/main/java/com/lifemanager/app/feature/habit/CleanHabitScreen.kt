@@ -39,6 +39,8 @@ import com.lifemanager.app.ui.theme.*
 @Composable
 fun CleanHabitScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit = {},
+    onNavigateToAdd: () -> Unit = {},
     viewModel: HabitViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -79,7 +81,7 @@ fun CleanHabitScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
+                onClick = onNavigateToAdd,
                 containerColor = CleanColors.primary,
                 contentColor = CleanColors.onPrimary,
                 shape = RoundedCornerShape(Radius.md)
@@ -162,7 +164,7 @@ fun CleanHabitScreen(
                                 message = "暂无习惯",
                                 icon = Icons.Outlined.Loop,
                                 actionText = "添加第一个习惯",
-                                onActionClick = { viewModel.showAddDialog() }
+                                onActionClick = onNavigateToAdd
                             )
                         }
                     } else {
@@ -170,7 +172,7 @@ fun CleanHabitScreen(
                             CleanHabitItem(
                                 habitWithStatus = habitWithStatus,
                                 onCheckIn = { viewModel.toggleCheckIn(habitWithStatus.habit.id) },
-                                onClick = { viewModel.showEditDialog(habitWithStatus.habit.id) },
+                                onClick = { onNavigateToDetail(habitWithStatus.habit.id) },
                                 onDelete = { viewModel.showDeleteConfirm(habitWithStatus.habit.id) }
                             )
                         }

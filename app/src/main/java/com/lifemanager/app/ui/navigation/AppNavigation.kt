@@ -25,7 +25,10 @@ import com.lifemanager.app.feature.diary.CleanDiaryScreen
 import com.lifemanager.app.feature.diary.CleanEditDiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
 import com.lifemanager.app.feature.habit.CleanHabitScreen
+import com.lifemanager.app.feature.habit.CleanHabitDetailScreen
+import com.lifemanager.app.feature.habit.CleanEditHabitScreen
 import com.lifemanager.app.feature.savings.SavingsPlanScreen
+import com.lifemanager.app.feature.savings.CleanSavingsPlanDetailScreen
 import com.lifemanager.app.feature.goal.GoalScreen
 import com.lifemanager.app.feature.datacenter.DataCenterScreen
 import com.lifemanager.app.feature.profile.ProfileScreen
@@ -506,6 +509,39 @@ fun AppNavHost(
         // 习惯打卡 - 使用简洁设计版本
         composable(Screen.Habit.route) {
             CleanHabitScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { habitId ->
+                    navController.navigate(Screen.HabitDetail.createRoute(habitId))
+                },
+                onNavigateToAdd = {
+                    navController.navigate(Screen.EditHabit.createNewRoute())
+                }
+            )
+        }
+
+        // 习惯详情页
+        composable(
+            route = Screen.HabitDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val habitId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanHabitDetailScreen(
+                habitId = habitId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.EditHabit.createRoute(id))
+                }
+            )
+        }
+
+        // 习惯编辑页
+        composable(
+            route = Screen.EditHabit.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val habitId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanEditHabitScreen(
+                habitId = habitId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -513,7 +549,25 @@ fun AppNavHost(
         // 存钱计划
         composable(Screen.SavingsPlan.route) {
             SavingsPlanScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { planId ->
+                    navController.navigate(Screen.SavingsPlanDetail.createRoute(planId))
+                }
+            )
+        }
+
+        // 存钱计划详情
+        composable(
+            route = Screen.SavingsPlanDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanSavingsPlanDetailScreen(
+                planId = planId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    // TODO: Navigate to edit screen when created
+                }
             )
         }
 

@@ -138,6 +138,12 @@ sealed class Screen(val route: String) {
         fun createRoute(id: Long) = "habit_detail/$id"
     }
 
+    /** 习惯编辑 */
+    object EditHabit : Screen("edit_habit/{id}") {
+        fun createRoute(id: Long) = "edit_habit/$id"
+        fun createNewRoute() = "edit_habit/0"
+    }
+
     /** 存钱计划 */
     object SavingsPlan : Screen("savings_plan")
 
