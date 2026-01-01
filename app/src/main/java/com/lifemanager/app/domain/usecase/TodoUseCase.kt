@@ -4,6 +4,7 @@ import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.core.database.entity.Quadrant
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.TodoStatus
+import com.lifemanager.app.core.reminder.ReminderManager
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.repository.TodoRepository
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +17,8 @@ import javax.inject.Inject
  * 待办记事用例
  */
 class TodoUseCase @Inject constructor(
-    private val repository: TodoRepository
+    private val repository: TodoRepository,
+    private val reminderManager: ReminderManager
 ) {
 
     /**
@@ -187,7 +189,14 @@ class TodoUseCase @Inject constructor(
             reminderAt = reminderAt,
             repeatRule = repeatRule
         )
-        return repository.insert(todo)
+        val id = repository.insert(todo)
+
+        // 如果有提醒时间，调度提醒
+        if (reminderAt != null) {
+            reminderManager.scheduleReminder(todo.copy(id = id))
+        }
+
+        return id
     }
 
     /**
@@ -217,6 +226,14 @@ class TodoUseCase @Inject constructor(
             updatedAt = System.currentTimeMillis()
         )
         repository.update(updated)
+
+        // 更新提醒调度
+        if (reminderAt != null) {
+            reminderManager.scheduleReminder(updated)
+        } else {
+            // 如果取消了提醒，取消调度
+            reminderManager.cancelReminder(id)
+        }
     }
 
     /**
@@ -226,8 +243,14 @@ class TodoUseCase @Inject constructor(
         val todo = repository.getById(id) ?: return
         if (todo.status == TodoStatus.COMPLETED) {
             repository.markPending(id)
+            // 恢复待办时重新调度提醒
+            if (todo.reminderAt != null && todo.reminderAt > System.currentTimeMillis()) {
+                reminderManager.scheduleReminder(todo)
+            }
         } else {
             repository.markCompleted(id)
+            // 完成后取消提醒
+            reminderManager.cancelReminder(id)
         }
     }
 
@@ -236,6 +259,8 @@ class TodoUseCase @Inject constructor(
      */
     suspend fun markCompleted(id: Long) {
         repository.markCompleted(id)
+        // 完成后取消提醒
+        reminderManager.cancelReminder(id)
     }
 
     /**
@@ -249,6 +274,8 @@ class TodoUseCase @Inject constructor(
      * 删除待办
      */
     suspend fun deleteTodo(id: Long) {
+        // 删除前取消提醒
+        reminderManager.cancelReminder(id)
         repository.deleteWithSubTodos(id)
     }
 
@@ -256,6 +283,10 @@ class TodoUseCase @Inject constructor(
      * 批量删除待办
      */
     suspend fun deleteTodos(ids: List<Long>) {
+        // 删除前取消所有提醒
+        ids.forEach { id ->
+            reminderManager.cancelReminder(id)
+        }
         repository.deleteByIds(ids)
     }
 

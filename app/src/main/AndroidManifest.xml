@@ -74,7 +74,7 @@
         <!-- 开机广播接收器 -->
         <receiver
             android:name=".core.reminder.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

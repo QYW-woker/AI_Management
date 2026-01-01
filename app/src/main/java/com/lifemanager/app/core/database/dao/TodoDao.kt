@@ -108,6 +108,16 @@ interface TodoDao {
     fun getUpcomingReminders(now: Long): Flow<List<TodoEntity>>
 
     /**
+     * 同步获取需要提醒的待办（用于BootReceiver重新调度）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE status = 'PENDING' AND reminderAt IS NOT NULL AND reminderAt > :now
+        ORDER BY reminderAt ASC
+    """)
+    suspend fun getUpcomingRemindersSync(now: Long): List<TodoEntity>
+
+    /**
      * 插入待办
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
