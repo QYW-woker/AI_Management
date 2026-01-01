@@ -2,14 +2,21 @@ package com.lifemanager.app.feature.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
 /**
@@ -29,6 +36,7 @@ class AISettingsViewModel @Inject constructor(
         private const val KEY_AUTO_HIDE_FLOATING_BALL = "auto_hide_floating_ball"
         private const val KEY_MOOD_SYNC = "mood_sync"
         private const val KEY_FLOATING_BALL_OPACITY = "floating_ball_opacity"
+        private const val KEY_CUSTOM_AVATAR_PATH = "custom_avatar_path"
         private const val KEY_VOICE_ACCOUNTING_ENABLED = "voice_accounting_enabled"
         private const val KEY_VOICE_FEEDBACK = "voice_feedback"
         private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
@@ -42,6 +50,10 @@ class AISettingsViewModel @Inject constructor(
         private const val KEY_API_KEY = "api_key"
         private const val KEY_CLOUD_AI = "cloud_ai"
         private const val KEY_SAVE_HISTORY = "save_history"
+
+        // 自定义形象图片相关常量
+        const val AVATAR_FILE_NAME = "floating_ball_avatar.png"
+        const val AVATAR_SIZE = 256  // 图片尺寸（像素）
     }
 
     private val prefs: SharedPreferences by lazy {
@@ -74,6 +86,7 @@ class AISettingsViewModel @Inject constructor(
             autoHideFloatingBall = prefs.getBoolean(KEY_AUTO_HIDE_FLOATING_BALL, false),
             moodSync = prefs.getBoolean(KEY_MOOD_SYNC, true),
             floatingBallOpacity = prefs.getFloat(KEY_FLOATING_BALL_OPACITY, 1f),
+            customAvatarPath = prefs.getString(KEY_CUSTOM_AVATAR_PATH, null),
             voiceAccountingEnabled = prefs.getBoolean(KEY_VOICE_ACCOUNTING_ENABLED, true),
             voiceFeedback = prefs.getBoolean(KEY_VOICE_FEEDBACK, true),
             wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD_ENABLED, false),
@@ -132,6 +145,82 @@ class AISettingsViewModel @Inject constructor(
     fun setFloatingBallOpacity(opacity: Float) {
         prefs.edit().putFloat(KEY_FLOATING_BALL_OPACITY, opacity).apply()
         saveAndUpdate { it.copy(floatingBallOpacity = opacity) }
+    }
+
+    /**
+     * 设置自定义悬浮球形象
+     * @param uri 图片URI
+     */
+    fun setCustomAvatar(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val savedPath = withContext(Dispatchers.IO) {
+                    saveAndScaleImage(uri)
+                }
+                if (savedPath != null) {
+                    prefs.edit().putString(KEY_CUSTOM_AVATAR_PATH, savedPath).apply()
+                    saveAndUpdate { it.copy(customAvatarPath = savedPath) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * 清除自定义形象，恢复默认
+     */
+    fun clearCustomAvatar() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                // 删除已保存的图片
+                val avatarFile = File(context.filesDir, AVATAR_FILE_NAME)
+                if (avatarFile.exists()) {
+                    avatarFile.delete()
+                }
+            }
+            prefs.edit().remove(KEY_CUSTOM_AVATAR_PATH).apply()
+            saveAndUpdate { it.copy(customAvatarPath = null) }
+        }
+    }
+
+    /**
+     * 保存并缩放图片到合适尺寸
+     */
+    private fun saveAndScaleImage(uri: Uri): String? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val originalBitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+
+            // 缩放到目标尺寸
+            val scaledBitmap = Bitmap.createScaledBitmap(
+                originalBitmap,
+                AVATAR_SIZE,
+                AVATAR_SIZE,
+                true
+            )
+            originalBitmap.recycle()
+
+            // 保存到内部存储
+            val avatarFile = File(context.filesDir, AVATAR_FILE_NAME)
+            FileOutputStream(avatarFile).use { out ->
+                scaledBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            scaledBitmap.recycle()
+
+            avatarFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * 获取自定义形象文件路径
+     */
+    fun getCustomAvatarPath(): String? {
+        return _settings.value.customAvatarPath
     }
 
     // 语音识别设置
@@ -246,6 +335,7 @@ data class AISettings(
     val autoHideFloatingBall: Boolean = false,
     val moodSync: Boolean = true,
     val floatingBallOpacity: Float = 1f,
+    val customAvatarPath: String? = null,
     val voiceAccountingEnabled: Boolean = true,
     val voiceFeedback: Boolean = true,
     val wakeWordEnabled: Boolean = false,
@@ -261,4 +351,5 @@ data class AISettings(
     val saveHistory: Boolean = true
 ) {
     val hasApiKey: Boolean get() = apiKey.isNotBlank()
+    val hasCustomAvatar: Boolean get() = !customAvatarPath.isNullOrBlank()
 }
