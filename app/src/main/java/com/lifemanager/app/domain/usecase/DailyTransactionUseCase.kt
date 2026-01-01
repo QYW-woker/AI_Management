@@ -142,6 +142,259 @@ class DailyTransactionUseCase @Inject constructor(
         )
     }
 
+    // ==================== 季度/年度统计 ====================
+
+    /**
+     * 获取指定月份的统计
+     */
+    suspend fun getMonthStats(year: Int, month: Int): MonthlyStats {
+        val startDate = LocalDate.of(year, month, 1)
+        val endDate = startDate.withDayOfMonth(startDate.lengthOfMonth())
+        val startEpoch = startDate.toEpochDay().toInt()
+        val endEpoch = endDate.toEpochDay().toInt()
+
+        val income = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.INCOME)
+        val expense = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.EXPENSE)
+        val count = transactionRepository.countInRange(startEpoch, endEpoch)
+        val days = endDate.dayOfMonth
+
+        return MonthlyStats(
+            year = year,
+            month = month,
+            startDate = startEpoch,
+            endDate = endEpoch,
+            totalIncome = income,
+            totalExpense = expense,
+            balance = income - expense,
+            transactionCount = count,
+            avgDailyExpense = if (days > 0) expense / days else 0.0
+        )
+    }
+
+    /**
+     * 获取当前季度统计
+     */
+    suspend fun getCurrentQuarterStats(): QuarterlyStats {
+        val today = LocalDate.now()
+        val quarter = (today.monthValue - 1) / 3 + 1
+        return getQuarterStats(today.year, quarter)
+    }
+
+    /**
+     * 获取指定季度统计
+     */
+    suspend fun getQuarterStats(year: Int, quarter: Int): QuarterlyStats {
+        val startMonth = (quarter - 1) * 3 + 1
+        val endMonth = startMonth + 2
+
+        val startDate = LocalDate.of(year, startMonth, 1)
+        val endDate = LocalDate.of(year, endMonth, 1).withDayOfMonth(
+            LocalDate.of(year, endMonth, 1).lengthOfMonth()
+        )
+        val startEpoch = startDate.toEpochDay().toInt()
+        val endEpoch = endDate.toEpochDay().toInt()
+
+        val income = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.INCOME)
+        val expense = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.EXPENSE)
+        val count = transactionRepository.countInRange(startEpoch, endEpoch)
+        val days = endEpoch - startEpoch + 1
+
+        // 获取月度分解
+        val monthlyBreakdown = (startMonth..endMonth).map { month ->
+            getMonthStats(year, month)
+        }
+
+        // 获取分类分解
+        val categoryBreakdown = getCategoryExpenseStats(startEpoch, endEpoch).first()
+
+        return QuarterlyStats(
+            year = year,
+            quarter = quarter,
+            startDate = startEpoch,
+            endDate = endEpoch,
+            totalIncome = income,
+            totalExpense = expense,
+            balance = income - expense,
+            transactionCount = count,
+            avgMonthlyExpense = expense / 3,
+            avgDailyExpense = if (days > 0) expense / days else 0.0,
+            monthlyBreakdown = monthlyBreakdown,
+            categoryBreakdown = categoryBreakdown
+        )
+    }
+
+    /**
+     * 获取当前年度统计
+     */
+    suspend fun getCurrentYearStats(): YearlyStats {
+        return getYearStats(LocalDate.now().year)
+    }
+
+    /**
+     * 获取指定年度统计
+     */
+    suspend fun getYearStats(year: Int): YearlyStats {
+        val startDate = LocalDate.of(year, 1, 1)
+        val endDate = LocalDate.of(year, 12, 31)
+        val startEpoch = startDate.toEpochDay().toInt()
+        val endEpoch = endDate.toEpochDay().toInt()
+
+        val income = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.INCOME)
+        val expense = transactionRepository.getTotalByTypeInRange(startEpoch, endEpoch, TransactionType.EXPENSE)
+        val count = transactionRepository.countInRange(startEpoch, endEpoch)
+        val days = endEpoch - startEpoch + 1
+
+        // 获取季度分解
+        val quarterlyBreakdown = (1..4).map { quarter ->
+            getQuarterStats(year, quarter)
+        }
+
+        // 获取月度分解
+        val monthlyBreakdown = (1..12).map { month ->
+            getMonthStats(year, month)
+        }
+
+        // 获取分类分解
+        val categoryBreakdown = getCategoryExpenseStats(startEpoch, endEpoch).first()
+
+        return YearlyStats(
+            year = year,
+            startDate = startEpoch,
+            endDate = endEpoch,
+            totalIncome = income,
+            totalExpense = expense,
+            balance = income - expense,
+            transactionCount = count,
+            avgMonthlyExpense = expense / 12,
+            avgDailyExpense = if (days > 0) expense / days else 0.0,
+            quarterlyBreakdown = quarterlyBreakdown,
+            monthlyBreakdown = monthlyBreakdown,
+            categoryBreakdown = categoryBreakdown
+        )
+    }
+
+    /**
+     * 获取月度趋势（最近N个月）
+     */
+    suspend fun getMonthlyTrend(months: Int = 12): List<TrendDataPoint> {
+        val today = LocalDate.now()
+        return (0 until months).map { offset ->
+            val date = today.minusMonths(offset.toLong())
+            val stats = getMonthStats(date.year, date.monthValue)
+            TrendDataPoint(
+                label = stats.monthLabel,
+                income = stats.totalIncome,
+                expense = stats.totalExpense,
+                balance = stats.balance
+            )
+        }.reversed()
+    }
+
+    /**
+     * 获取季度趋势（最近N个季度）
+     */
+    suspend fun getQuarterlyTrend(quarters: Int = 4): List<TrendDataPoint> {
+        val today = LocalDate.now()
+        val currentQuarter = (today.monthValue - 1) / 3 + 1
+        var year = today.year
+        var quarter = currentQuarter
+
+        return (0 until quarters).map {
+            val stats = getQuarterStats(year, quarter)
+            val point = TrendDataPoint(
+                label = "Q$quarter",
+                income = stats.totalIncome,
+                expense = stats.totalExpense,
+                balance = stats.balance
+            )
+
+            quarter--
+            if (quarter < 1) {
+                quarter = 4
+                year--
+            }
+            point
+        }.reversed()
+    }
+
+    /**
+     * 获取月度同比分析（与去年同月比较）
+     */
+    suspend fun getMonthYearOverYearComparison(year: Int, month: Int): ComparisonStats {
+        val currentStats = getMonthStats(year, month)
+        val previousStats = getMonthStats(year - 1, month)
+
+        return createComparisonStats(
+            PeriodStats(
+                startDate = currentStats.startDate,
+                endDate = currentStats.endDate,
+                totalIncome = currentStats.totalIncome,
+                totalExpense = currentStats.totalExpense,
+                balance = currentStats.balance,
+                transactionCount = currentStats.transactionCount,
+                avgDailyExpense = currentStats.avgDailyExpense
+            ),
+            PeriodStats(
+                startDate = previousStats.startDate,
+                endDate = previousStats.endDate,
+                totalIncome = previousStats.totalIncome,
+                totalExpense = previousStats.totalExpense,
+                balance = previousStats.balance,
+                transactionCount = previousStats.transactionCount,
+                avgDailyExpense = previousStats.avgDailyExpense
+            )
+        )
+    }
+
+    /**
+     * 获取月度环比分析（与上月比较）
+     */
+    suspend fun getMonthMonthOverMonthComparison(year: Int, month: Int): ComparisonStats {
+        val currentStats = getMonthStats(year, month)
+
+        val prevMonth = if (month == 1) 12 else month - 1
+        val prevYear = if (month == 1) year - 1 else year
+        val previousStats = getMonthStats(prevYear, prevMonth)
+
+        return createComparisonStats(
+            PeriodStats(
+                startDate = currentStats.startDate,
+                endDate = currentStats.endDate,
+                totalIncome = currentStats.totalIncome,
+                totalExpense = currentStats.totalExpense,
+                balance = currentStats.balance,
+                transactionCount = currentStats.transactionCount,
+                avgDailyExpense = currentStats.avgDailyExpense
+            ),
+            PeriodStats(
+                startDate = previousStats.startDate,
+                endDate = previousStats.endDate,
+                totalIncome = previousStats.totalIncome,
+                totalExpense = previousStats.totalExpense,
+                balance = previousStats.balance,
+                transactionCount = previousStats.transactionCount,
+                avgDailyExpense = previousStats.avgDailyExpense
+            )
+        )
+    }
+
+    /**
+     * 创建比较统计
+     */
+    private fun createComparisonStats(current: PeriodStats, previous: PeriodStats): ComparisonStats {
+        fun calcChange(current: Double, previous: Double): Double {
+            return if (previous > 0) (current - previous) / previous * 100 else 0.0
+        }
+
+        return ComparisonStats(
+            currentPeriod = current,
+            previousPeriod = previous,
+            incomeChange = calcChange(current.totalIncome, previous.totalIncome),
+            expenseChange = calcChange(current.totalExpense, previous.totalExpense),
+            balanceChange = calcChange(current.balance, previous.balance)
+        )
+    }
+
     /**
      * 获取今日统计
      */

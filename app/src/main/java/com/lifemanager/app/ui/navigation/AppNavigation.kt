@@ -43,6 +43,7 @@ import com.lifemanager.app.feature.finance.accounting.AccountingSearchScreen
 import com.lifemanager.app.feature.finance.ledger.LedgerManagementScreen
 import com.lifemanager.app.feature.finance.recurring.RecurringTransactionScreen
 import com.lifemanager.app.feature.finance.account.FundAccountScreen
+import com.lifemanager.app.feature.finance.statistics.StatisticsScreen
 import com.lifemanager.app.feature.health.HealthRecordScreen
 
 /**
@@ -329,14 +330,7 @@ fun AppNavHost(
                 onNavigateToCalendar = { navController.navigate(Screen.AccountingCalendar.route) },
                 onNavigateToSearch = { navController.navigate(Screen.AccountingSearch.route) },
                 onNavigateToStatistics = {
-                    // 使用与底部导航栏一致的导航方式
-                    navController.navigate(Screen.DataCenter.route) {
-                        popUpTo(Screen.Home.route) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    navController.navigate(Screen.Statistics.route)
                 },
                 onNavigateToLedgerManagement = { navController.navigate(Screen.LedgerManagement.route) },
                 onNavigateToAssetManagement = { navController.navigate(Screen.MonthlyAsset.route) },
@@ -382,6 +376,13 @@ fun AppNavHost(
         // 资金账户
         composable(Screen.FundAccount.route) {
             FundAccountScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 统计分析
+        composable(Screen.Statistics.route) {
+            StatisticsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

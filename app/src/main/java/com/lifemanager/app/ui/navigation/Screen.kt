@@ -63,6 +63,9 @@ sealed class Screen(val route: String) {
     /** 资金账户 */
     object FundAccount : Screen("fund_account")
 
+    /** 统计分析 */
+    object Statistics : Screen("statistics")
+
     // ==================== 详情/编辑页面 ====================
 
     /** 添加收支记录 */
