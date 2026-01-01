@@ -249,7 +249,7 @@ fun ReadingOverviewCard(
                 )
 
                 LinearProgressIndicator(
-                    progress = { yearlyStats.booksProgressPercent / 100f },
+                    progress = yearlyStats.booksProgressPercent / 100f,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
@@ -371,7 +371,7 @@ fun ReadingBookCard(
                     )
                 }
                 LinearProgressIndicator(
-                    progress = { book.progressPercent / 100f },
+                    progress = book.progressPercent / 100f,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)

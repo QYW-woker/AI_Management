@@ -1,6 +1,8 @@
 package com.lifemanager.app.core.database
 
+import android.content.Context
 import androidx.room.Database
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.lifemanager.app.core.database.converter.Converters
@@ -309,5 +311,24 @@ abstract class AppDatabase : RoomDatabase() {
          * 数据库名称
          */
         const val DATABASE_NAME = "life_manager_db"
+
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        /**
+         * 获取数据库单例（用于Widget等非Hilt注入的场景）
+         */
+        fun getInstance(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    DATABASE_NAME
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { INSTANCE = it }
+            }
+        }
     }
 }

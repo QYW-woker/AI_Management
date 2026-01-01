@@ -364,7 +364,7 @@ fun BookDetailContent(
                         }
 
                         LinearProgressIndicator(
-                            progress = { book.progressPercent / 100f },
+                            progress = book.progressPercent / 100f,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)
@@ -777,16 +777,16 @@ fun UpdateProgressDialog(
                 )
 
                 if (totalPages > 0) {
-                    val progress = (page.toIntOrNull() ?: 0) * 100 / totalPages
+                    val progressValue = (page.toIntOrNull() ?: 0) * 100 / totalPages
                     LinearProgressIndicator(
-                        progress = { progress / 100f },
+                        progress = progressValue / 100f,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
                     )
                     Text(
-                        text = "进度: $progress%",
+                        text = "进度: $progressValue%",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

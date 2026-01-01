@@ -9,9 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
@@ -53,7 +53,7 @@ fun StatisticsScreen(
                 title = { Text("统计分析") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
@@ -167,7 +167,7 @@ private fun PeriodSelector(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onPrevious) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上一个")
+                Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "上一个")
             }
 
             Text(
@@ -177,7 +177,7 @@ private fun PeriodSelector(
             )
 
             IconButton(onClick = onNext) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下一个")
+                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = "下一个")
             }
         }
     }
@@ -225,7 +225,7 @@ private fun OverviewCard(stats: MonthlyStats) {
                 )
             }
 
-            HorizontalDivider()
+            Divider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -293,7 +293,7 @@ private fun QuarterlyOverviewCard(stats: QuarterlyStats) {
                 )
             }
 
-            HorizontalDivider()
+            Divider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -361,7 +361,7 @@ private fun YearlyOverviewCard(stats: YearlyStats) {
                 )
             }
 
-            HorizontalDivider()
+            Divider()
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

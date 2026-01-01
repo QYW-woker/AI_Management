@@ -129,7 +129,7 @@ fun AdvancedFilterPanel(
                         onSelectionChange = onUpdateModules
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 对比模式
                     CompareModeSelector(
@@ -137,7 +137,7 @@ fun AdvancedFilterPanel(
                         onModeChange = onUpdateCompareMode
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 聚合粒度
                     GranularitySelector(
@@ -145,7 +145,7 @@ fun AdvancedFilterPanel(
                         onGranularityChange = onUpdateGranularity
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 排序方式
                     SortModeSelector(
@@ -153,7 +153,7 @@ fun AdvancedFilterPanel(
                         onSortChange = onUpdateSortMode
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 金额范围筛选
                     AmountRangeFilter(
@@ -162,7 +162,7 @@ fun AdvancedFilterPanel(
                         onRangeChange = onUpdateAmountRange
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 搜索关键词
                     SearchKeywordInput(
@@ -170,7 +170,7 @@ fun AdvancedFilterPanel(
                         onKeywordChange = onUpdateSearchKeyword
                     )
 
-                    HorizontalDivider()
+                    Divider()
 
                     // 显示数量
                     ShowTopNSelector(
