@@ -9,12 +9,23 @@ import com.lifemanager.app.core.database.entity.GoalRecordEntity
 import com.lifemanager.app.core.database.entity.GoalRecordType
 import com.lifemanager.app.core.database.entity.GoalStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+
+/**
+ * 操作结果状态 - 用于提供即时反馈
+ */
+sealed class OperationResult {
+    object Idle : OperationResult()
+    object Loading : OperationResult()
+    data class Success(val message: String) : OperationResult()
+    data class Error(val message: String) : OperationResult()
+}
 
 /**
  * 目标详情ViewModel
@@ -40,6 +51,14 @@ class GoalDetailViewModel @Inject constructor(
     // 加载状态
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    // 操作结果状态 - 用于即时反馈
+    private val _operationResult = MutableStateFlow<OperationResult>(OperationResult.Idle)
+    val operationResult: StateFlow<OperationResult> = _operationResult.asStateFlow()
+
+    // 标记完成操作中
+    private val _isCompleting = MutableStateFlow(false)
+    val isCompleting: StateFlow<Boolean> = _isCompleting.asStateFlow()
 
     private var currentGoalId: Long = 0
 
@@ -95,13 +114,21 @@ class GoalDetailViewModel @Inject constructor(
     }
 
     /**
-     * 添加进度记录
+     * 清除操作结果状态
+     */
+    fun clearOperationResult() {
+        _operationResult.value = OperationResult.Idle
+    }
+
+    /**
+     * 添加进度记录 - 带即时反馈
      */
     fun addRecord(title: String, content: String, progressValue: Double?) {
         val currentGoal = _goal.value ?: return
         val today = LocalDate.now().toEpochDay().toInt()
 
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
                 // 创建记录
                 val previousValue = currentGoal.currentValue
@@ -139,10 +166,145 @@ class GoalDetailViewModel @Inject constructor(
                             recordDate = today
                         )
                         goalRecordDao.insert(completeRecord)
+                        _operationResult.value = OperationResult.Success("🎉 目标已完成！恭喜！")
+                    } else {
+                        val progressPercent = if (target != null && target > 0) {
+                            ((newValue / target) * 100).toInt()
+                        } else {
+                            newValue.toInt()
+                        }
+                        _operationResult.value = OperationResult.Success("进度已更新至 $progressPercent%")
                     }
+                } else {
+                    _operationResult.value = OperationResult.Success("记录已添加")
+                }
+
+                // 自动清除成功状态（3秒后）
+                delay(3000)
+                if (_operationResult.value is OperationResult.Success) {
+                    _operationResult.value = OperationResult.Idle
                 }
             } catch (e: Exception) {
-                // Handle error
+                _operationResult.value = OperationResult.Error(e.message ?: "更新失败，请重试")
+            }
+        }
+    }
+
+    /**
+     * 标记目标完成 - 带即时反馈和动画
+     */
+    fun completeGoal() {
+        val currentGoal = _goal.value ?: return
+        if (currentGoal.status != GoalStatus.ACTIVE) return
+
+        val today = LocalDate.now().toEpochDay().toInt()
+
+        viewModelScope.launch {
+            _isCompleting.value = true
+            _operationResult.value = OperationResult.Loading
+            try {
+                // 检查是否有未完成的子目标
+                val childCount = goalDao.countChildGoals(currentGoalId)
+                if (childCount > 0) {
+                    val completedChildCount = goalDao.countCompletedChildGoals(currentGoalId)
+                    if (completedChildCount < childCount) {
+                        _operationResult.value = OperationResult.Error(
+                            "请先完成所有子目标（$completedChildCount/$childCount）"
+                        )
+                        _isCompleting.value = false
+                        return@launch
+                    }
+                }
+
+                // 更新目标状态为已完成
+                goalDao.completeGoal(currentGoalId)
+
+                // 如果是数值型目标，将进度设置为目标值
+                if (currentGoal.progressType == "NUMERIC" && currentGoal.targetValue != null) {
+                    goalDao.updateProgress(currentGoalId, currentGoal.targetValue)
+                } else {
+                    // 百分比类型设置为100
+                    goalDao.updateProgress(currentGoalId, 100.0)
+                }
+
+                // 添加完成记录
+                val completeRecord = GoalRecordEntity(
+                    goalId = currentGoalId,
+                    recordType = GoalRecordType.COMPLETE,
+                    title = "目标完成",
+                    content = "恭喜！目标「${currentGoal.title}」已成功达成！",
+                    recordDate = today
+                )
+                goalRecordDao.insert(completeRecord)
+
+                // 显示成功反馈
+                _operationResult.value = OperationResult.Success("🎉 目标已完成！恭喜你！")
+                _isCompleting.value = false
+
+                // 5秒后自动清除成功状态
+                delay(5000)
+                if (_operationResult.value is OperationResult.Success) {
+                    _operationResult.value = OperationResult.Idle
+                }
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败，请重试")
+                _isCompleting.value = false
+            }
+        }
+    }
+
+    /**
+     * 更新百分比进度 - 快捷更新
+     */
+    fun updatePercentageProgress(percentage: Int) {
+        val currentGoal = _goal.value ?: return
+        if (currentGoal.progressType != "PERCENTAGE") return
+
+        val today = LocalDate.now().toEpochDay().toInt()
+
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                val previousValue = currentGoal.currentValue
+                val newValue = percentage.toDouble().coerceIn(0.0, 100.0)
+
+                // 更新进度
+                goalDao.updateProgress(currentGoalId, newValue)
+
+                // 添加记录
+                val record = GoalRecordEntity(
+                    goalId = currentGoalId,
+                    recordType = GoalRecordType.PROGRESS,
+                    title = "进度更新",
+                    content = "进度从 ${previousValue.toInt()}% 更新至 ${newValue.toInt()}%",
+                    progressValue = newValue - previousValue,
+                    previousValue = previousValue,
+                    recordDate = today
+                )
+                goalRecordDao.insert(record)
+
+                // 检查是否完成
+                if (newValue >= 100.0) {
+                    goalDao.completeGoal(currentGoalId)
+                    val completeRecord = GoalRecordEntity(
+                        goalId = currentGoalId,
+                        recordType = GoalRecordType.COMPLETE,
+                        title = "目标完成",
+                        content = "恭喜！目标已达成！",
+                        recordDate = today
+                    )
+                    goalRecordDao.insert(completeRecord)
+                    _operationResult.value = OperationResult.Success("🎉 目标已完成！恭喜！")
+                } else {
+                    _operationResult.value = OperationResult.Success("进度已更新至 ${newValue.toInt()}%")
+                }
+
+                delay(3000)
+                if (_operationResult.value is OperationResult.Success) {
+                    _operationResult.value = OperationResult.Idle
+                }
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "更新失败")
             }
         }
     }

@@ -264,7 +264,20 @@ class GoalViewModel @Inject constructor(
     }
 
     fun updateEditCategory(category: String) {
-        _editState.value = _editState.value.copy(category = category)
+        val currentState = _editState.value
+        // 只在用户尚未手动修改目标类型时自动关联
+        // 或者这是新建目标（非编辑模式）
+        val recommendedType = com.lifemanager.app.domain.model.getRecommendedGoalType(category)
+        val recommendedProgressType = com.lifemanager.app.domain.model.getRecommendedProgressType(category)
+        val recommendedUnit = com.lifemanager.app.domain.model.getRecommendedUnit(category)
+
+        _editState.value = currentState.copy(
+            category = category,
+            // 如果不是编辑模式，自动设置推荐的类型
+            goalType = if (!currentState.isEditing) recommendedType else currentState.goalType,
+            progressType = if (!currentState.isEditing) recommendedProgressType else currentState.progressType,
+            unit = if (!currentState.isEditing && recommendedUnit.isNotEmpty()) recommendedUnit else currentState.unit
+        )
     }
 
     fun updateEditStartDate(date: Int) {

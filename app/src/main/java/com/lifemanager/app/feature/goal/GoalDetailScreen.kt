@@ -50,11 +50,36 @@ fun GoalDetailScreen(
     val records by viewModel.records.collectAsState()
     val childGoals by viewModel.childGoals.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val operationResult by viewModel.operationResult.collectAsState()
+    val isCompleting by viewModel.isCompleting.collectAsState()
 
     // 对话框状态
     var showAddRecordDialog by remember { mutableStateOf(false) }
     var showAbandonDialog by remember { mutableStateOf(false) }
     var showAddSubGoalDialog by remember { mutableStateOf(false) }
+    var showCompleteConfirmDialog by remember { mutableStateOf(false) }
+
+    // Snackbar 状态
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 显示操作结果
+    LaunchedEffect(operationResult) {
+        when (val result = operationResult) {
+            is OperationResult.Success -> {
+                snackbarHostState.showSnackbar(
+                    message = result.message,
+                    duration = SnackbarDuration.Short
+                )
+            }
+            is OperationResult.Error -> {
+                snackbarHostState.showSnackbar(
+                    message = result.message,
+                    duration = SnackbarDuration.Long
+                )
+            }
+            else -> {}
+        }
+    }
 
     LaunchedEffect(goalId) {
         viewModel.loadGoal(goalId)
@@ -80,6 +105,7 @@ fun GoalDetailScreen(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             goal?.let { g ->
                 if (g.status == GoalStatus.ACTIVE) {
@@ -124,7 +150,9 @@ fun GoalDetailScreen(
                         AnimatedProgressCard(
                             goal = currentGoal,
                             progress = viewModel.calculateProgress(currentGoal),
-                            onUpdateProgress = { showAddRecordDialog = true }
+                            isCompleting = isCompleting,
+                            onUpdateProgress = { showAddRecordDialog = true },
+                            onCompleteGoal = { showCompleteConfirmDialog = true }
                         )
                     }
 
@@ -242,6 +270,144 @@ fun GoalDetailScreen(
             }
         )
     }
+
+    // 确认完成目标对话框
+    if (showCompleteConfirmDialog) {
+        CompleteGoalConfirmDialog(
+            goal = goal,
+            childGoals = childGoals,
+            onDismiss = { showCompleteConfirmDialog = false },
+            onConfirm = {
+                viewModel.completeGoal()
+                showCompleteConfirmDialog = false
+            }
+        )
+    }
+}
+
+/**
+ * 确认完成目标对话框
+ */
+@Composable
+private fun CompleteGoalConfirmDialog(
+    goal: GoalEntity?,
+    childGoals: List<GoalEntity>,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val incompleteChildren = childGoals.filter { it.status != GoalStatus.COMPLETED }
+    val hasIncompleteChildren = incompleteChildren.isNotEmpty()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF4CAF50),
+                modifier = Modifier.size(48.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "确认完成目标",
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "确定将「${goal?.title ?: ""}」标记为已完成吗？",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                if (hasIncompleteChildren) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFF9800).copy(alpha = 0.1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9800),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "还有 ${incompleteChildren.size} 个子目标未完成",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFFF9800),
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                incompleteChildren.take(3).forEach { child ->
+                                    Text(
+                                        text = "• ${child.title}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (incompleteChildren.size > 3) {
+                                    Text(
+                                        text = "...还有 ${incompleteChildren.size - 3} 个",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (childGoals.isEmpty()) "恭喜！即将完成此目标" else "所有子目标已完成",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("确认完成")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 /**
@@ -378,7 +544,9 @@ private fun GoalHeaderCard(
 private fun AnimatedProgressCard(
     goal: GoalEntity,
     progress: Float,
-    onUpdateProgress: () -> Unit
+    isCompleting: Boolean,
+    onUpdateProgress: () -> Unit,
+    onCompleteGoal: () -> Unit
 ) {
     // 进度动画
     val animatedProgress by animateFloatAsState(
@@ -484,15 +652,72 @@ private fun AnimatedProgressCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 更新进度按钮
+            // 操作按钮
             if (goal.status == GoalStatus.ACTIVE) {
-                Button(
-                    onClick = onUpdateProgress,
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(Icons.Default.Update, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("更新进度")
+                    // 更新进度按钮
+                    OutlinedButton(
+                        onClick = onUpdateProgress,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Update, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("更新进度")
+                    }
+
+                    // 标记完成按钮（带加载状态）
+                    Button(
+                        onClick = onCompleteGoal,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isCompleting,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4CAF50)
+                        )
+                    ) {
+                        if (isCompleting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("完成中...")
+                        } else {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("标记完成")
+                        }
+                    }
+                }
+            }
+
+            // 已完成状态显示
+            if (goal.status == GoalStatus.COMPLETED) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "目标已完成！",
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

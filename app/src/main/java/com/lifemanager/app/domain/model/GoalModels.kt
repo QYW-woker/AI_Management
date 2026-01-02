@@ -264,6 +264,67 @@ val goalCategoryOptions = listOf(
 )
 
 /**
+ * 分类到推荐目标类型的映射
+ * 当用户选择分类时，自动推荐对应的目标类型
+ */
+val categoryToTypeMapping = mapOf(
+    "HEALTH" to "MONTHLY",       // 健康运动 → 月度目标（适合持续性习惯）
+    "CAREER" to "YEARLY",        // 事业工作 → 年度目标（需要长期规划）
+    "FINANCE" to "YEARLY",       // 财务理财 → 年度目标（储蓄投资需要时间）
+    "LEARNING" to "QUARTERLY",   // 学习成长 → 季度目标（课程学习周期）
+    "RELATIONSHIP" to "MONTHLY", // 人际关系 → 月度目标（社交频率）
+    "LIFESTYLE" to "MONTHLY",    // 生活方式 → 月度目标（习惯养成）
+    "HOBBY" to "QUARTERLY"       // 兴趣爱好 → 季度目标（技能提升周期）
+)
+
+/**
+ * 获取分类推荐的目标类型
+ */
+fun getRecommendedGoalType(category: String): String {
+    return categoryToTypeMapping[category] ?: "CUSTOM"
+}
+
+/**
+ * 分类对应的进度类型推荐
+ */
+val categoryToProgressTypeMapping = mapOf(
+    "HEALTH" to "NUMERIC",       // 健康：数值型（运动次数、体重等）
+    "CAREER" to "PERCENTAGE",    // 事业：百分比（项目进度）
+    "FINANCE" to "NUMERIC",      // 财务：数值型（金额）
+    "LEARNING" to "NUMERIC",     // 学习：数值型（课程数、书籍数）
+    "RELATIONSHIP" to "NUMERIC", // 人际：数值型（聚会次数）
+    "LIFESTYLE" to "PERCENTAGE", // 生活：百分比（习惯养成）
+    "HOBBY" to "NUMERIC"         // 爱好：数值型（作品数、练习时间）
+)
+
+/**
+ * 获取分类推荐的进度类型
+ */
+fun getRecommendedProgressType(category: String): String {
+    return categoryToProgressTypeMapping[category] ?: "PERCENTAGE"
+}
+
+/**
+ * 分类对应的默认单位
+ */
+val categoryToUnitMapping = mapOf(
+    "HEALTH" to "次",
+    "CAREER" to "",
+    "FINANCE" to "元",
+    "LEARNING" to "课时",
+    "RELATIONSHIP" to "次",
+    "LIFESTYLE" to "",
+    "HOBBY" to "小时"
+)
+
+/**
+ * 获取分类推荐的单位
+ */
+fun getRecommendedUnit(category: String): String {
+    return categoryToUnitMapping[category] ?: ""
+}
+
+/**
  * 获取目标分类显示名称
  */
 fun getCategoryDisplayName(category: String): String {
