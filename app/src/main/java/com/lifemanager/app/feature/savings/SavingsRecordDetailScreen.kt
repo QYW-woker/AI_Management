@@ -177,7 +177,7 @@ private fun AmountCard(
 
             // 存款日期
             Text(
-                text = formatDateFromInt(deposit.depositDate),
+                text = formatDateFromInt(deposit.date),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -61,7 +61,7 @@ fun GoalTypeSelectSheet(
             GoalTypeOption(
                 icon = Icons.Default.Flag,
                 title = "单级目标",
-                description = "适合简单、独立的目标，如"存款5万元"、"读完10本书"",
+                description = "适合简单、独立的目标，如存款5万元、读完10本书",
                 onClick = {
                     onTypeSelected(GoalStructureType.SINGLE)
                     onDismiss()
@@ -74,7 +74,7 @@ fun GoalTypeSelectSheet(
             GoalTypeOption(
                 icon = Icons.Default.AccountTree,
                 title = "多级目标",
-                description = "适合复杂目标，可拆分为多个子目标，如"健康生活"下包含"每日运动"、"均衡饮食"等",
+                description = "适合复杂目标，可拆分为多个子目标，如健康生活下包含每日运动、均衡饮食等",
                 isPrimary = true,
                 onClick = {
                     onTypeSelected(GoalStructureType.MULTI_LEVEL)

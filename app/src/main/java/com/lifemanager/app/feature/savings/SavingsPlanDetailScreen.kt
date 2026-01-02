@@ -400,7 +400,7 @@ private fun DepositRecordItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = formatDateFromInt(deposit.depositDate),
+                    text = formatDateFromInt(deposit.date),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium
                 )
