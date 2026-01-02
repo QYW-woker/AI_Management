@@ -106,22 +106,22 @@ fun CleanSavingsPlanScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = state.message,
-                            style = CleanTypography.body,
-                            color = CleanColors.error
-                        )
-                        Spacer(modifier = Modifier.height(Spacing.lg))
-                        CleanSecondaryButton(
-                            text = "重试",
-                            onClick = { viewModel.refresh() }
-                        )
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = state.message,
+                                style = CleanTypography.body,
+                                color = CleanColors.error
+                            )
+                            Spacer(modifier = Modifier.height(Spacing.lg))
+                            CleanSecondaryButton(
+                                text = "重试",
+                                onClick = { viewModel.refresh() }
+                            )
+                        }
                     }
                 }
-            }
 
             is SavingsUiState.Success -> {
                 LazyColumn(

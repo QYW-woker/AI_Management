@@ -7,7 +7,8 @@ import com.lifemanager.app.core.database.entity.SavingsPlanEntity
 import com.lifemanager.app.core.database.entity.SavingsRecordEntity
 import com.lifemanager.app.domain.model.Milestone
 import com.lifemanager.app.domain.model.getMilestoneProgress
-import com.lifemanager.app.domain.repository.SavingsRepository
+import com.lifemanager.app.domain.repository.SavingsPlanRepository
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class SavingsPlanDetailViewModel @Inject constructor(
-    private val repository: SavingsRepository,
+    private val repository: SavingsPlanRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -102,7 +103,7 @@ class SavingsPlanDetailViewModel @Inject constructor(
 
     private suspend fun loadRecords(planId: Long) {
         try {
-            val recordList = repository.getRecordsByPlanId(planId)
+            val recordList = repository.getRecordsByPlan(planId).first()
             _records.value = recordList.sortedByDescending { it.date }
         } catch (e: Exception) {
             _records.value = emptyList()
@@ -202,7 +203,7 @@ class SavingsPlanDetailViewModel @Inject constructor(
                     note = _depositNote.value.takeIf { it.isNotBlank() },
                     date = LocalDate.now().toEpochDay().toInt()
                 )
-                repository.insertRecord(record)
+                repository.saveRecord(record)
 
                 // 更新计划金额
                 _plan.value?.let { plan ->
@@ -261,7 +262,7 @@ class SavingsPlanDetailViewModel @Inject constructor(
                     note = "取款",
                     date = LocalDate.now().toEpochDay().toInt()
                 )
-                repository.insertRecord(record)
+                repository.saveRecord(record)
 
                 // 更新计划金额
                 _plan.value?.let { plan ->
@@ -295,7 +296,7 @@ class SavingsPlanDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _plan.value?.let { plan ->
-                    repository.deletePlan(plan)
+                    repository.deletePlan(plan.id)
                     hideDeleteConfirm()
                     onComplete()
                 }
