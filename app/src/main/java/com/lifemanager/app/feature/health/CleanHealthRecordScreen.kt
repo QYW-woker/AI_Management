@@ -1,10 +1,12 @@
 package com.lifemanager.app.feature.health
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -392,9 +394,18 @@ private fun CleanQuickActionButton(
     label: String,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = CleanColors.primary),
+                onClick = onClick
+            )
+            .padding(Spacing.xs)
     ) {
         Surface(
             modifier = Modifier.size(52.dp),

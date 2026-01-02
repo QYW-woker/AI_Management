@@ -556,3 +556,75 @@ fun AmountText(
         modifier = modifier
     )
 }
+
+// ==================== 动画工具 ====================
+
+/**
+ * 带涟漪效果的可点击修饰符
+ */
+@Composable
+fun Modifier.cleanClickable(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    return this
+        .clip(RoundedCornerShape(Radius.sm))
+        .clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.material3.ripple(
+                bounded = true,
+                color = CleanColors.primary
+            ),
+            enabled = enabled,
+            onClick = onClick
+        )
+}
+
+/**
+ * 带涟漪效果的可点击容器
+ */
+@Composable
+fun CleanClickableBox(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier.cleanClickable(enabled = enabled, onClick = onClick),
+        content = content
+    )
+}
+
+/**
+ * 状态转换动画规格
+ */
+object CleanAnimations {
+    /** 快速淡入淡出 */
+    fun fadeSpec() = androidx.compose.animation.core.tween<Float>(
+        durationMillis = Duration.fast
+    )
+
+    /** 标准淡入淡出 */
+    fun standardFadeSpec() = androidx.compose.animation.core.tween<Float>(
+        durationMillis = Duration.standard
+    )
+
+    /** 标准滑入滑出 */
+    @Composable
+    fun slideEnterTransition() = androidx.compose.animation.slideInVertically(
+        initialOffsetY = { it / 10 },
+        animationSpec = androidx.compose.animation.core.tween(Duration.enter)
+    ) + androidx.compose.animation.fadeIn(
+        animationSpec = androidx.compose.animation.core.tween(Duration.enter)
+    )
+
+    @Composable
+    fun slideExitTransition() = androidx.compose.animation.slideOutVertically(
+        targetOffsetY = { -it / 10 },
+        animationSpec = androidx.compose.animation.core.tween(Duration.exit)
+    ) + androidx.compose.animation.fadeOut(
+        animationSpec = androidx.compose.animation.core.tween(Duration.exit)
+    )
+}

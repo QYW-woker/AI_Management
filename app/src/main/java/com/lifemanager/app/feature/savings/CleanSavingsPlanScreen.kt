@@ -1,9 +1,12 @@
 package com.lifemanager.app.feature.savings
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.ripple
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -88,21 +91,26 @@ fun CleanSavingsPlanScreen(
             }
         }
     ) { paddingValues ->
-        when (uiState) {
-            is SavingsUiState.Loading -> {
-                PageLoadingState(modifier = Modifier.padding(paddingValues))
-            }
+        Crossfade(
+            targetState = uiState,
+            animationSpec = tween(Duration.standard),
+            label = "stateTransition"
+        ) { state ->
+            when (state) {
+                is SavingsUiState.Loading -> {
+                    PageLoadingState(modifier = Modifier.padding(paddingValues))
+                }
 
-            is SavingsUiState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
+                is SavingsUiState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = (uiState as SavingsUiState.Error).message,
+                            text = state.message,
                             style = CleanTypography.body,
                             color = CleanColors.error
                         )
@@ -407,10 +415,16 @@ private fun CleanPlanItem(
         CleanColors.primary
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true, color = planColor),
+                onClick = onClick
+            ),
         shape = RoundedCornerShape(Radius.md),
         color = CleanColors.surface,
         shadowElevation = Elevation.xs
