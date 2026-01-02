@@ -485,6 +485,9 @@ class FloatingBallService : Service() {
                         is ExecutionResult.NotRecognized -> {
                             showToast("❓ 无法识别: ${result.originalText}")
                         }
+                        is ExecutionResult.MultipleAdded -> {
+                            showToast("✅ ${result.summary}")
+                        }
                     }
                 }
 

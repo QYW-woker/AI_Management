@@ -246,6 +246,10 @@ private fun IntentDetailCard(intent: CommandIntent) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                is CommandIntent.Multiple -> {
+                    DetailRow(label = "批量记录", value = "${intent.intents.size} 条")
+                }
             }
         }
     }
@@ -293,6 +297,7 @@ private fun getIntentIcon(intent: CommandIntent): ImageVector {
         is CommandIntent.Goal -> Icons.Default.Flag
         is CommandIntent.Savings -> Icons.Default.Savings
         is CommandIntent.Unknown -> Icons.Default.HelpOutline
+        is CommandIntent.Multiple -> Icons.Default.List
     }
 }
 
@@ -313,6 +318,7 @@ private fun getIntentTitle(intent: CommandIntent): String {
         is CommandIntent.Goal -> "目标管理"
         is CommandIntent.Savings -> "储蓄操作"
         is CommandIntent.Unknown -> "未识别命令"
+        is CommandIntent.Multiple -> "批量操作"
     }
 }
 

@@ -214,6 +214,9 @@ class VoiceCommandProcessor @Inject constructor(
             is CommandIntent.Unknown -> {
                 "未能识别指令，请重新说明"
             }
+            is CommandIntent.Multiple -> {
+                "批量操作: 共 ${intent.intents.size} 条记录"
+            }
         }
     }
 

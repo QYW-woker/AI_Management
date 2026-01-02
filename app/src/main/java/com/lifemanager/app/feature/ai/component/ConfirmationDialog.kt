@@ -136,6 +136,7 @@ private fun getIntentIconAndColor(intent: CommandIntent): Pair<ImageVector, andr
         is CommandIntent.Goal -> Icons.Default.Flag to MaterialTheme.colorScheme.secondary
         is CommandIntent.Savings -> Icons.Default.Savings to MaterialTheme.colorScheme.primary
         is CommandIntent.Unknown -> Icons.Default.QuestionMark to MaterialTheme.colorScheme.error
+        is CommandIntent.Multiple -> Icons.Default.List to MaterialTheme.colorScheme.primary
     }
 }
 
@@ -176,6 +177,7 @@ private fun getIntentTitle(intent: CommandIntent): String {
             }
         }
         is CommandIntent.Unknown -> "未识别命令"
+        is CommandIntent.Multiple -> "批量操作"
     }
 }
 
@@ -195,6 +197,7 @@ private fun IntentDetailContent(intent: CommandIntent) {
         is CommandIntent.Goal -> GoalDetail(intent)
         is CommandIntent.Savings -> SavingsDetail(intent)
         is CommandIntent.Unknown -> UnknownDetail(intent)
+        is CommandIntent.Multiple -> MultipleDetail(intent)
     }
 }
 
@@ -450,6 +453,21 @@ private fun UnknownDetail(intent: CommandIntent.Unknown) {
 }
 
 @Composable
+private fun MultipleDetail(intent: CommandIntent.Multiple) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "共 ${intent.intents.size} 条记录",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
 private fun DetailRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -497,6 +515,7 @@ fun ExecutionResultDialog(
         is ExecutionResult.NeedConfirmation -> result.previewMessage
         is ExecutionResult.NeedMoreInfo -> result.prompt
         is ExecutionResult.NotRecognized -> "未能识别: ${result.originalText}"
+        is ExecutionResult.MultipleAdded -> result.summary
     }
 
     Dialog(onDismissRequest = onDismiss) {

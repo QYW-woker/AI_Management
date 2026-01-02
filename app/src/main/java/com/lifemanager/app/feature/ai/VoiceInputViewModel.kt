@@ -239,6 +239,7 @@ class VoiceInputViewModel @Inject constructor(
             is ExecutionResult.NotRecognized -> result.originalText
             is ExecutionResult.NeedConfirmation -> result.previewMessage
             is ExecutionResult.NeedMoreInfo -> result.prompt
+            is ExecutionResult.MultipleAdded -> result.summary
         }
 
         _resultMessage.value = Pair(message, result is ExecutionResult.Success)

@@ -186,6 +186,9 @@ class FloatingConfirmationView(context: Context) : FrameLayout(context) {
             is CommandIntent.Unknown -> {
                 "未识别 ❓" to "无法识别该命令，请重试"
             }
+            is CommandIntent.Multiple -> {
+                "批量操作 📋" to "包含 ${intent.intents.size} 条记录"
+            }
         }
 
         titleText.text = title
