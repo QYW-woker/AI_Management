@@ -265,6 +265,7 @@ private fun FilterChips(
     val filters = listOf(
         "ACTIVE" to "进行中",
         "COMPLETED" to "已完成",
+        "ABANDONED" to "已放弃",
         "ALL" to "全部"
     )
 
@@ -274,13 +275,22 @@ private fun FilterChips(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(filters) { (value, label) ->
+            val isAbandoned = value == "ABANDONED"
             FilterChip(
                 selected = currentFilter == value,
                 onClick = { onFilterChange(value) },
                 label = { Text(label) },
                 leadingIcon = if (currentFilter == value) {
                     { Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp)) }
-                } else null
+                } else null,
+                colors = if (isAbandoned) {
+                    FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                } else {
+                    FilterChipDefaults.filterChipColors()
+                }
             )
         }
     }
@@ -417,14 +427,31 @@ private fun GoalTreeCard(
 
                     // 状态指示
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (goal.status == GoalStatus.COMPLETED) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "已完成",
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        when (goal.status) {
+                            GoalStatus.COMPLETED -> {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "已完成",
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            GoalStatus.ABANDONED -> {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer
+                                ) {
+                                    Text(
+                                        text = "已放弃",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            else -> {}
                         }
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
@@ -518,7 +545,11 @@ private fun EmptyState(currentFilter: String) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                imageVector = Icons.Default.Flag,
+                imageVector = when (currentFilter) {
+                    "ABANDONED" -> Icons.Default.Block
+                    "COMPLETED" -> Icons.Default.CheckCircle
+                    else -> Icons.Default.Flag
+                },
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -527,6 +558,7 @@ private fun EmptyState(currentFilter: String) {
             Text(
                 text = when (currentFilter) {
                     "COMPLETED" -> "暂无已完成的目标"
+                    "ABANDONED" -> "暂无已放弃的目标"
                     else -> "暂无目标"
                 },
                 style = MaterialTheme.typography.bodyLarge,
@@ -534,7 +566,10 @@ private fun EmptyState(currentFilter: String) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "点击右下角按钮创建新目标",
+                text = when (currentFilter) {
+                    "ABANDONED" -> "放弃的目标会显示在这里"
+                    else -> "点击右下角按钮创建新目标"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )

@@ -4,13 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
+import com.lifemanager.app.domain.model.AIAnalysisState
+import com.lifemanager.app.domain.model.GoalDetailState
 import com.lifemanager.app.domain.model.GoalEditState
 import com.lifemanager.app.domain.model.GoalStatistics
 import com.lifemanager.app.domain.model.GoalTreeNode
 import com.lifemanager.app.domain.model.GoalUiState
+import com.lifemanager.app.domain.model.OperationResult
 import com.lifemanager.app.domain.model.SubGoalEditState
+import com.lifemanager.app.domain.model.categoryToTypeMapping
+import com.lifemanager.app.core.ai.service.AIService
 import com.lifemanager.app.domain.usecase.GoalUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +29,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class GoalViewModel @Inject constructor(
-    private val useCase: GoalUseCase
+    private val useCase: GoalUseCase,
+    private val aiService: AIService
 ) : ViewModel() {
 
     // UI状态
@@ -71,6 +78,21 @@ class GoalViewModel @Inject constructor(
     private var goalToDelete: Long? = null
     private var goalToUpdateProgress: GoalEntity? = null
 
+    // 操作结果状态（用于UI反馈）
+    private val _operationResult = MutableStateFlow<OperationResult>(OperationResult.Idle)
+    val operationResult: StateFlow<OperationResult> = _operationResult.asStateFlow()
+
+    // 目标详情状态（用于详情页响应式更新）
+    private val _goalDetailState = MutableStateFlow(GoalDetailState())
+    val goalDetailState: StateFlow<GoalDetailState> = _goalDetailState.asStateFlow()
+
+    // AI分析状态
+    private val _aiAnalysisState = MutableStateFlow<AIAnalysisState>(AIAnalysisState.Idle)
+    val aiAnalysisState: StateFlow<AIAnalysisState> = _aiAnalysisState.asStateFlow()
+
+    // 当前查看的目标ID
+    private var currentDetailGoalId: Long? = null
+
     init {
         loadGoals()
     }
@@ -90,6 +112,7 @@ class GoalViewModel @Inject constructor(
                         val filtered = when (_currentFilter.value) {
                             "ACTIVE" -> allGoals.filter { it.status == GoalStatus.ACTIVE }
                             "COMPLETED" -> allGoals.filter { it.status == GoalStatus.COMPLETED }
+                            "ABANDONED" -> allGoals.filter { it.status == GoalStatus.ABANDONED }
                             else -> allGoals
                         }
                         _goals.value = filtered
@@ -192,7 +215,19 @@ class GoalViewModel @Inject constructor(
     }
 
     fun updateEditCategory(category: String) {
-        _editState.value = _editState.value.copy(category = category)
+        // 根据分类自动推荐目标类型
+        val recommendedType = categoryToTypeMapping[category] ?: _editState.value.goalType
+        _editState.value = _editState.value.copy(
+            category = category,
+            goalType = recommendedType
+        )
+    }
+
+    /**
+     * 获取分类对应的推荐目标类型
+     */
+    fun getRecommendedGoalType(category: String): String {
+        return categoryToTypeMapping[category] ?: "YEARLY"
     }
 
     fun updateEditStartDate(date: Int) {
@@ -296,11 +331,20 @@ class GoalViewModel @Inject constructor(
     fun updateProgress(value: Double) {
         val goal = goalToUpdateProgress ?: return
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
                 useCase.updateProgress(goal.id, value)
+                _operationResult.value = OperationResult.Success("进度已更新")
                 hideProgressDialog()
+                // 刷新详情页数据
+                refreshGoalDetail(goal.id)
+                // 延迟后重置状态
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
             } catch (e: Exception) {
-                // 处理错误
+                _operationResult.value = OperationResult.Error(e.message ?: "更新进度失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
             }
         }
     }
@@ -310,10 +354,20 @@ class GoalViewModel @Inject constructor(
      */
     fun completeGoal(goalId: Long) {
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
                 useCase.completeGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已完成！恭喜！")
+                // 刷新详情页和列表
+                refreshGoalDetail(goalId)
+                loadGoals()
+                // 延迟后重置状态
+                delay(2500)
+                _operationResult.value = OperationResult.Idle
             } catch (e: Exception) {
-                _uiState.value = GoalUiState.Error(e.message ?: "操作失败")
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
             }
         }
     }
@@ -383,10 +437,51 @@ class GoalViewModel @Inject constructor(
     }
 
     /**
-     * 加载目标详情
+     * 加载目标详情（响应式）
      */
     fun loadGoalDetail(goalId: Long) {
-        // 目前通过 getGoalById 获取
+        currentDetailGoalId = goalId
+        refreshGoalDetail(goalId)
+    }
+
+    /**
+     * 刷新目标详情状态
+     */
+    private fun refreshGoalDetail(goalId: Long) {
+        viewModelScope.launch {
+            _goalDetailState.value = _goalDetailState.value.copy(isLoading = true)
+            try {
+                val goal = useCase.getGoalById(goalId)
+                if (goal != null) {
+                    val progress = useCase.calculateProgress(goal)
+                    val remainingDays = useCase.getRemainingDays(goal.endDate)
+                    _goalDetailState.value = GoalDetailState(
+                        goal = goal,
+                        isLoading = false,
+                        progress = progress,
+                        remainingDays = remainingDays,
+                        operationResult = _operationResult.value
+                    )
+                } else {
+                    _goalDetailState.value = GoalDetailState(
+                        isLoading = false,
+                        operationResult = OperationResult.Error("目标不存在")
+                    )
+                }
+            } catch (e: Exception) {
+                _goalDetailState.value = GoalDetailState(
+                    isLoading = false,
+                    operationResult = OperationResult.Error(e.message ?: "加载失败")
+                )
+            }
+        }
+    }
+
+    /**
+     * 清除操作结果状态
+     */
+    fun clearOperationResult() {
+        _operationResult.value = OperationResult.Idle
     }
 
     /**
@@ -489,6 +584,7 @@ class GoalViewModel @Inject constructor(
                         val filtered = when (_currentFilter.value) {
                             "ACTIVE" -> topLevelGoals.filter { it.status == GoalStatus.ACTIVE }
                             "COMPLETED" -> topLevelGoals.filter { it.status == GoalStatus.COMPLETED }
+                            "ABANDONED" -> topLevelGoals.filter { it.status == GoalStatus.ABANDONED }
                             else -> topLevelGoals
                         }
 
@@ -641,12 +737,117 @@ class GoalViewModel @Inject constructor(
      */
     fun updateGoalProgress(goalId: Long, value: Double) {
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
                 useCase.updateProgress(goalId, value)
+                _operationResult.value = OperationResult.Success("进度已更新")
                 loadGoalTree() // 刷新树以更新父目标进度
+                refreshGoalDetail(goalId)
+                // 延迟后重置状态
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
             } catch (e: Exception) {
-                _uiState.value = GoalUiState.Error(e.message ?: "更新进度失败")
+                _operationResult.value = OperationResult.Error(e.message ?: "更新进度失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
             }
         }
+    }
+
+    /**
+     * 放弃目标
+     */
+    fun abandonGoal(goalId: Long) {
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                useCase.abandonGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已放弃")
+                refreshGoalDetail(goalId)
+                loadGoals()
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
+            }
+        }
+    }
+
+    /**
+     * 恢复已放弃的目标
+     */
+    fun reactivateGoal(goalId: Long) {
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                useCase.reactivateGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已恢复")
+                refreshGoalDetail(goalId)
+                loadGoals()
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
+            }
+        }
+    }
+
+    // ==================== AI分析功能 ====================
+
+    /**
+     * 检查AI服务是否已配置
+     */
+    fun isAIConfigured(): Boolean {
+        return aiService.isConfigured()
+    }
+
+    /**
+     * 分析目标并给出建议
+     */
+    fun analyzeGoal(goalId: Long) {
+        viewModelScope.launch {
+            _aiAnalysisState.value = AIAnalysisState.Loading
+            try {
+                val goal = useCase.getGoalById(goalId)
+                if (goal == null) {
+                    _aiAnalysisState.value = AIAnalysisState.Error("目标不存在")
+                    return@launch
+                }
+
+                val progress = useCase.calculateProgress(goal)
+                val remainingDays = useCase.getRemainingDays(goal.endDate)
+
+                val result = aiService.analyzeGoal(
+                    title = goal.title,
+                    description = goal.description,
+                    category = goal.category,
+                    goalType = goal.goalType,
+                    progress = progress,
+                    remainingDays = remainingDays
+                )
+
+                result.fold(
+                    onSuccess = { analysis ->
+                        _aiAnalysisState.value = AIAnalysisState.Success(analysis)
+                    },
+                    onFailure = { error ->
+                        _aiAnalysisState.value = AIAnalysisState.Error(error.message ?: "分析失败")
+                    }
+                )
+            } catch (e: Exception) {
+                _aiAnalysisState.value = AIAnalysisState.Error(e.message ?: "分析失败")
+            }
+        }
+    }
+
+    /**
+     * 清除AI分析状态
+     */
+    fun clearAIAnalysis() {
+        _aiAnalysisState.value = AIAnalysisState.Idle
     }
 }

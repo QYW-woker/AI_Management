@@ -109,3 +109,47 @@ data class SubGoalEditState(
     val unit: String = "",
     val progressType: String = "PERCENTAGE"
 )
+
+/**
+ * 操作结果状态（用于UI反馈）
+ */
+sealed class OperationResult {
+    object Idle : OperationResult()
+    object Loading : OperationResult()
+    data class Success(val message: String) : OperationResult()
+    data class Error(val message: String) : OperationResult()
+}
+
+/**
+ * 目标详情状态（用于详情页）
+ */
+data class GoalDetailState(
+    val goal: GoalEntity? = null,
+    val isLoading: Boolean = false,
+    val progress: Float = 0f,
+    val remainingDays: Int? = null,
+    val operationResult: OperationResult = OperationResult.Idle
+)
+
+/**
+ * 分类与目标类型的推荐映射
+ */
+val categoryToTypeMapping = mapOf(
+    "HEALTH" to "MONTHLY",      // 健康 → 月度目标（持续习惯）
+    "CAREER" to "YEARLY",       // 事业 → 年度目标
+    "FINANCE" to "YEARLY",      // 财务 → 年度目标
+    "LEARNING" to "QUARTERLY",  // 学习 → 季度目标
+    "RELATIONSHIP" to "LONG_TERM", // 人际关系 → 长期目标
+    "LIFESTYLE" to "MONTHLY",   // 生活方式 → 月度目标
+    "HOBBY" to "CUSTOM"         // 兴趣爱好 → 自定义
+)
+
+/**
+ * AI分析状态
+ */
+sealed class AIAnalysisState {
+    object Idle : AIAnalysisState()
+    object Loading : AIAnalysisState()
+    data class Success(val analysis: String) : AIAnalysisState()
+    data class Error(val message: String) : AIAnalysisState()
+}
