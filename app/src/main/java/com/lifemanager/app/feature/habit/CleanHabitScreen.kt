@@ -143,7 +143,7 @@ fun CleanHabitScreen(
                     // AI智能洞察
                     item(key = "ai_insight") {
                         CleanAIInsightCard(
-                            analysis = habitAnalysis,
+                            analysis = habitAnalysis?.content,
                             isLoading = isAnalyzing,
                             onRefresh = { viewModel.refreshAIAnalysis() }
                         )

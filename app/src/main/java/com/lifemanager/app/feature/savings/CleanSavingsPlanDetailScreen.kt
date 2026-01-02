@@ -495,8 +495,8 @@ private fun MilestonesCard(
             ) {
                 milestones.forEach { milestoneStatus ->
                     MilestoneItem(
-                        label = milestoneStatus.milestone.label,
-                        description = milestoneStatus.milestone.description,
+                        label = "${milestoneStatus.milestone.percentage}%",
+                        description = milestoneStatus.milestone.label,
                         isAchieved = milestoneStatus.isAchieved,
                         amount = milestoneStatus.amountReached,
                         color = planColor,

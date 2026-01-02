@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ripple.rememberRipple
 import com.lifemanager.app.ui.theme.*
 
@@ -490,7 +491,9 @@ fun CleanTextField(
     isError: Boolean = false,
     supportingText: String? = null,
     leadingIcon: @Composable (() -> Unit)? = null,
-    trailingIcon: @Composable (() -> Unit)? = null
+    trailingIcon: @Composable (() -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    minLines: Int = 1
 ) {
     OutlinedTextField(
         value = value,
@@ -504,6 +507,8 @@ fun CleanTextField(
         supportingText = supportingText?.let { { Text(it, style = CleanTypography.caption) } },
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
+        keyboardOptions = keyboardOptions,
+        minLines = minLines,
         shape = RoundedCornerShape(Radius.sm),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = CleanColors.primary,

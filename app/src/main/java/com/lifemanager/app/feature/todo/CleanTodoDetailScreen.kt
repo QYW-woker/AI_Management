@@ -463,7 +463,7 @@ private fun CleanDetailsCard(
                 CleanDetailRow(
                     icon = Icons.Outlined.Flag,
                     label = "优先级",
-                    value = formatPriority(todo.priority),
+                    value = formatPriority(todo.priority.name),
                     valueColor = priorityColor
                 )
                 CleanDivider(modifier = Modifier.padding(vertical = Spacing.md))

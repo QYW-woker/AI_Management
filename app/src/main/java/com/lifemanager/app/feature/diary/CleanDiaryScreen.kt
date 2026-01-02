@@ -533,7 +533,7 @@ private fun getWeatherIcon(weather: String): ImageVector {
         "THUNDERSTORM" -> Icons.Outlined.Thunderstorm
         "SNOWY" -> Icons.Outlined.AcUnit
         "WINDY" -> Icons.Outlined.Air
-        "FOGGY" -> Icons.Outlined.Foggy
+        "FOGGY" -> Icons.Outlined.Cloud
         else -> Icons.Outlined.Cloud
     }
 }

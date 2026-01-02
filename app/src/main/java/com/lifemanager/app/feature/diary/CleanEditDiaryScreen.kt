@@ -54,7 +54,7 @@ fun CleanEditDiaryScreen(
 
     // 如果传入日期，初始化编辑状态
     LaunchedEffect(diaryDate) {
-        diaryDate?.let { viewModel.initEditState(it) }
+        diaryDate?.let { viewModel.showEditDialog(it) }
     }
 
     Scaffold(
