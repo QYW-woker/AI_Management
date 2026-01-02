@@ -64,8 +64,11 @@ sealed class Screen(val route: String) {
 
     // ==================== 目标模块 ====================
 
-    /** 添加目标 */
+    /** 添加单级目标 */
     object AddGoal : Screen("add_goal")
+
+    /** 添加多级目标 */
+    object AddMultiLevelGoal : Screen("add_multi_level_goal")
 
     /** 编辑目标 */
     object EditGoal : Screen("edit_goal/{id}") {

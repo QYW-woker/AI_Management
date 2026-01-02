@@ -3,9 +3,8 @@ package com.lifemanager.app.feature.goal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,17 +21,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
  * 新建/编辑目标页面
+ *
+ * @param goalId 编辑时的目标ID，null表示新建
+ * @param isMultiLevel 是否为多级目标（带子目标）
+ * @param onNavigateBack 返回回调
+ * @param viewModel ViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditGoalScreen(
     goalId: Long? = null,
+    isMultiLevel: Boolean = false,
     onNavigateBack: () -> Unit,
     viewModel: GoalViewModel = hiltViewModel()
 ) {
@@ -53,6 +59,11 @@ fun AddEditGoalScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
+    // 子目标列表（仅多级目标使用）
+    var subGoals by remember { mutableStateOf<List<SubGoalEditState>>(emptyList()) }
+    var showAddSubGoalDialog by remember { mutableStateOf(false) }
+    var editingSubGoal by remember { mutableStateOf<SubGoalEditState?>(null) }
+
     // 加载现有目标数据（编辑模式）
     LaunchedEffect(goalId) {
         if (isEditing && goalId != null) {
@@ -65,11 +76,8 @@ fun AddEditGoalScreen(
                     targetValue = it.targetValue?.toString() ?: ""
                     unit = it.unit
                     progressType = it.progressType
-                    it.deadline?.let { d ->
-                        val year = d / 10000
-                        val month = (d % 10000) / 100
-                        val day = d % 100
-                        deadline = LocalDate.of(year, month, day)
+                    it.endDate?.let { epochDay ->
+                        deadline = LocalDate.ofEpochDay(epochDay.toLong())
                     }
                 }
             }
@@ -108,12 +116,15 @@ fun AddEditGoalScreen(
                                 error = "请输入目标名称"
                                 return@TextButton
                             }
+                            // 多级目标必须至少有一个子目标
+                            if (isMultiLevel && subGoals.isEmpty()) {
+                                error = "多级目标至少需要添加一个子目标"
+                                return@TextButton
+                            }
                             isLoading = true
                             error = null
 
-                            val deadlineInt = deadline?.let {
-                                it.year * 10000 + it.monthValue * 100 + it.dayOfMonth
-                            }
+                            val deadlineInt = deadline?.toEpochDay()?.toInt()
 
                             if (isEditing && goalId != null) {
                                 viewModel.updateGoal(
@@ -127,7 +138,21 @@ fun AddEditGoalScreen(
                                     progressType = progressType,
                                     deadline = deadlineInt
                                 )
+                            } else if (isMultiLevel) {
+                                // 创建多级目标
+                                viewModel.createGoalWithSubGoals(
+                                    title = title,
+                                    description = description,
+                                    category = category,
+                                    goalType = goalType,
+                                    targetValue = targetValue.toDoubleOrNull(),
+                                    unit = unit,
+                                    progressType = progressType,
+                                    deadline = deadlineInt,
+                                    subGoals = subGoals
+                                )
                             } else {
+                                // 创建单级目标
                                 viewModel.createGoal(
                                     title = title,
                                     description = description,
@@ -369,8 +394,119 @@ fun AddEditGoalScreen(
                 )
             }
 
+            // 子目标管理（仅多级目标显示）
+            if (isMultiLevel) {
+                Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+                HorizontalDivider()
+
+                Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        SectionTitle(title = "子目标", centered = false)
+                        Text(
+                            text = "已添加 ${subGoals.size} 个子目标",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { showAddSubGoalDialog = true },
+                        shape = AppShapes.Medium
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("添加子目标")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+                // 子目标列表
+                if (subGoals.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        shape = AppShapes.Medium
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.AccountTree,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "尚未添加子目标",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "点击上方按钮添加子目标",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        subGoals.forEachIndexed { index, subGoal ->
+                            SubGoalCard(
+                                subGoal = subGoal,
+                                index = index + 1,
+                                onEdit = { editingSubGoal = subGoal },
+                                onDelete = { subGoals = subGoals.filter { it.tempId != subGoal.tempId } }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(AppDimens.SpacingLarge))
         }
+    }
+
+    // 添加/编辑子目标对话框
+    if (showAddSubGoalDialog || editingSubGoal != null) {
+        SubGoalDialog(
+            subGoal = editingSubGoal,
+            onDismiss = {
+                showAddSubGoalDialog = false
+                editingSubGoal = null
+            },
+            onSave = { newSubGoal ->
+                if (editingSubGoal != null) {
+                    // 编辑现有子目标
+                    subGoals = subGoals.map {
+                        if (it.tempId == editingSubGoal!!.tempId) newSubGoal else it
+                    }
+                } else {
+                    // 添加新子目标
+                    subGoals = subGoals + newSubGoal
+                }
+                showAddSubGoalDialog = false
+                editingSubGoal = null
+            }
+        )
     }
 
     // 日期选择器
@@ -415,4 +551,210 @@ private fun getCategoryColor(category: String): Color {
         "HOBBY" -> Color(0xFFFF5722)
         else -> Color.Gray
     }
+}
+
+/**
+ * 子目标卡片
+ */
+@Composable
+private fun SubGoalCard(
+    subGoal: SubGoalEditState,
+    index: Int,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.Medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppDimens.SpacingMedium),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 序号
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Text(
+                        text = "$index",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(AppDimens.SpacingMedium))
+
+            // 子目标信息
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = subGoal.title.ifBlank { "未命名子目标" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                if (subGoal.targetValue != null) {
+                    Text(
+                        text = "目标: ${subGoal.targetValue}${subGoal.unit}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 操作按钮
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "编辑",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "删除",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 子目标编辑对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubGoalDialog(
+    subGoal: SubGoalEditState?,
+    onDismiss: () -> Unit,
+    onSave: (SubGoalEditState) -> Unit
+) {
+    val isEditing = subGoal != null
+
+    var title by remember { mutableStateOf(subGoal?.title ?: "") }
+    var description by remember { mutableStateOf(subGoal?.description ?: "") }
+    var targetValue by remember { mutableStateOf(subGoal?.targetValue?.toString() ?: "") }
+    var unit by remember { mutableStateOf(subGoal?.unit ?: "") }
+    var progressType by remember { mutableStateOf(subGoal?.progressType ?: "PERCENTAGE") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (isEditing) "编辑子目标" else "添加子目标",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(AppDimens.SpacingMedium)
+            ) {
+                // 子目标名称
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("子目标名称 *") },
+                    placeholder = { Text("例如：每日运动30分钟") },
+                    singleLine = true,
+                    shape = AppShapes.Medium
+                )
+
+                // 描述（可选）
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("描述（可选）") },
+                    minLines = 2,
+                    maxLines = 3,
+                    shape = AppShapes.Medium
+                )
+
+                // 目标值和单位
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppDimens.SpacingSmall)
+                ) {
+                    OutlinedTextField(
+                        value = targetValue,
+                        onValueChange = { targetValue = it.filter { c -> c.isDigit() || c == '.' } },
+                        modifier = Modifier.weight(2f),
+                        label = { Text("目标数值") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = AppShapes.Medium
+                    )
+                    OutlinedTextField(
+                        value = unit,
+                        onValueChange = { unit = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("单位") },
+                        singleLine = true,
+                        shape = AppShapes.Medium
+                    )
+                }
+
+                // 进度类型
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppDimens.SpacingSmall)
+                ) {
+                    FilterChip(
+                        selected = progressType == "NUMERIC",
+                        onClick = { progressType = "NUMERIC" },
+                        label = { Text("数值") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = progressType == "PERCENTAGE",
+                        onClick = { progressType = "PERCENTAGE" },
+                        label = { Text("百分比") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (title.isNotBlank()) {
+                        onSave(
+                            SubGoalEditState(
+                                tempId = subGoal?.tempId ?: System.currentTimeMillis(),
+                                title = title.trim(),
+                                description = description.trim(),
+                                targetValue = targetValue.toDoubleOrNull(),
+                                unit = unit.trim(),
+                                progressType = progressType
+                            )
+                        )
+                    }
+                },
+                enabled = title.isNotBlank()
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }

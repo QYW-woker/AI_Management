@@ -6,7 +6,9 @@ import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
 import com.lifemanager.app.domain.model.GoalEditState
 import com.lifemanager.app.domain.model.GoalStatistics
+import com.lifemanager.app.domain.model.GoalTreeNode
 import com.lifemanager.app.domain.model.GoalUiState
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.domain.usecase.GoalUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +33,18 @@ class GoalViewModel @Inject constructor(
     // 目标列表
     private val _goals = MutableStateFlow<List<GoalEntity>>(emptyList())
     val goals: StateFlow<List<GoalEntity>> = _goals.asStateFlow()
+
+    // 目标树列表（用于展示多级目标）
+    private val _goalTree = MutableStateFlow<List<GoalTreeNode>>(emptyList())
+    val goalTree: StateFlow<List<GoalTreeNode>> = _goalTree.asStateFlow()
+
+    // 展开的目标ID集合
+    private val _expandedGoalIds = MutableStateFlow<Set<Long>>(emptySet())
+    val expandedGoalIds: StateFlow<Set<Long>> = _expandedGoalIds.asStateFlow()
+
+    // 扁平化的目标列表（根据展开状态）
+    private val _flattenedGoals = MutableStateFlow<List<GoalTreeNode>>(emptyList())
+    val flattenedGoals: StateFlow<List<GoalTreeNode>> = _flattenedGoals.asStateFlow()
 
     // 统计数据
     private val _statistics = MutableStateFlow(GoalStatistics())
@@ -454,6 +468,184 @@ class GoalViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = GoalUiState.Error(e.message ?: "更新失败")
+            }
+        }
+    }
+
+    // ==================== 多级目标相关方法 ====================
+
+    /**
+     * 加载目标树
+     */
+    fun loadGoalTree() {
+        viewModelScope.launch {
+            try {
+                useCase.getAllTopLevelGoals()
+                    .catch { e ->
+                        _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
+                    }
+                    .collect { topLevelGoals ->
+                        // 根据筛选条件过滤
+                        val filtered = when (_currentFilter.value) {
+                            "ACTIVE" -> topLevelGoals.filter { it.status == GoalStatus.ACTIVE }
+                            "COMPLETED" -> topLevelGoals.filter { it.status == GoalStatus.COMPLETED }
+                            else -> topLevelGoals
+                        }
+
+                        // 构建目标树
+                        val tree = useCase.buildGoalTree(filtered)
+                        _goalTree.value = tree
+
+                        // 更新扁平化列表
+                        updateFlattenedGoals()
+
+                        _uiState.value = GoalUiState.Success(filtered)
+                    }
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
+            }
+        }
+    }
+
+    /**
+     * 更新扁平化的目标列表
+     */
+    private fun updateFlattenedGoals() {
+        val tree = _goalTree.value
+        val expandedIds = _expandedGoalIds.value
+        _flattenedGoals.value = useCase.flattenTree(tree, expandedIds)
+    }
+
+    /**
+     * 切换目标展开/收起状态
+     */
+    fun toggleExpand(goalId: Long) {
+        val currentExpanded = _expandedGoalIds.value.toMutableSet()
+        if (currentExpanded.contains(goalId)) {
+            currentExpanded.remove(goalId)
+        } else {
+            currentExpanded.add(goalId)
+        }
+        _expandedGoalIds.value = currentExpanded
+        updateFlattenedGoals()
+    }
+
+    /**
+     * 展开所有目标
+     */
+    fun expandAll() {
+        val allIds = _goalTree.value.flatMap { collectAllIds(it) }.toSet()
+        _expandedGoalIds.value = allIds
+        updateFlattenedGoals()
+    }
+
+    /**
+     * 收起所有目标
+     */
+    fun collapseAll() {
+        _expandedGoalIds.value = emptySet()
+        updateFlattenedGoals()
+    }
+
+    /**
+     * 收集所有目标ID（包括子目标）
+     */
+    private fun collectAllIds(node: GoalTreeNode): List<Long> {
+        val result = mutableListOf(node.goal.id)
+        node.children.forEach { child ->
+            result.addAll(collectAllIds(child))
+        }
+        return result
+    }
+
+    /**
+     * 获取子目标列表
+     */
+    fun getChildGoals(parentId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getChildGoalsSync(parentId))
+    }
+
+    /**
+     * 添加子目标
+     */
+    fun addSubGoal(
+        parentId: Long,
+        title: String,
+        description: String = "",
+        progressType: String = "PERCENTAGE",
+        targetValue: Double? = null,
+        unit: String = ""
+    ) {
+        viewModelScope.launch {
+            try {
+                useCase.addSubGoal(parentId, title, description, progressType, targetValue, unit)
+                loadGoalTree() // 刷新树
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "添加子目标失败")
+            }
+        }
+    }
+
+    /**
+     * 创建带子目标的多级目标
+     */
+    fun createGoalWithSubGoals(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?,
+        subGoals: List<SubGoalEditState>
+    ) {
+        viewModelScope.launch {
+            try {
+                val today = useCase.getToday()
+                useCase.createGoalWithSubGoals(
+                    title = title,
+                    description = description,
+                    goalType = goalType,
+                    category = category,
+                    startDate = today,
+                    endDate = deadline,
+                    progressType = progressType,
+                    targetValue = targetValue,
+                    unit = unit,
+                    subGoals = subGoals
+                )
+                loadGoalTree() // 刷新树
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "创建失败")
+            }
+        }
+    }
+
+    /**
+     * 删除目标（包括子目标）
+     */
+    fun deleteGoalWithChildren(goalId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteGoalWithChildren(goalId)
+                loadGoalTree() // 刷新树
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 更新目标进度（带父目标自动更新）
+     */
+    fun updateGoalProgress(goalId: Long, value: Double) {
+        viewModelScope.launch {
+            try {
+                useCase.updateProgress(goalId, value)
+                loadGoalTree() // 刷新树以更新父目标进度
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "更新进度失败")
             }
         }
     }

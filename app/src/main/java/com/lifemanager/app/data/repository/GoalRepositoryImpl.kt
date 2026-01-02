@@ -58,4 +58,33 @@ class GoalRepositoryImpl @Inject constructor(
     override suspend fun countActiveGoals(): Int {
         return goalDao.countActiveGoals()
     }
+
+    // 多级目标相关
+    override fun getTopLevelGoals(): Flow<List<GoalEntity>> {
+        return goalDao.getTopLevelGoals()
+    }
+
+    override fun getAllTopLevelGoals(): Flow<List<GoalEntity>> {
+        return goalDao.getAllTopLevelGoals()
+    }
+
+    override fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
+        return goalDao.getChildGoals(parentId)
+    }
+
+    override suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity> {
+        return goalDao.getChildGoalsSync(parentId)
+    }
+
+    override suspend fun countChildGoals(parentId: Long): Int {
+        return goalDao.countChildGoals(parentId)
+    }
+
+    override suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean) {
+        goalDao.updateMultiLevelFlag(id, isMultiLevel)
+    }
+
+    override suspend fun deleteChildGoals(parentId: Long) {
+        goalDao.deleteChildGoals(parentId)
+    }
 }

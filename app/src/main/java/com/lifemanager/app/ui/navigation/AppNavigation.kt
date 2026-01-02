@@ -313,6 +313,9 @@ fun AppNavHost(
                 },
                 onNavigateToAdd = {
                     navController.navigate(Screen.AddGoal.route)
+                },
+                onNavigateToAddMultiLevel = {
+                    navController.navigate(Screen.AddMultiLevelGoal.route)
                 }
             )
         }
@@ -332,10 +335,20 @@ fun AppNavHost(
             )
         }
 
-        // 新建目标
+        // 新建单级目标
         composable(Screen.AddGoal.route) {
             AddEditGoalScreen(
                 goalId = null,
+                isMultiLevel = false,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 新建多级目标
+        composable(Screen.AddMultiLevelGoal.route) {
+            AddEditGoalScreen(
+                goalId = null,
+                isMultiLevel = true,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

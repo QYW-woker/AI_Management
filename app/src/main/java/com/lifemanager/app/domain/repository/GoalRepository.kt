@@ -18,4 +18,13 @@ interface GoalRepository {
     suspend fun updateStatus(id: Long, status: String)
     suspend fun delete(id: Long)
     suspend fun countActiveGoals(): Int
+
+    // 多级目标相关
+    fun getTopLevelGoals(): Flow<List<GoalEntity>>
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>>
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>>
+    suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity>
+    suspend fun countChildGoals(parentId: Long): Int
+    suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean)
+    suspend fun deleteChildGoals(parentId: Long)
 }

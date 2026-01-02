@@ -3,9 +3,12 @@ package com.lifemanager.app.domain.usecase
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
 import com.lifemanager.app.domain.model.GoalStatistics
+import com.lifemanager.app.domain.model.GoalTreeNode
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.domain.repository.GoalRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -63,7 +66,10 @@ class GoalUseCase @Inject constructor(
         endDate: Int?,
         progressType: String,
         targetValue: Double?,
-        unit: String
+        unit: String,
+        parentId: Long? = null,
+        level: Int = 0,
+        isMultiLevel: Boolean = false
     ): Long {
         val goal = GoalEntity(
             title = title,
@@ -74,9 +80,61 @@ class GoalUseCase @Inject constructor(
             endDate = endDate,
             progressType = progressType,
             targetValue = targetValue,
-            unit = unit
+            unit = unit,
+            parentId = parentId,
+            level = level,
+            isMultiLevel = isMultiLevel
         )
         return repository.insert(goal)
+    }
+
+    /**
+     * 创建带子目标的多级目标
+     */
+    suspend fun createGoalWithSubGoals(
+        title: String,
+        description: String,
+        goalType: String,
+        category: String,
+        startDate: Int,
+        endDate: Int?,
+        progressType: String,
+        targetValue: Double?,
+        unit: String,
+        subGoals: List<SubGoalEditState>
+    ): Long {
+        // 创建父目标
+        val parentId = createGoal(
+            title = title,
+            description = description,
+            goalType = goalType,
+            category = category,
+            startDate = startDate,
+            endDate = endDate,
+            progressType = progressType,
+            targetValue = targetValue,
+            unit = unit,
+            isMultiLevel = subGoals.isNotEmpty()
+        )
+
+        // 创建子目标
+        subGoals.forEach { subGoal ->
+            createGoal(
+                title = subGoal.title,
+                description = subGoal.description,
+                goalType = goalType,
+                category = category,
+                startDate = startDate,
+                endDate = endDate,
+                progressType = subGoal.progressType,
+                targetValue = subGoal.targetValue,
+                unit = subGoal.unit,
+                parentId = parentId,
+                level = 1
+            )
+        }
+
+        return parentId
     }
 
     /**
@@ -96,6 +154,53 @@ class GoalUseCase @Inject constructor(
         val goal = repository.getGoalById(id)
         if (goal != null && goal.targetValue != null && value >= goal.targetValue) {
             repository.updateStatus(id, GoalStatus.COMPLETED)
+        }
+
+        // 如果有父目标，更新父目标进度
+        goal?.parentId?.let { parentId ->
+            updateParentProgress(parentId)
+        }
+    }
+
+    /**
+     * 更新父目标进度（根据子目标进度自动计算）
+     */
+    private suspend fun updateParentProgress(parentId: Long) {
+        val children = repository.getChildGoalsSync(parentId)
+        if (children.isEmpty()) return
+
+        // 计算子目标平均进度
+        val childProgresses = children.map { child ->
+            calculateProgress(child)
+        }
+        val averageProgress = childProgresses.average().toFloat()
+
+        // 获取父目标信息
+        val parent = repository.getGoalById(parentId) ?: return
+
+        // 根据父目标的进度类型更新进度值
+        val progressValue = when (parent.progressType) {
+            "PERCENTAGE" -> (averageProgress * 100).toDouble()
+            "NUMERIC" -> {
+                if (parent.targetValue != null) {
+                    averageProgress * parent.targetValue
+                } else {
+                    (averageProgress * 100).toDouble()
+                }
+            }
+            else -> (averageProgress * 100).toDouble()
+        }
+
+        repository.updateProgress(parentId, progressValue)
+
+        // 检查是否完成
+        if (averageProgress >= 1f) {
+            repository.updateStatus(parentId, GoalStatus.COMPLETED)
+        }
+
+        // 递归更新更上层的父目标
+        parent.parentId?.let { grandParentId ->
+            updateParentProgress(grandParentId)
         }
     }
 
@@ -191,5 +296,148 @@ class GoalUseCase @Inject constructor(
         if (endDate == null) return null
         val today = getToday()
         return endDate - today
+    }
+
+    // ==================== 多级目标相关方法 ====================
+
+    /**
+     * 获取顶级目标列表
+     */
+    fun getTopLevelGoals(): Flow<List<GoalEntity>> {
+        return repository.getTopLevelGoals()
+    }
+
+    /**
+     * 获取所有顶级目标（包含所有状态）
+     */
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>> {
+        return repository.getAllTopLevelGoals()
+    }
+
+    /**
+     * 获取子目标列表
+     */
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
+        return repository.getChildGoals(parentId)
+    }
+
+    /**
+     * 获取子目标列表（同步版本）
+     */
+    suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity> {
+        return repository.getChildGoalsSync(parentId)
+    }
+
+    /**
+     * 获取子目标数量
+     */
+    suspend fun countChildGoals(parentId: Long): Int {
+        return repository.countChildGoals(parentId)
+    }
+
+    /**
+     * 构建目标树
+     */
+    suspend fun buildGoalTree(goals: List<GoalEntity>): List<GoalTreeNode> {
+        return goals.map { goal ->
+            buildTreeNode(goal)
+        }
+    }
+
+    /**
+     * 构建单个目标的树节点
+     */
+    private suspend fun buildTreeNode(goal: GoalEntity): GoalTreeNode {
+        val children = repository.getChildGoalsSync(goal.id)
+        val childNodes = children.map { buildTreeNode(it) }
+        val progress = if (children.isNotEmpty()) {
+            // 多级目标：根据子目标计算进度
+            childNodes.map { it.progress }.average().toFloat()
+        } else {
+            calculateProgress(goal)
+        }
+
+        return GoalTreeNode(
+            goal = goal,
+            level = goal.level,
+            children = childNodes,
+            isExpanded = false,
+            childCount = children.size,
+            progress = progress
+        )
+    }
+
+    /**
+     * 将目标树扁平化为列表（仅包含展开的节点）
+     */
+    fun flattenTree(
+        nodes: List<GoalTreeNode>,
+        expandedIds: Set<Long> = emptySet()
+    ): List<GoalTreeNode> {
+        val result = mutableListOf<GoalTreeNode>()
+        nodes.forEach { node ->
+            val isExpanded = expandedIds.contains(node.goal.id)
+            result.add(node.copy(isExpanded = isExpanded))
+            if (isExpanded && node.children.isNotEmpty()) {
+                result.addAll(flattenTree(node.children, expandedIds))
+            }
+        }
+        return result
+    }
+
+    /**
+     * 添加子目标
+     */
+    suspend fun addSubGoal(
+        parentId: Long,
+        title: String,
+        description: String = "",
+        progressType: String = "PERCENTAGE",
+        targetValue: Double? = null,
+        unit: String = ""
+    ): Long {
+        val parent = repository.getGoalById(parentId) ?: return -1
+
+        val subGoalId = createGoal(
+            title = title,
+            description = description,
+            goalType = parent.goalType,
+            category = parent.category,
+            startDate = parent.startDate,
+            endDate = parent.endDate,
+            progressType = progressType,
+            targetValue = targetValue,
+            unit = unit,
+            parentId = parentId,
+            level = parent.level + 1
+        )
+
+        // 更新父目标为多级目标
+        if (!parent.isMultiLevel) {
+            repository.updateMultiLevelFlag(parentId, true)
+        }
+
+        return subGoalId
+    }
+
+    /**
+     * 删除目标（包括子目标）
+     */
+    suspend fun deleteGoalWithChildren(id: Long) {
+        // 先删除所有子目标
+        repository.deleteChildGoals(id)
+        // 再删除目标本身
+        repository.delete(id)
+
+        // 检查父目标是否还有子目标
+        val goal = repository.getGoalById(id)
+        goal?.parentId?.let { parentId ->
+            val childCount = repository.countChildGoals(parentId)
+            if (childCount == 0) {
+                repository.updateMultiLevelFlag(parentId, false)
+            }
+            // 更新父目标进度
+            updateParentProgress(parentId)
+        }
     }
 }

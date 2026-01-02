@@ -77,3 +77,35 @@ fun getCategoryDisplayName(category: String): String {
 fun getGoalTypeDisplayName(type: String): String {
     return goalTypeOptions.find { it.first == type }?.second ?: type
 }
+
+/**
+ * 目标树节点（用于展示多级目标）
+ */
+data class GoalTreeNode(
+    val goal: GoalEntity,
+    val level: Int = 0,
+    val children: List<GoalTreeNode> = emptyList(),
+    var isExpanded: Boolean = false,
+    val childCount: Int = 0,
+    val progress: Float = 0f
+)
+
+/**
+ * 目标类型（单级/多级）
+ */
+enum class GoalStructureType {
+    SINGLE,     // 单级目标
+    MULTI_LEVEL // 多级目标（带子目标）
+}
+
+/**
+ * 子目标编辑状态（用于新建多级目标时的临时子目标）
+ */
+data class SubGoalEditState(
+    val tempId: Long = System.currentTimeMillis(), // 临时ID，保存后会被替换
+    val title: String = "",
+    val description: String = "",
+    val targetValue: Double? = null,
+    val unit: String = "",
+    val progressType: String = "PERCENTAGE"
+)
