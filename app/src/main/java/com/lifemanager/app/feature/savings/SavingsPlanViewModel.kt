@@ -355,4 +355,141 @@ class SavingsPlanViewModel @Inject constructor(
     fun formatDate(epochDay: Int): String {
         return useCase.formatDate(epochDay)
     }
+
+    /**
+     * 根据ID获取计划（用于详情页）
+     */
+    fun getPlanById(planId: Long) = kotlinx.coroutines.flow.flow {
+        val plan = useCase.getPlanById(planId)
+        if (plan != null) {
+            val plans = _plans.value
+            val planWithDetails = plans.find { it.plan.id == planId }
+            emit(planWithDetails)
+        } else {
+            emit(null)
+        }
+    }
+
+    /**
+     * 加载计划详情
+     */
+    fun loadPlanDetail(planId: Long) {
+        // 通过 getPlanById 获取
+    }
+
+    /**
+     * 获取计划的存款记录
+     */
+    fun getDepositsForPlan(planId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getDepositsForPlan(planId))
+    }
+
+    /**
+     * 根据ID获取存款记录
+     */
+    fun getDepositById(depositId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getDepositById(depositId))
+    }
+
+    /**
+     * 直接存款（用于快速存钱页面）
+     */
+    fun deposit(planId: Long, amount: Double, note: String?, date: java.time.LocalDate) {
+        viewModelScope.launch {
+            try {
+                val dateInt = date.year * 10000 + date.monthValue * 100 + date.dayOfMonth
+                useCase.deposit(planId, amount, note, dateInt)
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "存款失败")
+            }
+        }
+    }
+
+    /**
+     * 删除计划
+     */
+    fun deletePlan(planId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deletePlan(planId)
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 删除存款记录
+     */
+    fun deleteDeposit(depositId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteDeposit(depositId)
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 创建计划（用于独立页面）
+     */
+    fun createPlan(
+        name: String,
+        targetAmount: Double,
+        targetDate: Int,
+        strategy: String,
+        color: String
+    ) {
+        viewModelScope.launch {
+            try {
+                val today = useCase.getToday()
+                val plan = SavingsPlanEntity(
+                    id = 0,
+                    name = name.trim(),
+                    description = "",
+                    targetAmount = targetAmount,
+                    startDate = today,
+                    targetDate = targetDate,
+                    strategy = strategy,
+                    color = color
+                )
+                useCase.createPlan(plan)
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "创建失败")
+            }
+        }
+    }
+
+    /**
+     * 更新计划（用于独立页面）
+     */
+    fun updatePlan(
+        id: Long,
+        name: String,
+        targetAmount: Double,
+        targetDate: Int,
+        strategy: String,
+        color: String
+    ) {
+        viewModelScope.launch {
+            try {
+                val existing = useCase.getPlanById(id)
+                if (existing != null) {
+                    val updated = existing.copy(
+                        name = name.trim(),
+                        targetAmount = targetAmount,
+                        targetDate = targetDate,
+                        strategy = strategy,
+                        color = color
+                    )
+                    useCase.updatePlan(updated)
+                }
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "更新失败")
+            }
+        }
+    }
 }

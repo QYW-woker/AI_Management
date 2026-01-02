@@ -139,19 +139,21 @@ private fun TodayOverviewSection() {
 }
 
 /**
- * 快捷功能入口
+ * 快捷功能入口 - 多行固定网格，不滑动
  */
 @Composable
 private fun QuickAccessSection(
     onNavigateToModule: (String) -> Unit
 ) {
-    // 快捷功能列表
+    // 快捷功能列表 - 按重要性排序，快速存钱放在显眼位置
     val quickAccessItems = listOf(
+        // 第一行：核心高频功能
         QuickAccessItem(
-            icon = Icons.Default.AutoAwesome,
-            label = "AI助手",
-            color = Color(0xFF2196F3),
-            route = Screen.AIAssistant.route
+            icon = Icons.Default.Savings,
+            label = "快速存钱",
+            color = Color(0xFF4CAF50),
+            route = "quick_savings/-1",
+            isPrimary = true
         ),
         QuickAccessItem(
             icon = Icons.Default.AccountBalance,
@@ -159,6 +161,19 @@ private fun QuickAccessSection(
             color = AppColors.Primary,
             route = Screen.DailyTransaction.route
         ),
+        QuickAccessItem(
+            icon = Icons.Default.Flag,
+            label = "目标",
+            color = Color(0xFFFF9800),
+            route = Screen.Goal.route
+        ),
+        QuickAccessItem(
+            icon = Icons.Default.AutoAwesome,
+            label = "AI助手",
+            color = Color(0xFF2196F3),
+            route = Screen.AIAssistant.route
+        ),
+        // 第二行
         QuickAccessItem(
             icon = Icons.Default.Assignment,
             label = "待办",
@@ -183,9 +198,10 @@ private fun QuickAccessSection(
             color = Color(0xFFE91E63),
             route = Screen.Diary.route
         ),
+        // 第三行
         QuickAccessItem(
-            icon = Icons.Default.Savings,
-            label = "存钱",
+            icon = Icons.Default.AccountBox,
+            label = "存钱计划",
             color = Color(0xFF00BCD4),
             route = Screen.SavingsPlan.route
         ),
@@ -201,20 +217,36 @@ private fun QuickAccessSection(
         Text(
             text = "快捷入口",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        // 固定多行网格布局，每行4个（减少到5列更适合）
+        val itemsPerRow = 5
+        val rows = quickAccessItems.chunked(itemsPerRow)
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            quickAccessItems.forEach { item ->
-                QuickAccessButton(
-                    item = item,
-                    onClick = { onNavigateToModule(item.route) }
-                )
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    rowItems.forEach { item ->
+                        QuickAccessButton(
+                            item = item,
+                            onClick = { onNavigateToModule(item.route) }
+                        )
+                    }
+                    // 填充空位保持对齐
+                    repeat(itemsPerRow - rowItems.size) {
+                        Spacer(modifier = Modifier.width(56.dp))
+                    }
+                }
             }
         }
     }
@@ -232,11 +264,12 @@ private fun QuickAccessButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(8.dp)
+            .padding(4.dp)
+            .width(56.dp)
     ) {
         Surface(
             shape = MaterialTheme.shapes.medium,
-            color = item.color.copy(alpha = 0.1f),
+            color = if (item.isPrimary) item.color else item.color.copy(alpha = 0.1f),
             modifier = Modifier.size(48.dp)
         ) {
             Box(
@@ -246,7 +279,7 @@ private fun QuickAccessButton(
                 Icon(
                     imageVector = item.icon,
                     contentDescription = item.label,
-                    tint = item.color,
+                    tint = if (item.isPrimary) Color.White else item.color,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -256,7 +289,9 @@ private fun QuickAccessButton(
 
         Text(
             text = item.label,
-            style = MaterialTheme.typography.labelSmall
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
@@ -494,5 +529,6 @@ private data class QuickAccessItem(
     val icon: ImageVector,
     val label: String,
     val color: Color,
-    val route: String
+    val route: String,
+    val isPrimary: Boolean = false
 )

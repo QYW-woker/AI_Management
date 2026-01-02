@@ -28,25 +28,31 @@ import com.lifemanager.app.domain.model.getGoalTypeDisplayName
 
 /**
  * 目标管理页面
+ *
+ * 重构后使用页面导航代替弹窗
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoalScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit = {},
+    onNavigateToAdd: () -> Unit = {},
     viewModel: GoalViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val goals by viewModel.goals.collectAsState()
     val statistics by viewModel.statistics.collectAsState()
     val currentFilter by viewModel.currentFilter.collectAsState()
-    val showEditDialog by viewModel.showEditDialog.collectAsState()
-    val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
-    val showProgressDialog by viewModel.showProgressDialog.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("目标管理") },
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "目标管理",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -56,7 +62,7 @@ fun GoalScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.showAddDialog() }
+                onClick = onNavigateToAdd
             ) {
                 Icon(Icons.Default.Add, contentDescription = "添加目标")
             }
@@ -119,10 +125,7 @@ fun GoalScreen(
                                     goal = goal,
                                     progress = viewModel.calculateProgress(goal),
                                     remainingDays = viewModel.getRemainingDays(goal),
-                                    onEdit = { viewModel.showEditDialog(goal.id) },
-                                    onUpdateProgress = { viewModel.showProgressDialog(goal) },
-                                    onComplete = { viewModel.completeGoal(goal.id) },
-                                    onDelete = { viewModel.showDeleteConfirm(goal.id) }
+                                    onClick = { onNavigateToDetail(goal.id) }
                                 )
                             }
                         }
@@ -130,47 +133,6 @@ fun GoalScreen(
                 }
             }
         }
-    }
-
-    // 编辑对话框
-    if (showEditDialog) {
-        AddEditGoalDialog(
-            viewModel = viewModel,
-            onDismiss = { viewModel.hideEditDialog() }
-        )
-    }
-
-    // 删除确认对话框
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.hideDeleteConfirm() },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这个目标吗？此操作不可恢复。") },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.confirmDelete() },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.hideDeleteConfirm() }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
-    // 更新进度对话框
-    if (showProgressDialog) {
-        UpdateProgressDialog(
-            goal = viewModel.getProgressGoal(),
-            onDismiss = { viewModel.hideProgressDialog() },
-            onConfirm = { viewModel.updateProgress(it) }
-        )
     }
 }
 
@@ -263,28 +225,28 @@ private fun FilterChips(
     }
 }
 
+/**
+ * 目标卡片 - 点击进入详情页
+ */
 @Composable
 private fun GoalCard(
     goal: GoalEntity,
     progress: Float,
     remainingDays: Int?,
-    onEdit: () -> Unit,
-    onUpdateProgress: () -> Unit,
-    onComplete: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     val categoryColor = getCategoryColor(goal.category)
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onEdit),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // 头部
+            // 头部：分类标签和状态
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -312,12 +274,21 @@ private fun GoalCard(
                     )
                 }
 
-                // 状态指示
-                if (goal.status == GoalStatus.COMPLETED) {
+                // 状态指示和箭头
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (goal.status == GoalStatus.COMPLETED) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "已完成",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "已完成",
-                        tint = Color(0xFF4CAF50),
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "查看详情",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -383,28 +354,6 @@ private fun GoalCard(
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
-
-            // 操作按钮（仅活跃目标显示）
-            if (goal.status == GoalStatus.ACTIVE) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onUpdateProgress) {
-                        Icon(Icons.Default.Update, contentDescription = null, Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("更新进度")
-                    }
-                    if (progress >= 1f || goal.progressType == "PERCENTAGE") {
-                        TextButton(onClick = onComplete) {
-                            Icon(Icons.Default.Check, contentDescription = null, Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("完成")
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -441,70 +390,6 @@ private fun EmptyState(currentFilter: String) {
             )
         }
     }
-}
-
-@Composable
-private fun UpdateProgressDialog(
-    goal: GoalEntity?,
-    onDismiss: () -> Unit,
-    onConfirm: (Double) -> Unit
-) {
-    if (goal == null) return
-
-    var value by remember { mutableStateOf(goal.currentValue.toString()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("更新进度") },
-        text = {
-            Column {
-                Text(
-                    text = goal.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it.filter { c -> c.isDigit() || c == '.' } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text(
-                            if (goal.progressType == "NUMERIC") "当前数值" else "完成百分比"
-                        )
-                    },
-                    suffix = {
-                        Text(
-                            if (goal.progressType == "NUMERIC") goal.unit else "%"
-                        )
-                    },
-                    singleLine = true
-                )
-                if (goal.progressType == "NUMERIC" && goal.targetValue != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "目标: ${goal.targetValue.toInt()}${goal.unit}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    value.toDoubleOrNull()?.let { onConfirm(it) }
-                }
-            ) {
-                Text("确认")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
 }
 
 private fun getCategoryColor(category: String): Color {

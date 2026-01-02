@@ -24,7 +24,14 @@ import com.lifemanager.app.feature.diary.DiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
 import com.lifemanager.app.feature.habit.HabitScreen
 import com.lifemanager.app.feature.savings.SavingsPlanScreen
+import com.lifemanager.app.feature.savings.SavingsOverviewScreen
+import com.lifemanager.app.feature.savings.QuickSavingsScreen
+import com.lifemanager.app.feature.savings.SavingsPlanDetailScreen
+import com.lifemanager.app.feature.savings.SavingsRecordDetailScreen
+import com.lifemanager.app.feature.savings.AddEditSavingsPlanScreen
 import com.lifemanager.app.feature.goal.GoalScreen
+import com.lifemanager.app.feature.goal.GoalDetailScreen
+import com.lifemanager.app.feature.goal.AddEditGoalScreen
 import com.lifemanager.app.feature.datacenter.DataCenterScreen
 import com.lifemanager.app.feature.profile.ProfileScreen
 import com.lifemanager.app.feature.settings.SettingsScreen
@@ -300,6 +307,47 @@ fun AppNavHost(
         // 目标管理
         composable(Screen.Goal.route) {
             GoalScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { goalId ->
+                    navController.navigate(Screen.GoalDetail.createRoute(goalId))
+                },
+                onNavigateToAdd = {
+                    navController.navigate(Screen.AddGoal.route)
+                }
+            )
+        }
+
+        // 目标详情
+        composable(
+            route = Screen.GoalDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val goalId = backStackEntry.arguments?.getLong("id") ?: 0L
+            GoalDetailScreen(
+                goalId = goalId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.EditGoal.createRoute(id))
+                }
+            )
+        }
+
+        // 新建目标
+        composable(Screen.AddGoal.route) {
+            AddEditGoalScreen(
+                goalId = null,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 编辑目标
+        composable(
+            route = Screen.EditGoal.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val goalId = backStackEntry.arguments?.getLong("id") ?: 0L
+            AddEditGoalScreen(
+                goalId = goalId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -367,9 +415,100 @@ fun AppNavHost(
             )
         }
 
-        // 存钱计划
+        // 存钱计划（旧入口重定向到总览页）
         composable(Screen.SavingsPlan.route) {
-            SavingsPlanScreen(
+            SavingsOverviewScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToQuickSavings = { planId ->
+                    navController.navigate(Screen.QuickSavings.createRoute(planId))
+                },
+                onNavigateToPlanDetail = { planId ->
+                    navController.navigate(Screen.SavingsPlanDetail.createRoute(planId))
+                },
+                onNavigateToAddPlan = {
+                    navController.navigate(Screen.AddSavingsPlan.route)
+                }
+            )
+        }
+
+        // 存钱总览
+        composable(Screen.SavingsOverview.route) {
+            SavingsOverviewScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToQuickSavings = { planId ->
+                    navController.navigate(Screen.QuickSavings.createRoute(planId))
+                },
+                onNavigateToPlanDetail = { planId ->
+                    navController.navigate(Screen.SavingsPlanDetail.createRoute(planId))
+                },
+                onNavigateToAddPlan = {
+                    navController.navigate(Screen.AddSavingsPlan.route)
+                }
+            )
+        }
+
+        // 快速存钱
+        composable(
+            route = Screen.QuickSavings.route,
+            arguments = listOf(navArgument("planId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getLong("planId")?.takeIf { it > 0 }
+            QuickSavingsScreen(
+                preSelectedPlanId = planId,
+                onNavigateBack = { navController.popBackStack() },
+                onSuccess = { navController.popBackStack() }
+            )
+        }
+
+        // 存钱计划详情
+        composable(
+            route = Screen.SavingsPlanDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getLong("id") ?: 0L
+            SavingsPlanDetailScreen(
+                planId = planId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.EditSavingsPlan.createRoute(id))
+                },
+                onNavigateToQuickSavings = { id ->
+                    navController.navigate(Screen.QuickSavings.createRoute(id))
+                },
+                onNavigateToRecordDetail = { recordId ->
+                    navController.navigate(Screen.SavingsRecordDetail.createRoute(recordId))
+                }
+            )
+        }
+
+        // 存钱记录详情
+        composable(
+            route = Screen.SavingsRecordDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val recordId = backStackEntry.arguments?.getLong("id") ?: 0L
+            SavingsRecordDetailScreen(
+                recordId = recordId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 新建存钱计划
+        composable(Screen.AddSavingsPlan.route) {
+            AddEditSavingsPlanScreen(
+                planId = null,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 编辑存钱计划
+        composable(
+            route = Screen.EditSavingsPlan.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getLong("id") ?: 0L
+            AddEditSavingsPlanScreen(
+                planId = planId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

@@ -360,4 +360,101 @@ class GoalViewModel @Inject constructor(
      * 获取进度更新目标
      */
     fun getProgressGoal(): GoalEntity? = goalToUpdateProgress
+
+    /**
+     * 根据ID获取目标（用于详情页）
+     */
+    fun getGoalById(goalId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getGoalById(goalId))
+    }
+
+    /**
+     * 加载目标详情
+     */
+    fun loadGoalDetail(goalId: Long) {
+        // 目前通过 getGoalById 获取
+    }
+
+    /**
+     * 删除目标
+     */
+    fun deleteGoal(goalId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteGoal(goalId)
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 创建新目标（用于独立页面）
+     */
+    fun createGoal(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?
+    ) {
+        viewModelScope.launch {
+            try {
+                val today = useCase.getToday()
+                useCase.createGoal(
+                    title = title,
+                    description = description,
+                    goalType = goalType,
+                    category = category,
+                    startDate = today,
+                    endDate = deadline,
+                    progressType = progressType,
+                    targetValue = targetValue,
+                    unit = unit
+                )
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "创建失败")
+            }
+        }
+    }
+
+    /**
+     * 更新目标（用于独立页面）
+     */
+    fun updateGoal(
+        id: Long,
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?
+    ) {
+        viewModelScope.launch {
+            try {
+                val existing = useCase.getGoalById(id)
+                if (existing != null) {
+                    useCase.updateGoal(
+                        existing.copy(
+                            title = title,
+                            description = description,
+                            goalType = goalType,
+                            category = category,
+                            endDate = deadline,
+                            progressType = progressType,
+                            targetValue = targetValue,
+                            unit = unit
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "更新失败")
+            }
+        }
+    }
 }
