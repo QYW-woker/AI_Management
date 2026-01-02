@@ -50,6 +50,7 @@ import com.lifemanager.app.ui.component.PremiumTextField
 @Composable
 fun GoalScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit = {},
     viewModel: GoalViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -75,8 +76,17 @@ fun GoalScreen(
     val overdueGoals by viewModel.overdueGoals.collectAsState()
     val showTemplateDialog by viewModel.showTemplateDialog.collectAsState()
     val selectedTemplateCategory by viewModel.selectedTemplateCategory.collectAsState()
+    val createdGoalId by viewModel.createdGoalId.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // 创建目标后导航到详情页
+    LaunchedEffect(createdGoalId) {
+        createdGoalId?.let { goalId ->
+            onNavigateToDetail(goalId)
+            viewModel.clearCreatedGoalId()
+        }
+    }
 
     // 显示错误消息
     LaunchedEffect(uiState) {
@@ -131,7 +141,7 @@ fun GoalScreen(
                     DeadlineWarningsCard(
                         overdueGoals = overdueGoals,
                         upcomingDeadlines = upcomingDeadlines,
-                        onGoalClick = { viewModel.showEditDialog(it) }
+                        onGoalClick = { onNavigateToDetail(it) }
                     )
                 }
             }
@@ -233,6 +243,7 @@ fun GoalScreen(
                                     childCount = childCount,
                                     isExpanded = isExpanded,
                                     indentLevel = 0,
+                                    onClick = { onNavigateToDetail(goal.id) },
                                     onEdit = { viewModel.showEditDialog(goal.id) },
                                     onUpdateProgress = { viewModel.showProgressDialog(goal) },
                                     onComplete = { viewModel.completeGoal(goal.id) },
@@ -259,6 +270,7 @@ fun GoalScreen(
                                             childCount = subChildCount,
                                             isExpanded = isSubExpanded,
                                             indentLevel = 1,
+                                            onClick = { onNavigateToDetail(childGoal.id) },
                                             onEdit = { viewModel.showEditDialog(childGoal.id) },
                                             onUpdateProgress = { viewModel.showProgressDialog(childGoal) },
                                             onComplete = { viewModel.completeGoal(childGoal.id) },
@@ -282,6 +294,7 @@ fun GoalScreen(
                                                     childCount = 0,
                                                     isExpanded = false,
                                                     indentLevel = 2,
+                                                    onClick = { onNavigateToDetail(grandChild.id) },
                                                     onEdit = { viewModel.showEditDialog(grandChild.id) },
                                                     onUpdateProgress = { viewModel.showProgressDialog(grandChild) },
                                                     onComplete = { viewModel.completeGoal(grandChild.id) },
@@ -612,6 +625,7 @@ private fun EnhancedGoalCard(
     childCount: Int = 0,
     isExpanded: Boolean = false,
     indentLevel: Int = 0,
+    onClick: () -> Unit,
     onEdit: () -> Unit,
     onUpdateProgress: () -> Unit,
     onComplete: () -> Unit,
@@ -643,7 +657,7 @@ private fun EnhancedGoalCard(
                 shape = RoundedCornerShape(20.dp),
                 spotColor = categoryColor.copy(alpha = 0.3f)
             )
-            .clickable(onClick = onEdit),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface

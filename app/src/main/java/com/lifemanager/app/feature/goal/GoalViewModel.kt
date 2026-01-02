@@ -112,6 +112,17 @@ class GoalViewModel @Inject constructor(
     private val _selectedTemplateCategory = MutableStateFlow<String?>(null)
     val selectedTemplateCategory: StateFlow<String?> = _selectedTemplateCategory.asStateFlow()
 
+    // 新创建的目标ID（用于导航到详情页）
+    private val _createdGoalId = MutableStateFlow<Long?>(null)
+    val createdGoalId: StateFlow<Long?> = _createdGoalId.asStateFlow()
+
+    /**
+     * 清除已创建目标ID（导航后调用）
+     */
+    fun clearCreatedGoalId() {
+        _createdGoalId.value = null
+    }
+
     init {
         loadGoals()
         loadAIAnalysis()
@@ -313,7 +324,8 @@ class GoalViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    useCase.createGoal(
+                    // 创建新目标并获取ID，用于导航到详情页
+                    val newGoalId = useCase.createGoal(
                         title = state.title.trim(),
                         description = state.description.trim(),
                         goalType = state.goalType,
@@ -324,6 +336,8 @@ class GoalViewModel @Inject constructor(
                         targetValue = state.targetValue,
                         unit = state.unit
                     )
+                    // 发射创建的目标ID，触发导航到详情页
+                    _createdGoalId.value = newGoalId
                 }
                 hideEditDialog()
             } catch (e: Exception) {

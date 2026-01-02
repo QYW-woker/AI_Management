@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material.Divider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -395,7 +396,12 @@ private fun CleanStatItem(
 }
 
 /**
- * 简洁计划项
+ * 简洁计划项 - 优化版
+ *
+ * 设计原则：
+ * - "存一笔"按钮最突出，一眼可见
+ * - 所有操作无需滑动、无需寻找
+ * - 信息展示清晰，分区明确
  */
 @Composable
 private fun CleanPlanItem(
@@ -419,229 +425,282 @@ private fun CleanPlanItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = rememberRipple(bounded = true, color = planColor),
-                onClick = onClick
-            ),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.md),
         color = CleanColors.surface,
         shadowElevation = Elevation.xs
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(Spacing.lg)
-        ) {
-            // 标题行
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(planColor.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Savings,
-                        contentDescription = null,
-                        tint = planColor,
-                        modifier = Modifier.size(IconSize.md)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(Spacing.md))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = plan.name,
-                        style = CleanTypography.body,
-                        color = CleanColors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "目标: ${formatDate(plan.targetDate)}",
-                        style = CleanTypography.caption,
-                        color = CleanColors.textTertiary
-                    )
-                }
-
-                if (plan.status != "ACTIVE") {
-                    StatusTag(
-                        text = getStatusDisplayText(plan.status),
-                        color = when (plan.status) {
-                            "COMPLETED" -> CleanColors.success
-                            "PAUSED" -> CleanColors.warning
-                            else -> CleanColors.textTertiary
-                        }
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = CleanColors.textTertiary,
-                    modifier = Modifier.size(IconSize.sm)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.lg))
-
-            // 进度
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column {
-                    Text(
-                        text = "¥${numberFormat.format(plan.currentAmount)}",
-                        style = CleanTypography.amountMedium,
-                        color = planColor
-                    )
-                    Text(
-                        text = "/ ¥${numberFormat.format(plan.targetAmount)}",
-                        style = CleanTypography.caption,
-                        color = CleanColors.textTertiary
-                    )
-                }
-
-                Text(
-                    text = String.format("%.1f%%", planWithDetails.progress * 100),
-                    style = CleanTypography.secondary,
-                    color = planColor
-                )
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.sm))
-
-            LinearProgressIndicator(
-                progress = planWithDetails.progress,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // ============ 第一区：信息区（可点击进入详情） ============
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = planColor,
-                trackColor = planColor.copy(alpha = 0.12f)
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.sm))
-
-            // 里程碑和剩余天数
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = rememberRipple(bounded = true, color = planColor),
+                        onClick = onClick
+                    )
+                    .padding(Spacing.lg)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // 标题行
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(planColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Savings,
+                            contentDescription = null,
+                            tint = planColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(Spacing.md))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = plan.name,
+                                style = CleanTypography.body,
+                                color = CleanColors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (plan.status != "ACTIVE") {
+                                Spacer(modifier = Modifier.width(Spacing.sm))
+                                StatusTag(
+                                    text = getStatusDisplayText(plan.status),
+                                    color = when (plan.status) {
+                                        "COMPLETED" -> CleanColors.success
+                                        "PAUSED" -> CleanColors.warning
+                                        else -> CleanColors.textTertiary
+                                    }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "剩余${planWithDetails.daysRemaining}天",
+                                style = CleanTypography.caption,
+                                color = CleanColors.textTertiary
+                            )
+                            if (!planWithDetails.isOnTrack && plan.status == "ACTIVE") {
+                                Spacer(modifier = Modifier.width(Spacing.sm))
+                                Icon(
+                                    imageVector = Icons.Outlined.Warning,
+                                    contentDescription = "进度落后",
+                                    tint = CleanColors.warning,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = "进度落后",
+                                    style = CleanTypography.caption,
+                                    color = CleanColors.warning
+                                )
+                            }
+                        }
+                    }
+
                     Icon(
-                        imageVector = Icons.Outlined.Flag,
-                        contentDescription = null,
-                        tint = planColor,
-                        modifier = Modifier.size(14.dp)
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "查看详情",
+                        tint = CleanColors.textTertiary,
+                        modifier = Modifier.size(IconSize.sm)
                     )
-                    Spacer(modifier = Modifier.width(Spacing.xs))
-                    Text(
-                        text = planWithDetails.currentMilestone.label,
-                        style = CleanTypography.caption,
-                        color = planColor
-                    )
-                    planWithDetails.nextMilestone?.let { next ->
+                }
+
+                Spacer(modifier = Modifier.height(Spacing.md))
+
+                // 金额和进度显示
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column {
                         Text(
-                            text = " → ${next.label}",
+                            text = "¥${numberFormat.format(plan.currentAmount)}",
+                            style = CleanTypography.amountMedium,
+                            color = planColor
+                        )
+                        Text(
+                            text = "目标 ¥${numberFormat.format(plan.targetAmount)}",
+                            style = CleanTypography.caption,
+                            color = CleanColors.textTertiary
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = String.format("%.0f%%", planWithDetails.progress * 100),
+                            style = CleanTypography.amountSmall,
+                            color = planColor
+                        )
+                        Text(
+                            text = planWithDetails.currentMilestone.label,
                             style = CleanTypography.caption,
                             color = CleanColors.textTertiary
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!planWithDetails.isOnTrack && plan.status == "ACTIVE") {
-                        Icon(
-                            imageVector = Icons.Outlined.Warning,
-                            contentDescription = "进度落后",
-                            tint = CleanColors.warning,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(Spacing.xs))
-                    }
-                    Text(
-                        text = "剩余${planWithDetails.daysRemaining}天",
-                        style = CleanTypography.caption,
-                        color = CleanColors.textTertiary
-                    )
-                }
+                Spacer(modifier = Modifier.height(Spacing.sm))
+
+                // 进度条
+                LinearProgressIndicator(
+                    progress = planWithDetails.progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = planColor,
+                    trackColor = planColor.copy(alpha = 0.12f)
+                )
             }
 
-            Spacer(modifier = Modifier.height(Spacing.md))
+            // ============ 第二区：操作区（始终可见，无需滚动） ============
+            if (plan.status == "ACTIVE") {
+                Divider(
+                    color = CleanColors.divider,
+                    thickness = 1.dp
+                )
 
-            // 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (plan.status == "ACTIVE") {
-                    // 存款按钮
-                    CleanSecondaryButton(
-                        text = "存款",
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // ★★★ 核心操作：存一笔（最突出） ★★★
+                    Button(
                         onClick = onDeposit,
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.Add
-                    )
+                        shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = planColor,
+                            contentColor = Color.White
+                        ),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Text(
+                            text = "存一笔",
+                            style = CleanTypography.button
+                        )
+                    }
 
-                    // 取款按钮
-                    if (plan.currentAmount > 0) {
-                        OutlinedButton(
-                            onClick = onWithdraw,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(Radius.sm),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = CleanColors.error
-                            ),
-                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                    // 查看详情按钮
+                    OutlinedButton(
+                        onClick = onClick,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = CleanColors.textSecondary
+                        ),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Text(
+                            text = "详情",
+                            style = CleanTypography.button
+                        )
+                    }
+
+                    // 更多操作（取款、历史、删除）
+                    var showMoreMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Remove,
-                                contentDescription = null,
-                                modifier = Modifier.size(IconSize.xs)
+                                imageVector = Icons.Outlined.MoreVert,
+                                contentDescription = "更多",
+                                tint = CleanColors.textSecondary
                             )
-                            Spacer(modifier = Modifier.width(Spacing.xs))
-                            Text("取款", style = CleanTypography.button)
+                        }
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false }
+                        ) {
+                            if (plan.currentAmount > 0) {
+                                DropdownMenuItem(
+                                    text = { Text("取款") },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onWithdraw()
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Remove, contentDescription = null)
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("历史记录") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onShowHistory()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.History, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("删除", color = CleanColors.error) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onDelete()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Outlined.Delete,
+                                        contentDescription = null,
+                                        tint = CleanColors.error
+                                    )
+                                }
+                            )
                         }
                     }
                 }
-
-                // 记录按钮
-                IconButton(
-                    onClick = onShowHistory,
-                    modifier = Modifier.size(36.dp)
+            } else {
+                // 非活跃状态：只显示查看详情
+                Divider(color = CleanColors.divider, thickness = 1.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(Spacing.md),
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.History,
-                        contentDescription = "记录",
-                        tint = CleanColors.textSecondary,
-                        modifier = Modifier.size(IconSize.sm)
-                    )
-                }
-
-                // 删除按钮
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "删除",
-                        tint = CleanColors.error.copy(alpha = 0.7f),
-                        modifier = Modifier.size(IconSize.sm)
-                    )
+                    TextButton(onClick = onClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Text("查看详情")
+                    }
                 }
             }
         }
