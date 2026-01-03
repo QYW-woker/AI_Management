@@ -82,7 +82,7 @@ import com.lifemanager.app.core.database.entity.*
         BookShelfMappingEntity::class,
         ReadingGoalEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
