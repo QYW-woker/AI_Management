@@ -11,7 +11,8 @@ plugins {
 
 android {
     namespace = "com.lifemanager.app"
-    compileSdk = 34
+    // 降级到 SDK 33 以避免 jlink.exe 兼容性问题
+    compileSdk = 33
 
     defaultConfig {
         applicationId = "com.lifemanager.app"
@@ -49,14 +50,14 @@ android {
     }
 
     compileOptions {
-        // 启用Java 8 Time API desugaring，确保在所有Android版本上兼容
-        isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        // 暂时禁用 Core Library Desugaring 以解决 jlink 兼容性问题
+        isCoreLibraryDesugaringEnabled = false
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "11"
     }
 
     buildFeatures {
@@ -77,7 +78,8 @@ android {
 
 dependencies {
     // ==================== Core Library Desugaring ====================
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // 注释掉以避免 jlink.exe 兼容性问题
+    // coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // ==================== Compose BOM ====================
     // 使用与 Kotlin 1.9.20 和 Compose Compiler 1.5.5 兼容的 BOM 版本
