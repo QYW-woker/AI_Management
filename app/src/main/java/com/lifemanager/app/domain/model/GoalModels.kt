@@ -74,12 +74,16 @@ data class GoalWithChildren(
 }
 
 /**
- * 子目标编辑状态
+ * 子目标编辑状态（用于新建多级目标时的临时子目标）
  */
 data class SubGoalEditState(
+    val tempId: Long = System.currentTimeMillis(), // 临时ID，保存后会被替换
     val parentId: Long = 0,
     val title: String = "",
     val description: String = "",
+    val targetValue: Double? = null,
+    val unit: String = "",
+    val progressType: String = "PERCENTAGE",
     val isEditing: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null
@@ -238,6 +242,57 @@ data class GoalReviewData(
     val topAchievements: List<GoalEntity>, // 完成的重要目标
     val insights: String // AI生成的洞察
 )
+
+/**
+ * 目标树节点（用于展示多级目标）
+ */
+data class GoalTreeNode(
+    val goal: GoalEntity,
+    val level: Int = 0,
+    val children: List<GoalTreeNode> = emptyList(),
+    var isExpanded: Boolean = false,
+    val childCount: Int = 0,
+    val progress: Float = 0f
+)
+
+/**
+ * 目标类型（单级/多级）
+ */
+enum class GoalStructureType {
+    SINGLE,     // 单级目标
+    MULTI_LEVEL // 多级目标（带子目标）
+}
+
+/**
+ * 操作结果状态（用于UI反馈）
+ */
+sealed class OperationResult {
+    object Idle : OperationResult()
+    object Loading : OperationResult()
+    data class Success(val message: String) : OperationResult()
+    data class Error(val message: String) : OperationResult()
+}
+
+/**
+ * 目标详情状态（用于详情页）
+ */
+data class GoalDetailState(
+    val goal: GoalEntity? = null,
+    val isLoading: Boolean = false,
+    val progress: Float = 0f,
+    val remainingDays: Int? = null,
+    val operationResult: OperationResult = OperationResult.Idle
+)
+
+/**
+ * AI分析状态
+ */
+sealed class AIAnalysisState {
+    object Idle : AIAnalysisState()
+    object Loading : AIAnalysisState()
+    data class Success(val analysis: String) : AIAnalysisState()
+    data class Error(val message: String) : AIAnalysisState()
+}
 
 /**
  * 目标类型选项

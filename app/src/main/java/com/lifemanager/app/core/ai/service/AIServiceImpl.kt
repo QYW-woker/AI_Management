@@ -514,6 +514,88 @@ $dataStr
         }
     }
 
+    override suspend fun analyzeGoal(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        progress: Float,
+        remainingDays: Int?
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val config = configRepository.getConfig()
+            if (!config.isConfigured) {
+                return@withContext Result.failure(Exception("API Key未配置"))
+            }
+
+            val progressPercent = (progress * 100).toInt()
+            val timeStatus = when {
+                remainingDays == null -> "无限期目标"
+                remainingDays < 0 -> "已逾期${-remainingDays}天"
+                remainingDays == 0 -> "今天截止"
+                remainingDays <= 7 -> "还剩${remainingDays}天，时间紧迫"
+                remainingDays <= 30 -> "还剩${remainingDays}天"
+                else -> "还剩${remainingDays}天，时间充裕"
+            }
+
+            val categoryName = when (category) {
+                "CAREER" -> "事业"
+                "FINANCE" -> "财务"
+                "HEALTH" -> "健康"
+                "LEARNING" -> "学习"
+                "RELATIONSHIP" -> "人际关系"
+                "LIFESTYLE" -> "生活方式"
+                "HOBBY" -> "兴趣爱好"
+                else -> category
+            }
+
+            val goalTypeName = when (goalType) {
+                "YEARLY" -> "年度目标"
+                "QUARTERLY" -> "季度目标"
+                "MONTHLY" -> "月度目标"
+                "LONG_TERM" -> "长期目标"
+                else -> goalType
+            }
+
+            val prompt = """
+作为个人目标达成顾问，请分析以下目标并给出具体可行的建议（150字以内）：
+
+目标名称：$title
+目标描述：${description.ifBlank { "无" }}
+分类：$categoryName
+类型：$goalTypeName
+当前进度：$progressPercent%
+时间状态：$timeStatus
+
+请从以下几个方面给出建议：
+1. 当前进度是否符合预期
+2. 需要调整的地方
+3. 具体的下一步行动建议
+
+保持建议简洁实用，直接给出可执行的建议，不要使用模板化语言。
+""".trimIndent()
+
+            val request = ChatRequest(
+                model = config.model,
+                messages = listOf(ChatMessage("user", prompt)),
+                temperature = 0.6,
+                maxTokens = 300
+            )
+
+            val response = api.chatCompletion(
+                authorization = "Bearer ${config.apiKey}",
+                request = request
+            )
+
+            val content = response.choices?.firstOrNull()?.message?.content
+                ?: return@withContext Result.failure(Exception("AI响应为空"))
+
+            Result.success(content)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * 解析JSON为CommandIntent
      */

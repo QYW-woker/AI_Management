@@ -2,25 +2,25 @@ package com.lifemanager.app.feature.goal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lifemanager.app.core.ai.service.AIDataAnalysisService
-import com.lifemanager.app.core.database.entity.AIAnalysisEntity
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
+import com.lifemanager.app.domain.model.AIAnalysisState
+import com.lifemanager.app.domain.model.GoalDetailState
 import com.lifemanager.app.domain.model.GoalEditState
-import com.lifemanager.app.domain.model.GoalInsights
 import com.lifemanager.app.domain.model.GoalStatistics
-import com.lifemanager.app.domain.model.GoalTemplate
+import com.lifemanager.app.domain.model.GoalTreeNode
 import com.lifemanager.app.domain.model.GoalUiState
-import com.lifemanager.app.domain.model.GoalWithChildren
+import com.lifemanager.app.domain.model.OperationResult
 import com.lifemanager.app.domain.model.SubGoalEditState
-import com.lifemanager.app.domain.model.goalTemplates
+import com.lifemanager.app.domain.model.categoryToTypeMapping
+import com.lifemanager.app.core.ai.service.AIService
 import com.lifemanager.app.domain.usecase.GoalUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -30,7 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class GoalViewModel @Inject constructor(
     private val useCase: GoalUseCase,
-    private val aiAnalysisService: AIDataAnalysisService
+    private val aiService: AIService
 ) : ViewModel() {
 
     // UI状态
@@ -40,6 +40,18 @@ class GoalViewModel @Inject constructor(
     // 目标列表
     private val _goals = MutableStateFlow<List<GoalEntity>>(emptyList())
     val goals: StateFlow<List<GoalEntity>> = _goals.asStateFlow()
+
+    // 目标树列表（用于展示多级目标）
+    private val _goalTree = MutableStateFlow<List<GoalTreeNode>>(emptyList())
+    val goalTree: StateFlow<List<GoalTreeNode>> = _goalTree.asStateFlow()
+
+    // 展开的目标ID集合
+    private val _expandedGoalIds = MutableStateFlow<Set<Long>>(emptySet())
+    val expandedGoalIds: StateFlow<Set<Long>> = _expandedGoalIds.asStateFlow()
+
+    // 扁平化的目标列表（根据展开状态）
+    private val _flattenedGoals = MutableStateFlow<List<GoalTreeNode>>(emptyList())
+    val flattenedGoals: StateFlow<List<GoalTreeNode>> = _flattenedGoals.asStateFlow()
 
     // 统计数据
     private val _statistics = MutableStateFlow(GoalStatistics())
@@ -66,67 +78,23 @@ class GoalViewModel @Inject constructor(
     private var goalToDelete: Long? = null
     private var goalToUpdateProgress: GoalEntity? = null
 
+    // 操作结果状态（用于UI反馈）
+    private val _operationResult = MutableStateFlow<OperationResult>(OperationResult.Idle)
+    val operationResult: StateFlow<OperationResult> = _operationResult.asStateFlow()
+
+    // 目标详情状态（用于详情页响应式更新）
+    private val _goalDetailState = MutableStateFlow(GoalDetailState())
+    val goalDetailState: StateFlow<GoalDetailState> = _goalDetailState.asStateFlow()
+
     // AI分析状态
-    private val _goalAnalysis = MutableStateFlow<AIAnalysisEntity?>(null)
-    val goalAnalysis: StateFlow<AIAnalysisEntity?> = _goalAnalysis.asStateFlow()
+    private val _aiAnalysisState = MutableStateFlow<AIAnalysisState>(AIAnalysisState.Idle)
+    val aiAnalysisState: StateFlow<AIAnalysisState> = _aiAnalysisState.asStateFlow()
 
-    private val _isAnalyzing = MutableStateFlow(false)
-    val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
-
-    // 子目标相关状态
-    private val _subGoalEditState = MutableStateFlow(SubGoalEditState())
-    val subGoalEditState: StateFlow<SubGoalEditState> = _subGoalEditState.asStateFlow()
-
-    private val _showSubGoalDialog = MutableStateFlow(false)
-    val showSubGoalDialog: StateFlow<Boolean> = _showSubGoalDialog.asStateFlow()
-
-    // 子目标数量缓存（goalId -> childCount）
-    private val _childCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
-    val childCounts: StateFlow<Map<Long, Int>> = _childCounts.asStateFlow()
-
-    // 展开的目标ID列表（用于层级显示）
-    private val _expandedGoalIds = MutableStateFlow<Set<Long>>(emptySet())
-    val expandedGoalIds: StateFlow<Set<Long>> = _expandedGoalIds.asStateFlow()
-
-    // 目标洞察
-    private val _goalInsights = MutableStateFlow<GoalInsights?>(null)
-    val goalInsights: StateFlow<GoalInsights?> = _goalInsights.asStateFlow()
-
-    // 推荐模板
-    private val _recommendedTemplates = MutableStateFlow<List<GoalTemplate>>(emptyList())
-    val recommendedTemplates: StateFlow<List<GoalTemplate>> = _recommendedTemplates.asStateFlow()
-
-    // 即将到期目标
-    private val _upcomingDeadlines = MutableStateFlow<List<GoalEntity>>(emptyList())
-    val upcomingDeadlines: StateFlow<List<GoalEntity>> = _upcomingDeadlines.asStateFlow()
-
-    // 已逾期目标
-    private val _overdueGoals = MutableStateFlow<List<GoalEntity>>(emptyList())
-    val overdueGoals: StateFlow<List<GoalEntity>> = _overdueGoals.asStateFlow()
-
-    // 模板选择对话框
-    private val _showTemplateDialog = MutableStateFlow(false)
-    val showTemplateDialog: StateFlow<Boolean> = _showTemplateDialog.asStateFlow()
-
-    // 当前选择的模板分类
-    private val _selectedTemplateCategory = MutableStateFlow<String?>(null)
-    val selectedTemplateCategory: StateFlow<String?> = _selectedTemplateCategory.asStateFlow()
-
-    // 新创建的目标ID（用于导航到详情页）
-    private val _createdGoalId = MutableStateFlow<Long?>(null)
-    val createdGoalId: StateFlow<Long?> = _createdGoalId.asStateFlow()
-
-    /**
-     * 清除已创建目标ID（导航后调用）
-     */
-    fun clearCreatedGoalId() {
-        _createdGoalId.value = null
-    }
+    // 当前查看的目标ID
+    private var currentDetailGoalId: Long? = null
 
     init {
         loadGoals()
-        loadAIAnalysis()
-        loadEnhancedData()
     }
 
     /**
@@ -150,27 +118,10 @@ class GoalViewModel @Inject constructor(
                         _goals.value = filtered
                         _uiState.value = GoalUiState.Success(filtered)
                         loadStatistics()
-                        loadChildCounts(allGoals)
                     }
             } catch (e: Exception) {
                 _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
             }
-        }
-    }
-
-    /**
-     * 加载所有目标的子目标数量
-     */
-    private fun loadChildCounts(goals: List<GoalEntity>) {
-        viewModelScope.launch {
-            val counts = mutableMapOf<Long, Int>()
-            goals.forEach { goal ->
-                val count = useCase.getChildCount(goal.id)
-                if (count > 0) {
-                    counts[goal.id] = count
-                }
-            }
-            _childCounts.value = counts
         }
     }
 
@@ -264,20 +215,19 @@ class GoalViewModel @Inject constructor(
     }
 
     fun updateEditCategory(category: String) {
-        val currentState = _editState.value
-        // 只在用户尚未手动修改目标类型时自动关联
-        // 或者这是新建目标（非编辑模式）
-        val recommendedType = com.lifemanager.app.domain.model.getRecommendedGoalType(category)
-        val recommendedProgressType = com.lifemanager.app.domain.model.getRecommendedProgressType(category)
-        val recommendedUnit = com.lifemanager.app.domain.model.getRecommendedUnit(category)
-
-        _editState.value = currentState.copy(
+        // 根据分类自动推荐目标类型
+        val recommendedType = categoryToTypeMapping[category] ?: _editState.value.goalType
+        _editState.value = _editState.value.copy(
             category = category,
-            // 如果不是编辑模式，自动设置推荐的类型
-            goalType = if (!currentState.isEditing) recommendedType else currentState.goalType,
-            progressType = if (!currentState.isEditing) recommendedProgressType else currentState.progressType,
-            unit = if (!currentState.isEditing && recommendedUnit.isNotEmpty()) recommendedUnit else currentState.unit
+            goalType = recommendedType
         )
+    }
+
+    /**
+     * 获取分类对应的推荐目标类型
+     */
+    fun getRecommendedGoalType(category: String): String {
+        return categoryToTypeMapping[category] ?: "YEARLY"
     }
 
     fun updateEditStartDate(date: Int) {
@@ -337,8 +287,7 @@ class GoalViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    // 创建新目标并获取ID，用于导航到详情页
-                    val newGoalId = useCase.createGoal(
+                    useCase.createGoal(
                         title = state.title.trim(),
                         description = state.description.trim(),
                         goalType = state.goalType,
@@ -349,8 +298,6 @@ class GoalViewModel @Inject constructor(
                         targetValue = state.targetValue,
                         unit = state.unit
                     )
-                    // 发射创建的目标ID，触发导航到详情页
-                    _createdGoalId.value = newGoalId
                 }
                 hideEditDialog()
             } catch (e: Exception) {
@@ -384,59 +331,43 @@ class GoalViewModel @Inject constructor(
     fun updateProgress(value: Double) {
         val goal = goalToUpdateProgress ?: return
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
                 useCase.updateProgress(goal.id, value)
+                _operationResult.value = OperationResult.Success("进度已更新")
                 hideProgressDialog()
+                // 刷新详情页数据
+                refreshGoalDetail(goal.id)
+                // 延迟后重置状态
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
             } catch (e: Exception) {
-                // 处理错误
+                _operationResult.value = OperationResult.Error(e.message ?: "更新进度失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
             }
         }
     }
 
     /**
-     * 完成目标（检查子目标是否全部完成）
+     * 完成目标
      */
     fun completeGoal(goalId: Long) {
         viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
             try {
-                // 检查是否有未完成的子目标
-                val childCount = useCase.getChildCount(goalId)
-                if (childCount > 0) {
-                    val completedChildCount = useCase.getCompletedChildCount(goalId)
-                    if (completedChildCount < childCount) {
-                        _uiState.value = GoalUiState.Error("请先完成所有子目标（${completedChildCount}/${childCount}）")
-                        return@launch
-                    }
-                }
                 useCase.completeGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已完成！恭喜！")
+                // 刷新详情页和列表
+                refreshGoalDetail(goalId)
+                loadGoals()
+                // 延迟后重置状态
+                delay(2500)
+                _operationResult.value = OperationResult.Idle
             } catch (e: Exception) {
-                _uiState.value = GoalUiState.Error(e.message ?: "操作失败")
-            }
-        }
-    }
-
-    /**
-     * 放弃目标
-     */
-    fun abandonGoal(goalId: Long) {
-        viewModelScope.launch {
-            try {
-                useCase.abandonGoal(goalId)
-            } catch (e: Exception) {
-                _uiState.value = GoalUiState.Error(e.message ?: "操作失败")
-            }
-        }
-    }
-
-    /**
-     * 重新激活目标
-     */
-    fun reactivateGoal(goalId: Long) {
-        viewModelScope.launch {
-            try {
-                useCase.reactivateGoal(goalId)
-            } catch (e: Exception) {
-                _uiState.value = GoalUiState.Error(e.message ?: "操作失败")
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
             }
         }
     }
@@ -499,273 +430,424 @@ class GoalViewModel @Inject constructor(
     fun getProgressGoal(): GoalEntity? = goalToUpdateProgress
 
     /**
-     * 加载AI分析结果
+     * 根据ID获取目标（用于详情页）
      */
-    private fun loadAIAnalysis() {
-        viewModelScope.launch {
-            aiAnalysisService.getGoalAnalysis().collectLatest { analyses ->
-                _goalAnalysis.value = analyses.firstOrNull()
-            }
-        }
+    fun getGoalById(goalId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getGoalById(goalId))
     }
 
     /**
-     * 刷新AI分析
+     * 加载目标详情（响应式）
      */
-    fun refreshAIAnalysis() {
-        if (_isAnalyzing.value) return
+    fun loadGoalDetail(goalId: Long) {
+        currentDetailGoalId = goalId
+        refreshGoalDetail(goalId)
+    }
 
+    /**
+     * 刷新目标详情状态
+     */
+    private fun refreshGoalDetail(goalId: Long) {
         viewModelScope.launch {
-            _isAnalyzing.value = true
+            _goalDetailState.value = _goalDetailState.value.copy(isLoading = true)
             try {
-                val result = aiAnalysisService.analyzeGoalData(forceRefresh = true)
-                result.onSuccess { analysis ->
-                    _goalAnalysis.value = analysis
+                val goal = useCase.getGoalById(goalId)
+                if (goal != null) {
+                    val progress = useCase.calculateProgress(goal)
+                    val remainingDays = useCase.getRemainingDays(goal.endDate)
+                    _goalDetailState.value = GoalDetailState(
+                        goal = goal,
+                        isLoading = false,
+                        progress = progress,
+                        remainingDays = remainingDays,
+                        operationResult = _operationResult.value
+                    )
+                } else {
+                    _goalDetailState.value = GoalDetailState(
+                        isLoading = false,
+                        operationResult = OperationResult.Error("目标不存在")
+                    )
                 }
-            } finally {
-                _isAnalyzing.value = false
-            }
-        }
-    }
-
-    // ============ 多级目标相关方法 ============
-
-    /**
-     * 显示添加子目标对话框
-     */
-    fun showAddSubGoalDialog(parentId: Long) {
-        _subGoalEditState.value = SubGoalEditState(parentId = parentId)
-        _showSubGoalDialog.value = true
-    }
-
-    /**
-     * 隐藏子目标对话框
-     */
-    fun hideSubGoalDialog() {
-        _showSubGoalDialog.value = false
-        _subGoalEditState.value = SubGoalEditState()
-    }
-
-    /**
-     * 更新子目标标题
-     */
-    fun updateSubGoalTitle(title: String) {
-        _subGoalEditState.value = _subGoalEditState.value.copy(title = title, error = null)
-    }
-
-    /**
-     * 更新子目标描述
-     */
-    fun updateSubGoalDescription(description: String) {
-        _subGoalEditState.value = _subGoalEditState.value.copy(description = description)
-    }
-
-    /**
-     * 保存子目标
-     */
-    fun saveSubGoal() {
-        val state = _subGoalEditState.value
-
-        // 验证
-        if (state.title.isBlank()) {
-            _subGoalEditState.value = state.copy(error = "请输入子目标标题")
-            return
-        }
-
-        viewModelScope.launch {
-            _subGoalEditState.value = state.copy(isSaving = true, error = null)
-            try {
-                useCase.createSubGoal(
-                    parentId = state.parentId,
-                    title = state.title.trim(),
-                    description = state.description.trim()
-                )
-                hideSubGoalDialog()
             } catch (e: Exception) {
-                _subGoalEditState.value = _subGoalEditState.value.copy(
-                    isSaving = false,
-                    error = e.message ?: "保存失败"
+                _goalDetailState.value = GoalDetailState(
+                    isLoading = false,
+                    operationResult = OperationResult.Error(e.message ?: "加载失败")
                 )
             }
         }
+    }
+
+    /**
+     * 清除操作结果状态
+     */
+    fun clearOperationResult() {
+        _operationResult.value = OperationResult.Idle
+    }
+
+    /**
+     * 删除目标
+     */
+    fun deleteGoal(goalId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteGoal(goalId)
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 创建新目标（用于独立页面）
+     */
+    fun createGoal(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?
+    ) {
+        viewModelScope.launch {
+            try {
+                val today = useCase.getToday()
+                useCase.createGoal(
+                    title = title,
+                    description = description,
+                    goalType = goalType,
+                    category = category,
+                    startDate = today,
+                    endDate = deadline,
+                    progressType = progressType,
+                    targetValue = targetValue,
+                    unit = unit
+                )
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "创建失败")
+            }
+        }
+    }
+
+    /**
+     * 更新目标（用于独立页面）
+     */
+    fun updateGoal(
+        id: Long,
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?
+    ) {
+        viewModelScope.launch {
+            try {
+                val existing = useCase.getGoalById(id)
+                if (existing != null) {
+                    useCase.updateGoal(
+                        existing.copy(
+                            title = title,
+                            description = description,
+                            goalType = goalType,
+                            category = category,
+                            endDate = deadline,
+                            progressType = progressType,
+                            targetValue = targetValue,
+                            unit = unit
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "更新失败")
+            }
+        }
+    }
+
+    // ==================== 多级目标相关方法 ====================
+
+    /**
+     * 加载目标树
+     */
+    fun loadGoalTree() {
+        viewModelScope.launch {
+            try {
+                useCase.getAllTopLevelGoals()
+                    .catch { e ->
+                        _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
+                    }
+                    .collect { topLevelGoals ->
+                        // 根据筛选条件过滤
+                        val filtered = when (_currentFilter.value) {
+                            "ACTIVE" -> topLevelGoals.filter { it.status == GoalStatus.ACTIVE }
+                            "COMPLETED" -> topLevelGoals.filter { it.status == GoalStatus.COMPLETED }
+                            "ABANDONED" -> topLevelGoals.filter { it.status == GoalStatus.ABANDONED }
+                            else -> topLevelGoals
+                        }
+
+                        // 构建目标树
+                        val tree = useCase.buildGoalTree(filtered)
+                        _goalTree.value = tree
+
+                        // 更新扁平化列表
+                        updateFlattenedGoals()
+
+                        _uiState.value = GoalUiState.Success(filtered)
+                    }
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "加载失败")
+            }
+        }
+    }
+
+    /**
+     * 更新扁平化的目标列表
+     */
+    private fun updateFlattenedGoals() {
+        val tree = _goalTree.value
+        val expandedIds = _expandedGoalIds.value
+        _flattenedGoals.value = useCase.flattenTree(tree, expandedIds)
     }
 
     /**
      * 切换目标展开/收起状态
      */
-    fun toggleGoalExpanded(goalId: Long) {
-        val current = _expandedGoalIds.value
-        _expandedGoalIds.value = if (goalId in current) {
-            current - goalId
+    fun toggleExpand(goalId: Long) {
+        val currentExpanded = _expandedGoalIds.value.toMutableSet()
+        if (currentExpanded.contains(goalId)) {
+            currentExpanded.remove(goalId)
         } else {
-            current + goalId
+            currentExpanded.add(goalId)
         }
+        _expandedGoalIds.value = currentExpanded
+        updateFlattenedGoals()
     }
 
     /**
-     * 检查目标是否展开
+     * 展开所有目标
      */
-    fun isGoalExpanded(goalId: Long): Boolean {
-        return goalId in _expandedGoalIds.value
+    fun expandAll() {
+        val allIds = _goalTree.value.flatMap { collectAllIds(it) }.toSet()
+        _expandedGoalIds.value = allIds
+        updateFlattenedGoals()
     }
 
     /**
-     * 获取目标的子目标数量
+     * 收起所有目标
      */
-    fun getChildCount(goalId: Long): Int {
-        return _childCounts.value[goalId] ?: 0
+    fun collapseAll() {
+        _expandedGoalIds.value = emptySet()
+        updateFlattenedGoals()
     }
 
     /**
-     * 检查目标是否有子目标
+     * 收集所有目标ID（包括子目标）
      */
-    fun hasChildren(goalId: Long): Boolean {
-        return getChildCount(goalId) > 0
+    private fun collectAllIds(node: GoalTreeNode): List<Long> {
+        val result = mutableListOf(node.goal.id)
+        node.children.forEach { child ->
+            result.addAll(collectAllIds(child))
+        }
+        return result
     }
 
     /**
-     * 获取目标的子目标列表
+     * 获取子目标列表
      */
-    fun getChildGoals(parentId: Long): List<GoalEntity> {
-        return _goals.value.filter { it.parentId == parentId }
+    fun getChildGoals(parentId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getChildGoalsSync(parentId))
     }
 
     /**
-     * 获取顶级目标列表（用于层级显示）
+     * 添加子目标
      */
-    fun getTopLevelGoals(): List<GoalEntity> {
-        return _goals.value.filter { it.parentId == null }
-    }
-
-    /**
-     * 获取目标的层级缩进（用于UI显示）
-     */
-    fun getGoalIndentLevel(goal: GoalEntity): Int {
-        return goal.level
-    }
-
-    /**
-     * 获取目标及其子目标的详情
-     */
-    suspend fun getGoalWithChildren(goalId: Long): GoalWithChildren? {
-        return useCase.getGoalWithChildren(goalId)
-    }
-
-    // ============ 扩展功能 ============
-
-    /**
-     * 加载增强数据
-     */
-    private fun loadEnhancedData() {
+    fun addSubGoal(
+        parentId: Long,
+        title: String,
+        description: String = "",
+        progressType: String = "PERCENTAGE",
+        targetValue: Double? = null,
+        unit: String = ""
+    ) {
         viewModelScope.launch {
             try {
-                // 加载目标洞察
-                _goalInsights.value = useCase.getGoalInsights()
-
-                // 加载推荐模板
-                _recommendedTemplates.value = useCase.getRecommendedTemplates()
-
-                // 加载即将到期目标
-                _upcomingDeadlines.value = useCase.getUpcomingDeadlines(7)
-
-                // 加载已逾期目标
-                _overdueGoals.value = useCase.getOverdueGoals()
+                useCase.addSubGoal(parentId, title, description, progressType, targetValue, unit)
+                loadGoalTree() // 刷新树
             } catch (e: Exception) {
-                // 增强数据加载失败不影响主功能
+                _uiState.value = GoalUiState.Error(e.message ?: "添加子目标失败")
             }
         }
     }
 
     /**
-     * 刷新增强数据
+     * 创建带子目标的多级目标
      */
-    fun refreshEnhancedData() {
-        loadEnhancedData()
-    }
-
-    /**
-     * 显示模板选择对话框
-     */
-    fun showTemplateDialog() {
-        _showTemplateDialog.value = true
-        _selectedTemplateCategory.value = null
-    }
-
-    /**
-     * 隐藏模板选择对话框
-     */
-    fun hideTemplateDialog() {
-        _showTemplateDialog.value = false
-        _selectedTemplateCategory.value = null
-    }
-
-    /**
-     * 选择模板分类
-     */
-    fun selectTemplateCategory(category: String?) {
-        _selectedTemplateCategory.value = category
-    }
-
-    /**
-     * 获取分类下的模板
-     */
-    fun getTemplatesForCategory(category: String): List<GoalTemplate> {
-        return goalTemplates.filter { it.category == category }
-    }
-
-    /**
-     * 从模板创建目标
-     */
-    fun createFromTemplate(template: GoalTemplate, customTitle: String? = null) {
+    fun createGoalWithSubGoals(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        targetValue: Double?,
+        unit: String,
+        progressType: String,
+        deadline: Int?,
+        subGoals: List<SubGoalEditState>
+    ) {
         viewModelScope.launch {
             try {
-                useCase.createGoalFromTemplate(template, customTitle)
-                hideTemplateDialog()
-                loadEnhancedData()
+                val today = useCase.getToday()
+                useCase.createGoalWithSubGoals(
+                    title = title,
+                    description = description,
+                    goalType = goalType,
+                    category = category,
+                    startDate = today,
+                    endDate = deadline,
+                    progressType = progressType,
+                    targetValue = targetValue,
+                    unit = unit,
+                    subGoals = subGoals
+                )
+                loadGoalTree() // 刷新树
             } catch (e: Exception) {
-                // 处理错误
+                _uiState.value = GoalUiState.Error(e.message ?: "创建失败")
             }
         }
     }
 
     /**
-     * 计算目标健康度
+     * 删除目标（包括子目标）
      */
-    fun getGoalHealth(goal: GoalEntity): Int {
-        return useCase.calculateGoalHealth(goal)
+    fun deleteGoalWithChildren(goalId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteGoalWithChildren(goalId)
+                loadGoalTree() // 刷新树
+            } catch (e: Exception) {
+                _uiState.value = GoalUiState.Error(e.message ?: "删除失败")
+            }
+        }
     }
 
     /**
-     * 获取目标时间线
+     * 更新目标进度（带父目标自动更新）
      */
-    suspend fun getGoalTimeline(goalId: Long) = useCase.getGoalTimeline(goalId)
-
-    /**
-     * 获取所有模板
-     */
-    fun getAllTemplates(): List<GoalTemplate> = goalTemplates
-
-    /**
-     * 检查是否有逾期目标
-     */
-    fun hasOverdueGoals(): Boolean = _overdueGoals.value.isNotEmpty()
-
-    /**
-     * 检查是否有即将到期目标
-     */
-    fun hasUpcomingDeadlines(): Boolean = _upcomingDeadlines.value.isNotEmpty()
-
-    /**
-     * 获取目标完成率
-     */
-    fun getCompletionRate(): Float {
-        return _goalInsights.value?.completionRate ?: 0f
+    fun updateGoalProgress(goalId: Long, value: Double) {
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                useCase.updateProgress(goalId, value)
+                _operationResult.value = OperationResult.Success("进度已更新")
+                loadGoalTree() // 刷新树以更新父目标进度
+                refreshGoalDetail(goalId)
+                // 延迟后重置状态
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "更新进度失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
+            }
+        }
     }
 
     /**
-     * 获取活跃目标数
+     * 放弃目标
      */
-    fun getActiveGoalsCount(): Int {
-        return _goalInsights.value?.activeGoals ?: 0
+    fun abandonGoal(goalId: Long) {
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                useCase.abandonGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已放弃")
+                refreshGoalDetail(goalId)
+                loadGoals()
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
+            }
+        }
+    }
+
+    /**
+     * 恢复已放弃的目标
+     */
+    fun reactivateGoal(goalId: Long) {
+        viewModelScope.launch {
+            _operationResult.value = OperationResult.Loading
+            try {
+                useCase.reactivateGoal(goalId)
+                _operationResult.value = OperationResult.Success("目标已恢复")
+                refreshGoalDetail(goalId)
+                loadGoals()
+                delay(2000)
+                _operationResult.value = OperationResult.Idle
+            } catch (e: Exception) {
+                _operationResult.value = OperationResult.Error(e.message ?: "操作失败")
+                delay(3000)
+                _operationResult.value = OperationResult.Idle
+            }
+        }
+    }
+
+    // ==================== AI分析功能 ====================
+
+    /**
+     * 检查AI服务是否已配置
+     */
+    fun isAIConfigured(): Boolean {
+        return aiService.isConfigured()
+    }
+
+    /**
+     * 分析目标并给出建议
+     */
+    fun analyzeGoal(goalId: Long) {
+        viewModelScope.launch {
+            _aiAnalysisState.value = AIAnalysisState.Loading
+            try {
+                val goal = useCase.getGoalById(goalId)
+                if (goal == null) {
+                    _aiAnalysisState.value = AIAnalysisState.Error("目标不存在")
+                    return@launch
+                }
+
+                val progress = useCase.calculateProgress(goal)
+                val remainingDays = useCase.getRemainingDays(goal.endDate)
+
+                val result = aiService.analyzeGoal(
+                    title = goal.title,
+                    description = goal.description,
+                    category = goal.category,
+                    goalType = goal.goalType,
+                    progress = progress,
+                    remainingDays = remainingDays
+                )
+
+                result.fold(
+                    onSuccess = { analysis ->
+                        _aiAnalysisState.value = AIAnalysisState.Success(analysis)
+                    },
+                    onFailure = { error ->
+                        _aiAnalysisState.value = AIAnalysisState.Error(error.message ?: "分析失败")
+                    }
+                )
+            } catch (e: Exception) {
+                _aiAnalysisState.value = AIAnalysisState.Error(e.message ?: "分析失败")
+            }
+        }
+    }
+
+    /**
+     * 清除AI分析状态
+     */
+    fun clearAIAnalysis() {
+        _aiAnalysisState.value = AIAnalysisState.Idle
     }
 }

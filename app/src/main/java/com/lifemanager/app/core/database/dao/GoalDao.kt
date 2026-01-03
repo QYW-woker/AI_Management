@@ -165,7 +165,7 @@ interface GoalDao {
     fun getGoalsInDateRange(startDate: Int, endDate: Int): Flow<List<GoalEntity>>
 
     /**
-     * 获取顶级目标（parentId为null）
+     * 获取顶级目标（没有父目标的活跃目标）
      */
     @Query("""
         SELECT * FROM goals
@@ -175,6 +175,23 @@ interface GoalDao {
             endDate ASC
     """)
     fun getTopLevelGoals(): Flow<List<GoalEntity>>
+
+    /**
+     * 获取所有顶级目标（包含所有状态）
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE parentId IS NULL
+        ORDER BY
+            CASE status
+                WHEN 'ACTIVE' THEN 0
+                WHEN 'COMPLETED' THEN 1
+                WHEN 'ABANDONED' THEN 2
+                WHEN 'ARCHIVED' THEN 3
+            END,
+            updatedAt DESC
+    """)
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>>
 
     /**
      * 获取子目标
@@ -201,6 +218,12 @@ interface GoalDao {
      */
     @Query("SELECT COUNT(*) FROM goals WHERE parentId = :parentId")
     suspend fun countChildGoals(parentId: Long): Int
+
+    /**
+     * 统计活跃子目标数量
+     */
+    @Query("SELECT COUNT(*) FROM goals WHERE parentId = :parentId AND status = 'ACTIVE'")
+    suspend fun countActiveChildGoals(parentId: Long): Int
 
     /**
      * 统计已完成的子目标数量
@@ -233,4 +256,16 @@ interface GoalDao {
             updatedAt DESC
     """)
     suspend fun getAllGoalsSync(): List<GoalEntity>
+
+    /**
+     * 更新目标的多级标记
+     */
+    @Query("UPDATE goals SET isMultiLevel = :isMultiLevel, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean, updatedAt: Long = System.currentTimeMillis())
+
+    /**
+     * 批量删除子目标
+     */
+    @Query("DELETE FROM goals WHERE parentId = :parentId")
+    suspend fun deleteChildGoals(parentId: Long)
 }

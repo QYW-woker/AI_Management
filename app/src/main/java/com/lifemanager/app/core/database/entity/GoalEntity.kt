@@ -1,6 +1,8 @@
 package com.lifemanager.app.core.database.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -11,14 +13,31 @@ import androidx.room.PrimaryKey
  * 支持多级目标（父-子目标关系）
  * 可关联财务字段实现自动进度更新
  */
-@Entity(tableName = "goals")
+@Entity(
+    tableName = "goals",
+    foreignKeys = [
+        ForeignKey(
+            entity = GoalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["parentId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("parentId")]
+)
 data class GoalEntity(
     // 主键ID
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    // 父目标ID（用于多级目标，null表示顶级目标）
+    // 父目标ID，null表示顶级目标
     val parentId: Long? = null,
+
+    // 目标层级（0为顶级，1为一级子目标，以此类推）
+    val level: Int = 0,
+
+    // 是否为多级目标（有子目标的目标）
+    val isMultiLevel: Boolean = false,
 
     // 目标标题
     val title: String,
@@ -72,9 +91,6 @@ data class GoalEntity(
     // 关联的财务字段ID
     // 设置后可自动根据该字段的数据更新目标进度
     val linkedFieldId: Long? = null,
-
-    // 目标层级（0为顶级目标，1为一级子目标，以此类推）
-    val level: Int = 0,
 
     // 创建时间
     val createdAt: Long = System.currentTimeMillis(),

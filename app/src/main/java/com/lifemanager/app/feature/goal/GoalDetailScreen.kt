@@ -1,15 +1,13 @@
 package com.lifemanager.app.feature.goal
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,52 +15,51 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.GoalEntity
-import com.lifemanager.app.core.database.entity.GoalRecordEntity
-import com.lifemanager.app.core.database.entity.GoalRecordType
 import com.lifemanager.app.core.database.entity.GoalStatus
-import com.lifemanager.app.ui.component.PremiumTextField
+import com.lifemanager.app.domain.model.AIAnalysisState
+import com.lifemanager.app.domain.model.OperationResult
+import com.lifemanager.app.domain.model.getCategoryDisplayName
+import com.lifemanager.app.domain.model.getGoalTypeDisplayName
+import com.lifemanager.app.ui.theme.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /**
  * 目标详情页面
+ *
+ * 展示目标完整信息、进度和历史记录
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoalDetailScreen(
     goalId: Long,
     onNavigateBack: () -> Unit,
-    viewModel: GoalDetailViewModel = hiltViewModel()
+    onNavigateToEdit: (Long) -> Unit,
+    viewModel: GoalViewModel = hiltViewModel()
 ) {
-    val goal by viewModel.goal.collectAsState()
-    val records by viewModel.records.collectAsState()
-    val childGoals by viewModel.childGoals.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val goalDetailState by viewModel.goalDetailState.collectAsState()
     val operationResult by viewModel.operationResult.collectAsState()
-    val isCompleting by viewModel.isCompleting.collectAsState()
+    val aiAnalysisState by viewModel.aiAnalysisState.collectAsState()
+    val goal = goalDetailState.goal
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showProgressInput by remember { mutableStateOf(false) }
+    var progressValue by remember { mutableStateOf("") }
+    var showAIAnalysis by remember { mutableStateOf(false) }
 
-    // 对话框状态
-    var showAddRecordDialog by remember { mutableStateOf(false) }
-    var showAbandonDialog by remember { mutableStateOf(false) }
-    var showAddSubGoalDialog by remember { mutableStateOf(false) }
-    var showCompleteConfirmDialog by remember { mutableStateOf(false) }
-
-    // Snackbar 状态
     val snackbarHostState = remember { SnackbarHostState() }
+    val isAIConfigured = remember { viewModel.isAIConfigured() }
 
-    // 显示操作结果
+    // 观察操作结果并显示Snackbar
     LaunchedEffect(operationResult) {
         when (val result = operationResult) {
             is OperationResult.Success -> {
@@ -82,44 +79,139 @@ fun GoalDetailScreen(
     }
 
     LaunchedEffect(goalId) {
-        viewModel.loadGoal(goalId)
+        viewModel.loadGoalDetail(goalId)
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("目标详情") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
+            UnifiedTopAppBar(
+                title = "目标详情",
+                onNavigateBack = onNavigateBack,
                 actions = {
-                    goal?.let { g ->
-                        if (g.status == GoalStatus.ACTIVE) {
-                            IconButton(onClick = { showAbandonDialog = true }) {
-                                Icon(Icons.Default.Close, contentDescription = "放弃目标")
-                            }
+                    if (goal != null) {
+                        IconButton(onClick = { onNavigateToEdit(goalId) }) {
+                            Icon(Icons.Default.Edit, contentDescription = "编辑")
+                        }
+                        IconButton(onClick = { showDeleteDialog = true }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "删除",
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            goal?.let { g ->
-                if (g.status == GoalStatus.ACTIVE) {
-                    FloatingActionButton(
-                        onClick = { showAddRecordDialog = true },
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "添加记录")
-                    }
-                }
-            }
         }
     ) { paddingValues ->
-        if (isLoading) {
+        // 操作进行中显示loading指示
+        val isOperationLoading = operationResult is OperationResult.Loading
+
+        goal?.let { currentGoal ->
+            val progress = goalDetailState.progress
+            val remainingDays = goalDetailState.remainingDays
+            val categoryColor = getCategoryColor(currentGoal.category)
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(AppDimens.PageHorizontalPadding),
+                verticalArrangement = Arrangement.spacedBy(AppDimens.SpacingNormal)
+            ) {
+                // 进度环卡片
+                item {
+                    ProgressCard(
+                        goal = currentGoal,
+                        progress = progress,
+                        categoryColor = categoryColor
+                    )
+                }
+
+                // 快速更新进度或恢复已放弃目标
+                when (currentGoal.status) {
+                    GoalStatus.ACTIVE -> {
+                        item {
+                            QuickProgressUpdateCard(
+                                goal = currentGoal,
+                                showInput = showProgressInput,
+                                progressValue = progressValue,
+                                isLoading = isOperationLoading,
+                                onToggleInput = { showProgressInput = !showProgressInput },
+                                onValueChange = { progressValue = it },
+                                onConfirm = {
+                                    progressValue.toDoubleOrNull()?.let {
+                                        viewModel.updateGoalProgress(currentGoal.id, it)
+                                        progressValue = ""
+                                        showProgressInput = false
+                                    }
+                                },
+                                onComplete = {
+                                    viewModel.completeGoal(currentGoal.id)
+                                },
+                                onAbandon = {
+                                    viewModel.abandonGoal(currentGoal.id)
+                                }
+                            )
+                        }
+                    }
+                    GoalStatus.ABANDONED -> {
+                        item {
+                            ReactivateCard(
+                                isLoading = isOperationLoading,
+                                onReactivate = {
+                                    viewModel.reactivateGoal(currentGoal.id)
+                                }
+                            )
+                        }
+                    }
+                    else -> {}
+                }
+
+                // 目标信息卡片
+                item {
+                    GoalInfoCard(
+                        goal = currentGoal,
+                        remainingDays = remainingDays,
+                        categoryColor = categoryColor
+                    )
+                }
+
+                // AI分析卡片
+                if (isAIConfigured) {
+                    item {
+                        AIAnalysisCard(
+                            aiAnalysisState = aiAnalysisState,
+                            showAnalysis = showAIAnalysis,
+                            onToggleAnalysis = { showAIAnalysis = !showAIAnalysis },
+                            onAnalyze = {
+                                viewModel.analyzeGoal(goalId)
+                                showAIAnalysis = true
+                            },
+                            onClear = {
+                                viewModel.clearAIAnalysis()
+                                showAIAnalysis = false
+                            }
+                        )
+                    }
+                }
+
+                // 进度历史（时间线）
+                item {
+                    SectionTitle(
+                        title = "进度记录",
+                        centered = true,
+                        modifier = Modifier.padding(top = AppDimens.SpacingMedium)
+                    )
+                }
+
+                item {
+                    ProgressHistoryCard(goal = currentGoal)
+                }
+            }
+        } ?: run {
+            // 加载状态
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -128,461 +220,47 @@ fun GoalDetailScreen(
             ) {
                 CircularProgressIndicator()
             }
-        } else {
-            goal?.let { currentGoal ->
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // 目标标题和状态
-                    item {
-                        GoalHeaderCard(
-                            goal = currentGoal,
-                            progress = viewModel.calculateProgress(currentGoal)
-                        )
-                    }
-
-                    // 进度展示（带动画）
-                    item {
-                        AnimatedProgressCard(
-                            goal = currentGoal,
-                            progress = viewModel.calculateProgress(currentGoal),
-                            isCompleting = isCompleting,
-                            onUpdateProgress = { showAddRecordDialog = true },
-                            onCompleteGoal = { showCompleteConfirmDialog = true }
-                        )
-                    }
-
-                    // 子目标列表
-                    if (childGoals.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "子目标",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        items(childGoals) { childGoal ->
-                            SubGoalCard(
-                                goal = childGoal,
-                                progress = viewModel.calculateProgress(childGoal),
-                                onClick = { /* Navigate to child goal detail */ }
-                            )
-                        }
-                    }
-
-                    // 添加子目标按钮
-                    if (currentGoal.status == GoalStatus.ACTIVE) {
-                        item {
-                            OutlinedButton(
-                                onClick = { showAddSubGoalDialog = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("添加子目标")
-                            }
-                        }
-                    }
-
-                    // 时间轴标题
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "时间轴",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${records.size} 条记录",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // 时间轴记录
-                    if (records.isEmpty()) {
-                        item {
-                            EmptyTimelineCard()
-                        }
-                    } else {
-                        items(records) { record ->
-                            TimelineItem(
-                                record = record,
-                                isFirst = record == records.first(),
-                                isLast = record == records.last()
-                            )
-                        }
-                    }
-                }
-            } ?: run {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("目标不存在")
-                }
-            }
         }
     }
 
-    // 添加记录对话框
-    if (showAddRecordDialog) {
-        AddRecordDialog(
-            goal = goal,
-            onDismiss = { showAddRecordDialog = false },
-            onConfirm = { title, content, progressValue ->
-                viewModel.addRecord(title, content, progressValue)
-                showAddRecordDialog = false
-            }
-        )
-    }
-
-    // 放弃目标对话框
-    if (showAbandonDialog) {
-        AbandonGoalDialog(
-            onDismiss = { showAbandonDialog = false },
-            onConfirm = { reason ->
-                viewModel.abandonGoal(reason)
-                showAbandonDialog = false
-            }
-        )
-    }
-
-    // 添加子目标对话框
-    if (showAddSubGoalDialog) {
-        AddSubGoalDialog(
-            parentGoal = goal,
-            onDismiss = { showAddSubGoalDialog = false },
-            onConfirm = { title, description, targetValue ->
-                viewModel.addSubGoal(title, description, targetValue)
-                showAddSubGoalDialog = false
-            }
-        )
-    }
-
-    // 确认完成目标对话框
-    if (showCompleteConfirmDialog) {
-        CompleteGoalConfirmDialog(
-            goal = goal,
-            childGoals = childGoals,
-            onDismiss = { showCompleteConfirmDialog = false },
-            onConfirm = {
-                viewModel.completeGoal()
-                showCompleteConfirmDialog = false
+    // 删除确认对话框
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除这个目标吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteGoal(goalId)
+                        showDeleteDialog = false
+                        onNavigateBack()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("取消")
+                }
             }
         )
     }
 }
 
-/**
- * 确认完成目标对话框
- */
 @Composable
-private fun CompleteGoalConfirmDialog(
-    goal: GoalEntity?,
-    childGoals: List<GoalEntity>,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    val incompleteChildren = childGoals.filter { it.status != GoalStatus.COMPLETED }
-    val hasIncompleteChildren = incompleteChildren.isNotEmpty()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = Color(0xFF4CAF50),
-                modifier = Modifier.size(48.dp)
-            )
-        },
-        title = {
-            Text(
-                text = "确认完成目标",
-                textAlign = TextAlign.Center
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "确定将「${goal?.title ?: ""}」标记为已完成吗？",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                if (hasIncompleteChildren) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFFF9800).copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color(0xFFFF9800),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = "还有 ${incompleteChildren.size} 个子目标未完成",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFFF9800),
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                incompleteChildren.take(3).forEach { child ->
-                                    Text(
-                                        text = "• ${child.title}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                if (incompleteChildren.size > 3) {
-                                    Text(
-                                        text = "...还有 ${incompleteChildren.size - 3} 个",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (childGoals.isEmpty()) "恭喜！即将完成此目标" else "所有子目标已完成",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF4CAF50)
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4CAF50)
-                )
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("确认完成")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-/**
- * 目标头部卡片
- */
-@Composable
-private fun GoalHeaderCard(
-    goal: GoalEntity,
-    progress: Float
-) {
-    val statusColor = when (goal.status) {
-        GoalStatus.ACTIVE -> MaterialTheme.colorScheme.primary
-        GoalStatus.COMPLETED -> Color(0xFF4CAF50)
-        GoalStatus.ABANDONED -> Color(0xFFF44336)
-        else -> MaterialTheme.colorScheme.outline
-    }
-
-    val statusText = when (goal.status) {
-        GoalStatus.ACTIVE -> "进行中"
-        GoalStatus.COMPLETED -> "已完成"
-        GoalStatus.ABANDONED -> "已放弃"
-        else -> "已归档"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = goal.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (goal.description.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = goal.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // 状态标签
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = statusColor.copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = statusText,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        color = statusColor,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 日期信息
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "开始日期",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatEpochDay(goal.startDate),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                goal.endDate?.let { endDate ->
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "结束日期",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = formatEpochDay(endDate),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // 放弃原因（如有）
-            if (goal.status == GoalStatus.ABANDONED && !goal.abandonReason.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFF44336).copy(alpha = 0.1f)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "放弃原因",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFF44336)
-                        )
-                        Text(
-                            text = goal.abandonReason,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * 动画进度卡片
- */
-@Composable
-private fun AnimatedProgressCard(
+private fun ProgressCard(
     goal: GoalEntity,
     progress: Float,
-    isCompleting: Boolean,
-    onUpdateProgress: () -> Unit,
-    onCompleteGoal: () -> Unit
+    categoryColor: Color
 ) {
-    // 进度动画
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-        label = "progress"
-    )
-
-    // 颜色动画
-    val progressColor by animateColorAsState(
-        targetValue = when {
-            progress >= 1f -> Color(0xFF4CAF50)
-            progress >= 0.7f -> Color(0xFF8BC34A)
-            progress >= 0.3f -> Color(0xFFFF9800)
-            else -> Color(0xFFF44336)
-        },
-        label = "color"
-    )
-
-    // 脉冲动画（进行中状态）
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    UnifiedCard {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 圆形进度指示器
@@ -590,579 +268,681 @@ private fun AnimatedProgressCard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(160.dp)
             ) {
-                // 背景圆环
-                Canvas(modifier = Modifier.size(160.dp)) {
-                    drawArc(
-                        color = progressColor.copy(alpha = 0.2f),
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-
-                // 进度圆环
-                Canvas(modifier = Modifier.size(160.dp)) {
-                    drawArc(
-                        brush = Brush.sweepGradient(
-                            colors = listOf(
-                                progressColor.copy(alpha = if (goal.status == GoalStatus.ACTIVE) pulseAlpha else 1f),
-                                progressColor
-                            )
-                        ),
-                        startAngle = -90f,
-                        sweepAngle = 360f * animatedProgress,
-                        useCenter = false,
-                        style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-
-                // 中间文字
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                CircularProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.size(160.dp),
+                    strokeWidth = 12.dp,
+                    color = categoryColor,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "${(animatedProgress * 100).toInt()}%",
+                        text = "${(progress * 100).toInt()}%",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
-                        color = progressColor
+                        color = categoryColor
                     )
-                    if (goal.progressType == "NUMERIC") {
+                    if (goal.progressType == "NUMERIC" && goal.targetValue != null) {
                         Text(
-                            text = "${goal.currentValue.toInt()}/${goal.targetValue?.toInt() ?: 0} ${goal.unit}",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "${goal.currentValue.toInt()}${goal.unit} / ${goal.targetValue.toInt()}${goal.unit}",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(AppDimens.SpacingNormal))
 
-            // 进度条
-            LinearProgressIndicator(
-                progress = animatedProgress,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = progressColor,
-                trackColor = progressColor.copy(alpha = 0.2f)
+            // 目标标题
+            Text(
+                text = goal.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (goal.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(AppDimens.SpacingSmall))
+                Text(
+                    text = goal.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
 
-            // 操作按钮
-            if (goal.status == GoalStatus.ACTIVE) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // 更新进度按钮
-                    OutlinedButton(
-                        onClick = onUpdateProgress,
-                        modifier = Modifier.weight(1f)
+            // 状态标签
+            when (goal.status) {
+                GoalStatus.COMPLETED -> {
+                    Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+                    Surface(
+                        shape = AppShapes.Small,
+                        color = Color(0xFF4CAF50).copy(alpha = 0.1f)
                     ) {
-                        Icon(Icons.Default.Update, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("更新进度")
-                    }
-
-                    // 标记完成按钮（带加载状态）
-                    Button(
-                        onClick = onCompleteGoal,
-                        modifier = Modifier.weight(1f),
-                        enabled = !isCompleting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50)
-                        )
-                    ) {
-                        if (isCompleting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("完成中...")
-                        } else {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("标记完成")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "已完成",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color(0xFF4CAF50)
+                            )
                         }
                     }
                 }
-            }
-
-            // 已完成状态显示
-            if (goal.status == GoalStatus.COMPLETED) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                GoalStatus.ABANDONED -> {
+                    Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+                    Surface(
+                        shape = AppShapes.Small,
+                        color = MaterialTheme.colorScheme.errorContainer
                     ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "目标已完成！",
-                            color = Color(0xFF4CAF50),
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Block,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "已放弃",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
+                else -> {}
             }
         }
     }
 }
 
-/**
- * 子目标卡片
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubGoalCard(
+private fun QuickProgressUpdateCard(
     goal: GoalEntity,
-    progress: Float,
-    onClick: () -> Unit
+    showInput: Boolean,
+    progressValue: String,
+    isLoading: Boolean = false,
+    onToggleInput: () -> Unit,
+    onValueChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onComplete: () -> Unit,
+    onAbandon: () -> Unit = {}
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 进度圆圈
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(48.dp)
+    UnifiedCard {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier.size(48.dp),
-                    strokeWidth = 4.dp,
-                    color = when {
-                        goal.status == GoalStatus.COMPLETED -> Color(0xFF4CAF50)
-                        progress >= 0.5f -> MaterialTheme.colorScheme.primary
-                        else -> Color(0xFFFF9800)
-                    }
-                )
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = goal.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-                if (goal.status == GoalStatus.COMPLETED) {
-                    Text(
-                        text = "已完成",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF4CAF50)
+                SectionTitle(title = "更新进度", centered = true)
+                if (isLoading) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
                     )
                 }
             }
 
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+            if (showInput) {
+                OutlinedTextField(
+                    value = progressValue,
+                    onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text(if (goal.progressType == "NUMERIC") "当前数值" else "完成百分比")
+                    },
+                    suffix = {
+                        Text(if (goal.progressType == "NUMERIC") goal.unit else "%")
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    shape = AppShapes.Medium
+                )
+
+                Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppDimens.SpacingSmall)
+                ) {
+                    OutlinedButton(
+                        onClick = onToggleInput,
+                        modifier = Modifier.weight(1f),
+                        shape = AppShapes.Medium,
+                        enabled = !isLoading
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        shape = AppShapes.Medium,
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text("确认")
+                        }
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(AppDimens.SpacingSmall)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(AppDimens.SpacingSmall)
+                    ) {
+                        Button(
+                            onClick = onToggleInput,
+                            modifier = Modifier.weight(1f),
+                            shape = AppShapes.Medium,
+                            enabled = !isLoading
+                        ) {
+                            Icon(Icons.Default.Update, contentDescription = null)
+                            Spacer(modifier = Modifier.width(AppDimens.SpacingSmall))
+                            Text("更新进度")
+                        }
+                        OutlinedButton(
+                            onClick = onComplete,
+                            modifier = Modifier.weight(1f),
+                            shape = AppShapes.Medium,
+                            enabled = !isLoading
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = null)
+                                Spacer(modifier = Modifier.width(AppDimens.SpacingSmall))
+                                Text("标记完成")
+                            }
+                        }
+                    }
+                    // 放弃按钮
+                    TextButton(
+                        onClick = onAbandon,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoading,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Block,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("放弃目标")
+                    }
+                }
+            }
         }
     }
 }
 
 /**
- * 时间轴项目
+ * 恢复已放弃目标的卡片
  */
 @Composable
-private fun TimelineItem(
-    record: GoalRecordEntity,
-    isFirst: Boolean,
-    isLast: Boolean
+private fun ReactivateCard(
+    isLoading: Boolean = false,
+    onReactivate: () -> Unit
 ) {
-    val iconColor = when (record.recordType) {
-        GoalRecordType.START -> Color(0xFF2196F3)
-        GoalRecordType.PROGRESS -> MaterialTheme.colorScheme.primary
-        GoalRecordType.MILESTONE -> Color(0xFFFF9800)
-        GoalRecordType.COMPLETE -> Color(0xFF4CAF50)
-        GoalRecordType.ABANDON -> Color(0xFFF44336)
-        else -> MaterialTheme.colorScheme.outline
-    }
+    UnifiedCard {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SectionTitle(title = "目标已放弃", centered = true)
 
-    val icon = when (record.recordType) {
-        GoalRecordType.START -> Icons.Default.PlayArrow
-        GoalRecordType.PROGRESS -> Icons.Default.TrendingUp
-        GoalRecordType.MILESTONE -> Icons.Default.Flag
-        GoalRecordType.COMPLETE -> Icons.Default.CheckCircle
-        GoalRecordType.ABANDON -> Icons.Default.Cancel
-        else -> Icons.Default.Notes
-    }
+            Spacer(modifier = Modifier.height(AppDimens.SpacingSmall))
 
+            Text(
+                text = "您可以重新激活这个目标继续追踪进度",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+            Button(
+                onClick = onReactivate,
+                modifier = Modifier.fillMaxWidth(),
+                shape = AppShapes.Medium,
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(modifier = Modifier.width(AppDimens.SpacingSmall))
+                    Text("重新激活")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoalInfoCard(
+    goal: GoalEntity,
+    remainingDays: Int?,
+    categoryColor: Color
+) {
+    UnifiedCard {
+        Column {
+            SectionTitle(title = "目标信息", centered = true)
+
+            Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+            // 分类和类型
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    shape = AppShapes.Small,
+                    color = categoryColor.copy(alpha = 0.1f)
+                ) {
+                    Text(
+                        text = getCategoryDisplayName(goal.category),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = categoryColor
+                    )
+                }
+                Spacer(modifier = Modifier.width(AppDimens.SpacingSmall))
+                Surface(
+                    shape = AppShapes.Small,
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = getGoalTypeDisplayName(goal.goalType),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(AppDimens.SpacingNormal))
+            Divider()
+            Spacer(modifier = Modifier.height(AppDimens.SpacingNormal))
+
+            // 时间信息
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                InfoColumn(
+                    label = "创建日期",
+                    value = formatDate(goal.createdAt)
+                )
+                InfoColumn(
+                    label = "截止日期",
+                    value = goal.endDate?.let { formatDateFromInt(it) } ?: "无"
+                )
+                InfoColumn(
+                    label = "剩余天数",
+                    value = remainingDays?.let {
+                        when {
+                            it > 0 -> "${it}天"
+                            it == 0 -> "今天"
+                            else -> "已过期"
+                        }
+                    } ?: "无限期",
+                    valueColor = remainingDays?.let {
+                        if (it < 0) MaterialTheme.colorScheme.error else null
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoColumn(
+    label: String,
+    value: String,
+    valueColor: Color? = null
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            color = valueColor ?: MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun ProgressHistoryCard(goal: GoalEntity) {
+    UnifiedCard {
+        // 这里可以展示进度历史时间线
+        // 目前简化为创建和最后更新信息
+        Column {
+            TimelineItem(
+                title = "创建目标",
+                subtitle = "开始追踪进度",
+                time = formatDate(goal.createdAt),
+                isFirst = true,
+                isLast = goal.updatedAt == goal.createdAt
+            )
+
+            if (goal.updatedAt != goal.createdAt) {
+                TimelineItem(
+                    title = "最近更新",
+                    subtitle = "当前进度: ${goal.currentValue.toInt()}${goal.unit}",
+                    time = formatDate(goal.updatedAt),
+                    isFirst = false,
+                    isLast = goal.status != GoalStatus.COMPLETED
+                )
+            }
+
+            if (goal.status == GoalStatus.COMPLETED) {
+                TimelineItem(
+                    title = "完成目标",
+                    subtitle = "恭喜达成目标！",
+                    time = formatDate(goal.updatedAt),
+                    isFirst = false,
+                    isLast = true,
+                    color = Color(0xFF4CAF50)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineItem(
+    title: String,
+    subtitle: String,
+    time: String,
+    isFirst: Boolean,
+    isLast: Boolean,
+    color: Color = MaterialTheme.colorScheme.primary
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppDimens.SpacingSmall)
     ) {
-        // 时间轴线和图标
+        // 时间线指示器
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(48.dp)
+            modifier = Modifier.width(24.dp)
         ) {
             if (!isFirst) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(16.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
+                        .height(12.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
-            } else {
-                Spacer(modifier = Modifier.height(16.dp))
             }
-
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
-                    .background(iconColor.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = iconColor
-                )
-            }
-
+                    .background(color)
+            )
             if (!isLast) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
+                        .height(12.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
             }
         }
 
-        // 内容卡片
-        Card(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        Spacer(modifier = Modifier.width(AppDimens.SpacingMedium))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium
             )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp)
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Text(
+            text = time,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun formatDate(timestamp: Long): String {
+    val instant = Instant.ofEpochMilli(timestamp)
+    val date = instant.atZone(ZoneId.systemDefault()).toLocalDate()
+    return date.format(DateTimeFormatter.ofPattern("MM-dd"))
+}
+
+private fun formatDateFromInt(dateInt: Int): String {
+    val year = dateInt / 10000
+    val month = (dateInt % 10000) / 100
+    val day = dateInt % 100
+    return String.format("%02d-%02d", month, day)
+}
+
+private fun getCategoryColor(category: String): Color {
+    return when (category) {
+        "CAREER" -> Color(0xFF2196F3)
+        "FINANCE" -> Color(0xFF4CAF50)
+        "HEALTH" -> Color(0xFFE91E63)
+        "LEARNING" -> Color(0xFFFF9800)
+        "RELATIONSHIP" -> Color(0xFF9C27B0)
+        "LIFESTYLE" -> Color(0xFF00BCD4)
+        "HOBBY" -> Color(0xFFFF5722)
+        else -> Color.Gray
+    }
+}
+
+/**
+ * AI分析卡片
+ */
+@Composable
+private fun AIAnalysisCard(
+    aiAnalysisState: AIAnalysisState,
+    showAnalysis: Boolean,
+    onToggleAnalysis: () -> Unit,
+    onAnalyze: () -> Unit,
+    onClear: () -> Unit
+) {
+    UnifiedCard {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = record.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = formatEpochDay(record.recordDate),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                if (record.content.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = record.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "AI 智能分析",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-                // 进度变化
-                if (record.progressValue != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.TrendingUp,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = Color(0xFF4CAF50)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "+${record.progressValue}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4CAF50)
-                        )
+                if (aiAnalysisState !is AIAnalysisState.Loading) {
+                    TextButton(onClick = onToggleAnalysis) {
+                        Text(if (showAnalysis) "收起" else "展开")
+                    }
+                }
+            }
+
+            AnimatedVisibility(visible = showAnalysis) {
+                Column {
+                    Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+
+                    when (aiAnalysisState) {
+                        is AIAnalysisState.Idle -> {
+                            Text(
+                                text = "AI可以分析您的目标进度并给出个性化建议",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(AppDimens.SpacingMedium))
+                            Button(
+                                onClick = onAnalyze,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = AppShapes.Medium
+                            ) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("开始分析")
+                            }
+                        }
+
+                        is AIAnalysisState.Loading -> {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    strokeWidth = 3.dp
+                                )
+                                Spacer(modifier = Modifier.height(AppDimens.SpacingSmall))
+                                Text(
+                                    text = "AI正在分析中...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        is AIAnalysisState.Success -> {
+                            Surface(
+                                shape = AppShapes.Medium,
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(AppDimens.SpacingMedium)
+                                ) {
+                                    Text(
+                                        text = aiAnalysisState.analysis,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(AppDimens.SpacingSmall))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onClear,
+                                    modifier = Modifier.weight(1f),
+                                    shape = AppShapes.Medium
+                                ) {
+                                    Text("清除")
+                                }
+                                Button(
+                                    onClick = onAnalyze,
+                                    modifier = Modifier.weight(1f),
+                                    shape = AppShapes.Medium
+                                ) {
+                                    Text("重新分析")
+                                }
+                            }
+                        }
+
+                        is AIAnalysisState.Error -> {
+                            Surface(
+                                shape = AppShapes.Medium,
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(AppDimens.SpacingMedium),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Error,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = aiAnalysisState.message,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(AppDimens.SpacingSmall))
+                            Button(
+                                onClick = onAnalyze,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = AppShapes.Medium
+                            ) {
+                                Text("重试")
+                            }
+                        }
                     }
                 }
             }
         }
     }
-}
-
-/**
- * 空时间轴提示
- */
-@Composable
-private fun EmptyTimelineCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                Icons.Default.Timeline,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "暂无记录",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "点击右下角按钮添加进度记录",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
-    }
-}
-
-/**
- * 添加记录对话框
- */
-@Composable
-private fun AddRecordDialog(
-    goal: GoalEntity?,
-    onDismiss: () -> Unit,
-    onConfirm: (title: String, content: String, progressValue: Double?) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
-    var progressValue by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("添加记录") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                PremiumTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = "标题",
-                    placeholder = "如：完成第一阶段",
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                PremiumTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = "详细内容（可选）",
-                    placeholder = "记录更多细节...",
-                    minLines = 2,
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (goal?.progressType == "NUMERIC") {
-                    PremiumTextField(
-                        value = progressValue,
-                        onValueChange = { progressValue = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = "进度增加值",
-                        placeholder = "如：10",
-                        trailingIcon = { Text(goal.unit) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(
-                        title.ifBlank { "进度更新" },
-                        content,
-                        progressValue.toDoubleOrNull()
-                    )
-                },
-                enabled = title.isNotBlank() || content.isNotBlank() || progressValue.isNotBlank()
-            ) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-/**
- * 放弃目标对话框
- */
-@Composable
-private fun AbandonGoalDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (reason: String) -> Unit
-) {
-    var reason by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("放弃目标") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "确定要放弃这个目标吗？此操作无法撤销。",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                PremiumTextField(
-                    value = reason,
-                    onValueChange = { reason = it },
-                    label = "放弃原因（必填）",
-                    placeholder = "请说明放弃的原因...",
-                    minLines = 2,
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(reason) },
-                enabled = reason.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFF44336)
-                )
-            ) {
-                Text("确认放弃")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-/**
- * 添加子目标对话框
- */
-@Composable
-private fun AddSubGoalDialog(
-    parentGoal: GoalEntity?,
-    onDismiss: () -> Unit,
-    onConfirm: (title: String, description: String, targetValue: Double?) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var targetValue by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("添加子目标") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                PremiumTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = "子目标标题",
-                    placeholder = "如：完成第一章",
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                PremiumTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = "描述（可选）",
-                    placeholder = "详细说明...",
-                    minLines = 2,
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (parentGoal?.progressType == "NUMERIC") {
-                    PremiumTextField(
-                        value = targetValue,
-                        onValueChange = { targetValue = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = "目标值",
-                        placeholder = "如：100",
-                        trailingIcon = { Text(parentGoal.unit) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(title, description, targetValue.toDoubleOrNull()) },
-                enabled = title.isNotBlank()
-            ) {
-                Text("添加")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-/**
- * 格式化epochDay为日期字符串
- */
-private fun formatEpochDay(epochDay: Int): String {
-    val date = LocalDate.ofEpochDay(epochDay.toLong())
-    val formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日")
-    return date.format(formatter)
 }

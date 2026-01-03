@@ -1,27 +1,15 @@
 package com.lifemanager.app.domain.usecase
 
-import com.lifemanager.app.core.database.entity.GoalCategory
 import com.lifemanager.app.core.database.entity.GoalEntity
 import com.lifemanager.app.core.database.entity.GoalStatus
-import com.lifemanager.app.core.database.entity.ProgressType
-import com.lifemanager.app.domain.model.CategoryGoalStats
-import com.lifemanager.app.domain.model.GoalInsights
 import com.lifemanager.app.domain.model.GoalStatistics
-import com.lifemanager.app.domain.model.GoalStreakData
-import com.lifemanager.app.domain.model.GoalTemplate
-import com.lifemanager.app.domain.model.GoalTimelineData
-import com.lifemanager.app.domain.model.GoalWithChildren
-import com.lifemanager.app.domain.model.MonthlyGoalStats
-import com.lifemanager.app.domain.model.getCategoryDisplayName
-import com.lifemanager.app.domain.model.goalCategoryOptions
-import com.lifemanager.app.domain.model.goalTemplates
+import com.lifemanager.app.domain.model.GoalTreeNode
+import com.lifemanager.app.domain.model.SubGoalEditState
 import com.lifemanager.app.domain.repository.GoalRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
-import java.time.YearMonth
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 /**
@@ -43,38 +31,6 @@ class GoalUseCase @Inject constructor(
      */
     fun getAllGoals(): Flow<List<GoalEntity>> {
         return repository.getAllGoals()
-    }
-
-    /**
-     * 获取顶级目标（用于层级显示）
-     */
-    fun getTopLevelGoals(): Flow<List<GoalEntity>> {
-        return repository.getTopLevelGoals()
-    }
-
-    /**
-     * 获取子目标
-     */
-    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
-        return repository.getChildGoals(parentId)
-    }
-
-    /**
-     * 获取目标及其子目标的完整结构
-     */
-    suspend fun getGoalWithChildren(goalId: Long): GoalWithChildren? {
-        val goal = repository.getGoalById(goalId) ?: return null
-        val children = repository.getChildGoalsSync(goalId)
-        val childCount = children.size
-        val completedChildCount = children.count { it.status == GoalStatus.COMPLETED }
-
-        return GoalWithChildren(
-            goal = goal,
-            children = children,
-            childCount = childCount,
-            completedChildCount = completedChildCount,
-            childProgress = if (childCount > 0) completedChildCount.toFloat() / childCount else 0f
-        )
     }
 
     /**
@@ -111,14 +67,10 @@ class GoalUseCase @Inject constructor(
         progressType: String,
         targetValue: Double?,
         unit: String,
-        parentId: Long? = null
+        parentId: Long? = null,
+        level: Int = 0,
+        isMultiLevel: Boolean = false
     ): Long {
-        // 如果有父目标，计算层级
-        val level = if (parentId != null) {
-            val parentGoal = repository.getGoalById(parentId)
-            (parentGoal?.level ?: 0) + 1
-        } else 0
-
         val goal = GoalEntity(
             title = title,
             description = description,
@@ -130,39 +82,59 @@ class GoalUseCase @Inject constructor(
             targetValue = targetValue,
             unit = unit,
             parentId = parentId,
-            level = level
+            level = level,
+            isMultiLevel = isMultiLevel
         )
         return repository.insert(goal)
     }
 
     /**
-     * 创建子目标
+     * 创建带子目标的多级目标
      */
-    suspend fun createSubGoal(
-        parentId: Long,
+    suspend fun createGoalWithSubGoals(
         title: String,
-        description: String = ""
+        description: String,
+        goalType: String,
+        category: String,
+        startDate: Int,
+        endDate: Int?,
+        progressType: String,
+        targetValue: Double?,
+        unit: String,
+        subGoals: List<SubGoalEditState>
     ): Long {
-        val parentGoal = repository.getGoalById(parentId)
-            ?: throw IllegalArgumentException("Parent goal not found")
-
-        val subGoal = GoalEntity(
+        // 创建父目标
+        val parentId = createGoal(
             title = title,
             description = description,
-            goalType = parentGoal.goalType,
-            category = parentGoal.category,
-            startDate = parentGoal.startDate,
-            endDate = parentGoal.endDate,
-            progressType = ProgressType.PERCENTAGE,  // 子目标默认使用百分比进度
-            parentId = parentId,
-            level = parentGoal.level + 1
+            goalType = goalType,
+            category = category,
+            startDate = startDate,
+            endDate = endDate,
+            progressType = progressType,
+            targetValue = targetValue,
+            unit = unit,
+            isMultiLevel = subGoals.isNotEmpty()
         )
 
-        val subGoalId = repository.insert(subGoal)
+        // 创建子目标
+        subGoals.forEach { subGoal ->
+            createGoal(
+                title = subGoal.title,
+                description = subGoal.description,
+                goalType = goalType,
+                category = category,
+                startDate = startDate,
+                endDate = endDate,
+                progressType = subGoal.progressType,
+                targetValue = subGoal.targetValue,
+                unit = subGoal.unit,
+                parentId = parentId,
+                level = 1
+            )
+        }
 
-        // 如果父目标还没有子目标，将其进度类型设置为基于子目标
-        // 父目标的进度将由子目标完成情况自动计算
-        return subGoalId
+        return parentId
     }
 
     /**
@@ -170,11 +142,6 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun updateGoal(goal: GoalEntity) {
         repository.update(goal.copy(updatedAt = System.currentTimeMillis()))
-
-        // 如果有父目标，更新父目标进度
-        goal.parentId?.let { parentId ->
-            updateParentGoalProgress(parentId)
-        }
     }
 
     /**
@@ -187,11 +154,53 @@ class GoalUseCase @Inject constructor(
         val goal = repository.getGoalById(id)
         if (goal != null && goal.targetValue != null && value >= goal.targetValue) {
             repository.updateStatus(id, GoalStatus.COMPLETED)
+        }
 
-            // 如果有父目标，更新父目标进度
-            goal.parentId?.let { parentId ->
-                updateParentGoalProgress(parentId)
+        // 如果有父目标，更新父目标进度
+        goal?.parentId?.let { parentId ->
+            updateParentProgress(parentId)
+        }
+    }
+
+    /**
+     * 更新父目标进度（根据子目标进度自动计算）
+     */
+    private suspend fun updateParentProgress(parentId: Long) {
+        val children = repository.getChildGoalsSync(parentId)
+        if (children.isEmpty()) return
+
+        // 计算子目标平均进度
+        val childProgresses = children.map { child ->
+            calculateProgress(child)
+        }
+        val averageProgress = childProgresses.average().toFloat()
+
+        // 获取父目标信息
+        val parent = repository.getGoalById(parentId) ?: return
+
+        // 根据父目标的进度类型更新进度值
+        val progressValue = when (parent.progressType) {
+            "PERCENTAGE" -> (averageProgress * 100).toDouble()
+            "NUMERIC" -> {
+                if (parent.targetValue != null) {
+                    averageProgress * parent.targetValue
+                } else {
+                    (averageProgress * 100).toDouble()
+                }
             }
+            else -> (averageProgress * 100).toDouble()
+        }
+
+        repository.updateProgress(parentId, progressValue)
+
+        // 检查是否完成
+        if (averageProgress >= 1f) {
+            repository.updateStatus(parentId, GoalStatus.COMPLETED)
+        }
+
+        // 递归更新更上层的父目标
+        parent.parentId?.let { grandParentId ->
+            updateParentProgress(grandParentId)
         }
     }
 
@@ -200,59 +209,6 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun completeGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.COMPLETED)
-
-        // 如果有父目标，更新父目标进度
-        val goal = repository.getGoalById(id)
-        goal?.parentId?.let { parentId ->
-            updateParentGoalProgress(parentId)
-        }
-    }
-
-    /**
-     * 更新父目标进度（基于子目标完成情况）
-     * 当子目标状态变化时调用此方法
-     */
-    suspend fun updateParentGoalProgress(parentId: Long) {
-        val childCount = repository.countChildGoals(parentId)
-        if (childCount == 0) return
-
-        val completedCount = repository.countCompletedChildGoals(parentId)
-        val progressPercentage = (completedCount.toDouble() / childCount) * 100
-
-        // 更新父目标进度
-        repository.updateProgress(parentId, progressPercentage)
-
-        // 如果所有子目标都完成了，自动完成父目标
-        if (completedCount >= childCount) {
-            repository.updateStatus(parentId, GoalStatus.COMPLETED)
-
-            // 递归检查更上层的父目标
-            val parentGoal = repository.getGoalById(parentId)
-            parentGoal?.parentId?.let { grandParentId ->
-                updateParentGoalProgress(grandParentId)
-            }
-        }
-    }
-
-    /**
-     * 获取子目标数量
-     */
-    suspend fun getChildCount(goalId: Long): Int {
-        return repository.countChildGoals(goalId)
-    }
-
-    /**
-     * 获取已完成的子目标数量
-     */
-    suspend fun getCompletedChildCount(goalId: Long): Int {
-        return repository.countCompletedChildGoals(goalId)
-    }
-
-    /**
-     * 检查目标是否有子目标
-     */
-    suspend fun hasChildren(goalId: Long): Boolean {
-        return repository.countChildGoals(goalId) > 0
     }
 
     /**
@@ -260,12 +216,6 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun abandonGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.ABANDONED)
-
-        // 如果有父目标，更新父目标进度（放弃不算完成，但可能影响整体进度显示）
-        val goal = repository.getGoalById(id)
-        goal?.parentId?.let { parentId ->
-            updateParentGoalProgress(parentId)
-        }
     }
 
     /**
@@ -280,33 +230,13 @@ class GoalUseCase @Inject constructor(
      */
     suspend fun reactivateGoal(id: Long) {
         repository.updateStatus(id, GoalStatus.ACTIVE)
-
-        // 如果有父目标，更新父目标进度
-        val goal = repository.getGoalById(id)
-        goal?.parentId?.let { parentId ->
-            updateParentGoalProgress(parentId)
-        }
     }
 
     /**
      * 删除目标
      */
     suspend fun deleteGoal(id: Long) {
-        val goal = repository.getGoalById(id)
-        val parentId = goal?.parentId
-
-        // 如果有子目标，一并删除
-        val childCount = repository.countChildGoals(id)
-        if (childCount > 0) {
-            repository.deleteWithChildren(id)
-        } else {
-            repository.delete(id)
-        }
-
-        // 如果有父目标，更新父目标进度
-        parentId?.let {
-            updateParentGoalProgress(it)
-        }
+        repository.delete(id)
     }
 
     /**
@@ -329,7 +259,7 @@ class GoalUseCase @Inject constructor(
     }
 
     /**
-     * 计算目标进度（简单版本，用于列表展示）
+     * 计算目标进度
      */
     fun calculateProgress(goal: GoalEntity): Float {
         return when {
@@ -342,24 +272,6 @@ class GoalUseCase @Inject constructor(
             }
             else -> 0f
         }
-    }
-
-    /**
-     * 计算目标进度（完整版本，考虑子目标）
-     * 如果目标有子目标，进度基于子目标完成情况计算
-     */
-    suspend fun calculateProgressWithChildren(goal: GoalEntity): Float {
-        if (goal.status == GoalStatus.COMPLETED) return 1f
-
-        // 检查是否有子目标
-        val childCount = repository.countChildGoals(goal.id)
-        if (childCount > 0) {
-            val completedCount = repository.countCompletedChildGoals(goal.id)
-            return (completedCount.toFloat() / childCount).coerceIn(0f, 1f)
-        }
-
-        // 无子目标时使用原有逻辑
-        return calculateProgress(goal)
     }
 
     /**
@@ -386,395 +298,146 @@ class GoalUseCase @Inject constructor(
         return endDate - today
     }
 
-    // ============ 扩展功能 ============
+    // ==================== 多级目标相关方法 ====================
 
     /**
-     * 获取目标洞察分析
+     * 获取顶级目标列表
      */
-    suspend fun getGoalInsights(): GoalInsights {
-        val allGoals = repository.getAllGoals().first()
-        val today = getToday()
+    fun getTopLevelGoals(): Flow<List<GoalEntity>> {
+        return repository.getTopLevelGoals()
+    }
 
-        val activeGoals = allGoals.filter { it.status == GoalStatus.ACTIVE }
-        val completedGoals = allGoals.filter { it.status == GoalStatus.COMPLETED }
-        val abandonedGoals = allGoals.filter { it.status == GoalStatus.ABANDONED }
+    /**
+     * 获取所有顶级目标（包含所有状态）
+     */
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>> {
+        return repository.getAllTopLevelGoals()
+    }
 
-        // 计算完成率
-        val completionRate = if (allGoals.isNotEmpty()) {
-            completedGoals.size.toFloat() / allGoals.size
-        } else 0f
+    /**
+     * 获取子目标列表
+     */
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
+        return repository.getChildGoals(parentId)
+    }
 
-        // 计算平均完成天数
-        val avgCompletionDays = completedGoals
-            .filter { it.completedAt != null }
-            .mapNotNull { goal ->
-                val startDate = LocalDate.ofEpochDay(goal.startDate.toLong())
-                val completedDate = LocalDate.ofEpochDay(goal.completedAt!! / (24 * 60 * 60 * 1000))
-                ChronoUnit.DAYS.between(startDate, completedDate).toInt()
-            }
-            .takeIf { it.isNotEmpty() }
-            ?.average()?.toInt() ?: 0
+    /**
+     * 获取子目标列表（同步版本）
+     */
+    suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity> {
+        return repository.getChildGoalsSync(parentId)
+    }
 
-        // 获取分类统计
-        val categoryStats = getCategoryStats(allGoals)
+    /**
+     * 获取子目标数量
+     */
+    suspend fun countChildGoals(parentId: Long): Int {
+        return repository.countChildGoals(parentId)
+    }
 
-        // 找出最活跃分类
-        val mostActiveCategory = categoryStats.maxByOrNull { it.activeCount }?.category
+    /**
+     * 构建目标树
+     */
+    suspend fun buildGoalTree(goals: List<GoalEntity>): List<GoalTreeNode> {
+        return goals.map { goal ->
+            buildTreeNode(goal)
+        }
+    }
 
-        // 获取月度统计
-        val monthlyStats = getMonthlyStats(allGoals)
+    /**
+     * 构建单个目标的树节点
+     */
+    private suspend fun buildTreeNode(goal: GoalEntity): GoalTreeNode {
+        val children = repository.getChildGoalsSync(goal.id)
+        val childNodes = children.map { buildTreeNode(it) }
+        val progress = if (children.isNotEmpty()) {
+            // 多级目标：根据子目标计算进度
+            childNodes.map { it.progress }.average().toFloat()
+        } else {
+            calculateProgress(goal)
+        }
 
-        // 即将到期的目标（7天内）
-        val upcomingDeadlines = activeGoals
-            .filter { goal ->
-                goal.endDate?.let { it - today in 0..7 } ?: false
-            }
-            .sortedBy { it.endDate }
-
-        // 已逾期目标
-        val overdueGoals = activeGoals
-            .filter { goal ->
-                goal.endDate?.let { it < today } ?: false
-            }
-            .sortedBy { it.endDate }
-
-        // 获取连续完成数据
-        val streakData = calculateGoalStreak(completedGoals)
-
-        return GoalInsights(
-            totalGoals = allGoals.size,
-            activeGoals = activeGoals.size,
-            completedGoals = completedGoals.size,
-            abandonedGoals = abandonedGoals.size,
-            completionRate = completionRate,
-            averageCompletionDays = avgCompletionDays,
-            mostActiveCategory = mostActiveCategory,
-            categoryStats = categoryStats,
-            monthlyStats = monthlyStats,
-            upcomingDeadlines = upcomingDeadlines,
-            overdueGoals = overdueGoals,
-            streakData = streakData
+        return GoalTreeNode(
+            goal = goal,
+            level = goal.level,
+            children = childNodes,
+            isExpanded = false,
+            childCount = children.size,
+            progress = progress
         )
     }
 
     /**
-     * 获取分类目标统计
+     * 将目标树扁平化为列表（仅包含展开的节点）
      */
-    private fun getCategoryStats(allGoals: List<GoalEntity>): List<CategoryGoalStats> {
-        val categoryColors = mapOf(
-            "CAREER" to "#3B82F6",
-            "FINANCE" to "#10B981",
-            "HEALTH" to "#EC4899",
-            "LEARNING" to "#F59E0B",
-            "RELATIONSHIP" to "#8B5CF6",
-            "LIFESTYLE" to "#06B6D4",
-            "HOBBY" to "#EF4444"
+    fun flattenTree(
+        nodes: List<GoalTreeNode>,
+        expandedIds: Set<Long> = emptySet()
+    ): List<GoalTreeNode> {
+        val result = mutableListOf<GoalTreeNode>()
+        nodes.forEach { node ->
+            val isExpanded = expandedIds.contains(node.goal.id)
+            result.add(node.copy(isExpanded = isExpanded))
+            if (isExpanded && node.children.isNotEmpty()) {
+                result.addAll(flattenTree(node.children, expandedIds))
+            }
+        }
+        return result
+    }
+
+    /**
+     * 添加子目标
+     */
+    suspend fun addSubGoal(
+        parentId: Long,
+        title: String,
+        description: String = "",
+        progressType: String = "PERCENTAGE",
+        targetValue: Double? = null,
+        unit: String = ""
+    ): Long {
+        val parent = repository.getGoalById(parentId) ?: return -1
+
+        val subGoalId = createGoal(
+            title = title,
+            description = description,
+            goalType = parent.goalType,
+            category = parent.category,
+            startDate = parent.startDate,
+            endDate = parent.endDate,
+            progressType = progressType,
+            targetValue = targetValue,
+            unit = unit,
+            parentId = parentId,
+            level = parent.level + 1
         )
 
-        return goalCategoryOptions.map { (category, _) ->
-            val categoryGoals = allGoals.filter { it.category == category }
-            val completedCount = categoryGoals.count { it.status == GoalStatus.COMPLETED }
-            val activeCount = categoryGoals.count { it.status == GoalStatus.ACTIVE }
-
-            CategoryGoalStats(
-                category = category,
-                categoryName = getCategoryDisplayName(category),
-                totalCount = categoryGoals.size,
-                completedCount = completedCount,
-                activeCount = activeCount,
-                completionRate = if (categoryGoals.isNotEmpty()) {
-                    completedCount.toFloat() / categoryGoals.size
-                } else 0f,
-                color = categoryColors[category] ?: "#6B7280"
-            )
-        }.filter { it.totalCount > 0 }
-    }
-
-    /**
-     * 获取月度统计（最近6个月）
-     */
-    private fun getMonthlyStats(allGoals: List<GoalEntity>): List<MonthlyGoalStats> {
-        val now = YearMonth.now()
-        return (0..5).map { monthsAgo ->
-            val yearMonth = now.minusMonths(monthsAgo.toLong())
-            val yearMonthInt = yearMonth.year * 100 + yearMonth.monthValue
-            val startOfMonth = yearMonth.atDay(1).toEpochDay().toInt()
-            val endOfMonth = yearMonth.atEndOfMonth().toEpochDay().toInt()
-
-            val createdInMonth = allGoals.count { goal ->
-                val createdDate = LocalDate.ofEpochDay(goal.createdAt / (24 * 60 * 60 * 1000))
-                val createdEpochDay = createdDate.toEpochDay().toInt()
-                createdEpochDay in startOfMonth..endOfMonth
-            }
-
-            val completedInMonth = allGoals.count { goal ->
-                goal.completedAt?.let { completedAt ->
-                    val completedDate = LocalDate.ofEpochDay(completedAt / (24 * 60 * 60 * 1000))
-                    val completedEpochDay = completedDate.toEpochDay().toInt()
-                    completedEpochDay in startOfMonth..endOfMonth
-                } ?: false
-            }
-
-            val abandonedInMonth = allGoals.count { goal ->
-                goal.abandonedAt?.let { abandonedAt ->
-                    val abandonedDate = LocalDate.ofEpochDay(abandonedAt / (24 * 60 * 60 * 1000))
-                    val abandonedEpochDay = abandonedDate.toEpochDay().toInt()
-                    abandonedEpochDay in startOfMonth..endOfMonth
-                } ?: false
-            }
-
-            MonthlyGoalStats(
-                yearMonth = yearMonthInt,
-                monthLabel = "${yearMonth.monthValue}月",
-                createdCount = createdInMonth,
-                completedCount = completedInMonth,
-                abandonedCount = abandonedInMonth
-            )
-        }.reversed()
-    }
-
-    /**
-     * 计算目标完成连续天数
-     */
-    private fun calculateGoalStreak(completedGoals: List<GoalEntity>): GoalStreakData {
-        if (completedGoals.isEmpty()) {
-            return GoalStreakData()
+        // 更新父目标为多级目标
+        if (!parent.isMultiLevel) {
+            repository.updateMultiLevelFlag(parentId, true)
         }
 
-        // 获取所有完成日期
-        val completionDates = completedGoals
-            .mapNotNull { it.completedAt }
-            .map { LocalDate.ofEpochDay(it / (24 * 60 * 60 * 1000)).toEpochDay().toInt() }
-            .toSet()
-            .sorted()
+        return subGoalId
+    }
 
-        if (completionDates.isEmpty()) {
-            return GoalStreakData(totalCompletionDays = 0)
-        }
+    /**
+     * 删除目标（包括子目标）
+     */
+    suspend fun deleteGoalWithChildren(id: Long) {
+        // 先删除所有子目标
+        repository.deleteChildGoals(id)
+        // 再删除目标本身
+        repository.delete(id)
 
-        val today = getToday()
-        var currentStreak = 0
-        var longestStreak = 0
-        var tempStreak = 1
-
-        // 计算最长连续和当前连续
-        for (i in 1 until completionDates.size) {
-            if (completionDates[i] - completionDates[i - 1] == 1) {
-                tempStreak++
-            } else {
-                longestStreak = maxOf(longestStreak, tempStreak)
-                tempStreak = 1
+        // 检查父目标是否还有子目标
+        val goal = repository.getGoalById(id)
+        goal?.parentId?.let { parentId ->
+            val childCount = repository.countChildGoals(parentId)
+            if (childCount == 0) {
+                repository.updateMultiLevelFlag(parentId, false)
             }
+            // 更新父目标进度
+            updateParentProgress(parentId)
         }
-        longestStreak = maxOf(longestStreak, tempStreak)
-
-        // 计算当前连续（从今天往回数）
-        if (completionDates.last() == today || completionDates.last() == today - 1) {
-            currentStreak = 1
-            var checkDate = completionDates.last() - 1
-            while (completionDates.contains(checkDate)) {
-                currentStreak++
-                checkDate--
-            }
-        }
-
-        return GoalStreakData(
-            currentStreak = currentStreak,
-            longestStreak = longestStreak,
-            totalCompletionDays = completionDates.size,
-            lastCompletionDate = completionDates.lastOrNull()
-        )
-    }
-
-    /**
-     * 获取目标时间线数据
-     */
-    suspend fun getGoalTimeline(goalId: Long): GoalTimelineData? {
-        val goal = repository.getGoalById(goalId) ?: return null
-        val today = getToday()
-
-        val startDate = goal.startDate
-        val endDate = goal.endDate
-
-        val daysElapsed = today - startDate
-        val daysRemaining = endDate?.let { it - today }
-        val totalDays = endDate?.let { it - startDate } ?: 365
-
-        // 计算预期进度（基于时间）
-        val expectedProgress = if (totalDays > 0) {
-            (daysElapsed.toFloat() / totalDays).coerceIn(0f, 1f)
-        } else 0f
-
-        val currentProgress = calculateProgress(goal)
-        val isOnTrack = currentProgress >= expectedProgress * 0.9f // 允许10%的偏差
-
-        return GoalTimelineData(
-            goalId = goalId,
-            goalTitle = goal.title,
-            startDate = startDate,
-            endDate = endDate,
-            progressRecords = emptyList(), // 需要从记录表获取
-            currentProgress = currentProgress,
-            daysElapsed = daysElapsed,
-            daysRemaining = daysRemaining,
-            expectedProgress = expectedProgress,
-            isOnTrack = isOnTrack
-        )
-    }
-
-    /**
-     * 获取即将到期的目标
-     */
-    suspend fun getUpcomingDeadlines(days: Int = 7): List<GoalEntity> {
-        val allGoals = repository.getAllGoals().first()
-        val today = getToday()
-
-        return allGoals
-            .filter { it.status == GoalStatus.ACTIVE }
-            .filter { goal ->
-                goal.endDate?.let { it - today in 0..days } ?: false
-            }
-            .sortedBy { it.endDate }
-    }
-
-    /**
-     * 获取已逾期目标
-     */
-    suspend fun getOverdueGoals(): List<GoalEntity> {
-        val allGoals = repository.getAllGoals().first()
-        val today = getToday()
-
-        return allGoals
-            .filter { it.status == GoalStatus.ACTIVE }
-            .filter { goal ->
-                goal.endDate?.let { it < today } ?: false
-            }
-            .sortedBy { it.endDate }
-    }
-
-    /**
-     * 获取推荐目标（基于用户历史和当前活跃目标）
-     */
-    suspend fun getRecommendedTemplates(): List<GoalTemplate> {
-        val allGoals = repository.getAllGoals().first()
-
-        // 找出用户最常创建的分类
-        val categoryCount = allGoals.groupBy { it.category }
-            .mapValues { it.value.size }
-
-        // 找出用户尚未尝试的分类
-        val unusedCategories = goalCategoryOptions.map { it.first }
-            .filter { category -> categoryCount[category] == null || categoryCount[category] == 0 }
-
-        // 获取推荐模板
-        val recommendations = mutableListOf<GoalTemplate>()
-
-        // 1. 从最常用分类中推荐
-        categoryCount.entries
-            .sortedByDescending { it.value }
-            .take(2)
-            .forEach { (category, _) ->
-                goalTemplates
-                    .filter { it.category == category }
-                    .take(1)
-                    .forEach { recommendations.add(it) }
-            }
-
-        // 2. 从未尝试分类中推荐
-        unusedCategories.take(2).forEach { category ->
-            goalTemplates
-                .filter { it.category == category }
-                .take(1)
-                .forEach { recommendations.add(it) }
-        }
-
-        // 3. 补充一些热门模板
-        val popularTemplates = listOf("learning_reading", "health_exercise", "finance_saving")
-        popularTemplates.forEach { id ->
-            goalTemplates.find { it.id == id }?.let { template ->
-                if (!recommendations.contains(template)) {
-                    recommendations.add(template)
-                }
-            }
-        }
-
-        return recommendations.take(6)
-    }
-
-    /**
-     * 从模板创建目标
-     */
-    suspend fun createGoalFromTemplate(template: GoalTemplate, customTitle: String? = null): Long {
-        val today = getToday()
-        val endDate = today + template.suggestedDuration
-
-        return createGoal(
-            title = customTitle ?: template.name,
-            description = template.description,
-            goalType = template.goalType,
-            category = template.category,
-            startDate = today,
-            endDate = endDate,
-            progressType = template.progressType,
-            targetValue = template.targetValue,
-            unit = template.unit
-        )
-    }
-
-    /**
-     * 获取目标完成率趋势（最近6个月）
-     */
-    suspend fun getCompletionRateTrend(): List<Pair<String, Float>> {
-        val insights = getGoalInsights()
-        return insights.monthlyStats.map { stats ->
-            val total = stats.createdCount + stats.completedCount
-            val rate = if (total > 0) stats.completedCount.toFloat() / total else 0f
-            stats.monthLabel to rate
-        }
-    }
-
-    /**
-     * 获取按分类分组的活跃目标
-     */
-    suspend fun getActiveGoalsByCategory(): Map<String, List<GoalEntity>> {
-        val activeGoals = repository.getAllGoals().first()
-            .filter { it.status == GoalStatus.ACTIVE }
-
-        return activeGoals.groupBy { it.category }
-    }
-
-    /**
-     * 计算目标健康度（0-100）
-     */
-    fun calculateGoalHealth(goal: GoalEntity): Int {
-        if (goal.status == GoalStatus.COMPLETED) return 100
-        if (goal.status == GoalStatus.ABANDONED) return 0
-
-        val today = getToday()
-        val progress = calculateProgress(goal)
-
-        // 如果没有截止日期，仅基于进度评估
-        if (goal.endDate == null) {
-            return (progress * 100).toInt()
-        }
-
-        val totalDays = goal.endDate - goal.startDate
-        val daysElapsed = today - goal.startDate
-        val expectedProgress = if (totalDays > 0) {
-            (daysElapsed.toFloat() / totalDays).coerceIn(0f, 1f)
-        } else 1f
-
-        // 健康度计算：实际进度与预期进度的比值
-        val healthRatio = if (expectedProgress > 0) {
-            (progress / expectedProgress).coerceIn(0f, 1.5f)
-        } else 1f
-
-        // 如果已逾期，降低健康度
-        val overdueRatio = if (today > goal.endDate) {
-            val overdueDays = today - goal.endDate
-            maxOf(0.5f, 1f - (overdueDays * 0.02f))
-        } else 1f
-
-        return (healthRatio * overdueRatio * 100).toInt().coerceIn(0, 100)
     }
 }

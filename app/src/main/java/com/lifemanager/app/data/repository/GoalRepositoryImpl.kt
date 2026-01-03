@@ -65,6 +65,10 @@ class GoalRepositoryImpl @Inject constructor(
         return goalDao.getTopLevelGoals()
     }
 
+    override fun getAllTopLevelGoals(): Flow<List<GoalEntity>> {
+        return goalDao.getAllTopLevelGoals()
+    }
+
     override fun getChildGoals(parentId: Long): Flow<List<GoalEntity>> {
         return goalDao.getChildGoals(parentId)
     }
@@ -79,6 +83,14 @@ class GoalRepositoryImpl @Inject constructor(
 
     override suspend fun countCompletedChildGoals(parentId: Long): Int {
         return goalDao.countCompletedChildGoals(parentId)
+    }
+
+    override suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean) {
+        goalDao.updateMultiLevelFlag(id, isMultiLevel)
+    }
+
+    override suspend fun deleteChildGoals(parentId: Long) {
+        goalDao.deleteChildGoals(parentId)
     }
 
     override suspend fun deleteWithChildren(id: Long) {

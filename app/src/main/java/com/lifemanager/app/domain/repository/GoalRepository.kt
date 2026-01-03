@@ -27,6 +27,11 @@ interface GoalRepository {
     fun getTopLevelGoals(): Flow<List<GoalEntity>>
 
     /**
+     * 获取所有顶级目标（包含所有状态）
+     */
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>>
+
+    /**
      * 获取子目标
      */
     fun getChildGoals(parentId: Long): Flow<List<GoalEntity>>
@@ -45,6 +50,16 @@ interface GoalRepository {
      * 统计已完成的子目标数量
      */
     suspend fun countCompletedChildGoals(parentId: Long): Int
+
+    /**
+     * 更新多级目标标记
+     */
+    suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean)
+
+    /**
+     * 删除子目标
+     */
+    suspend fun deleteChildGoals(parentId: Long)
 
     /**
      * 删除目标及其所有子目标

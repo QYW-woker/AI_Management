@@ -90,12 +90,48 @@ sealed class Screen(val route: String) {
 
     // ==================== 目标模块 ====================
 
-    /** 添加目标 */
+    /** 添加单级目标 */
     object AddGoal : Screen("add_goal")
+
+    /** 添加多级目标 */
+    object AddMultiLevelGoal : Screen("add_multi_level_goal")
+
+    /** 编辑目标 */
+    object EditGoal : Screen("edit_goal/{id}") {
+        fun createRoute(id: Long) = "edit_goal/$id"
+    }
 
     /** 目标详情 */
     object GoalDetail : Screen("goal_detail/{id}") {
         fun createRoute(id: Long) = "goal_detail/$id"
+    }
+
+    // ==================== 存钱模块 ====================
+
+    /** 存钱总览 */
+    object SavingsOverview : Screen("savings_overview")
+
+    /** 快速存钱 */
+    object QuickSavings : Screen("quick_savings/{planId}") {
+        fun createRoute(planId: Long? = null) = if (planId != null) "quick_savings/$planId" else "quick_savings/-1"
+    }
+
+    /** 存钱计划详情 */
+    object SavingsPlanDetail : Screen("savings_plan_detail/{id}") {
+        fun createRoute(id: Long) = "savings_plan_detail/$id"
+    }
+
+    /** 添加存钱计划 */
+    object AddSavingsPlan : Screen("add_savings_plan")
+
+    /** 编辑存钱计划 */
+    object EditSavingsPlan : Screen("edit_savings_plan/{id}") {
+        fun createRoute(id: Long) = "edit_savings_plan/$id"
+    }
+
+    /** 存钱记录详情 */
+    object SavingsRecordDetail : Screen("savings_record_detail/{id}") {
+        fun createRoute(id: Long) = "savings_record_detail/$id"
     }
 
     // ==================== 其他模块 ====================
