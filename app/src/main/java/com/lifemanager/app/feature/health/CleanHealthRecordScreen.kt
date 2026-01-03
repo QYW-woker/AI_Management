@@ -230,7 +230,7 @@ fun CleanHealthRecordScreen(
 }
 
 /**
- * 今日健康概览卡片 - 简洁版本
+ * 今日健康概览卡片 - 可视化增强版本
  */
 @Composable
 private fun CleanTodaySummaryCard(
@@ -271,56 +271,302 @@ private fun CleanTodaySummaryCard(
 
             Spacer(modifier = Modifier.height(Spacing.lg))
 
+            // 饮水量可视化 - 8个水杯图标
+            WaterIntakeVisual(
+                currentMl = summary.waterIntake.toInt(),
+                targetMl = 2000,
+                onClick = { onQuickRecord(HealthRecordType.WATER) }
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.lg))
+
+            // 心情表情选择
+            MoodVisual(
+                currentMood = summary.moodRating,
+                onClick = { onQuickRecord(HealthRecordType.MOOD) }
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.lg))
+
+            // 其他健康指标网格
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
+                // 睡眠 - 带进度条
+                HealthIndicatorWithProgress(
+                    icon = Icons.Outlined.Bedtime,
+                    iconColor = Color(0xFF7C4DFF),
+                    label = "睡眠",
+                    value = summary.sleepHours?.let { "${String.format("%.1f", it)}h" } ?: "--",
+                    progress = ((summary.sleepHours ?: 0.0) / 8.0).toFloat().coerceIn(0f, 1f),
+                    onClick = { onQuickRecord(HealthRecordType.SLEEP) }
+                )
+
+                // 运动 - 带进度环
+                HealthIndicatorWithProgress(
+                    icon = Icons.Outlined.DirectionsRun,
+                    iconColor = CleanColors.success,
+                    label = "运动",
+                    value = "${summary.exerciseMinutes.toInt()}分钟",
+                    progress = (summary.exerciseMinutes / 30.0).toFloat().coerceIn(0f, 1f),
+                    onClick = { onQuickRecord(HealthRecordType.EXERCISE) }
+                )
+
+                // 步数 - 带进度环
+                HealthIndicatorWithProgress(
+                    icon = Icons.Outlined.DirectionsWalk,
+                    iconColor = CleanColors.primary,
+                    label = "步数",
+                    value = "${summary.steps.toInt()}",
+                    progress = (summary.steps / 8000.0).toFloat().coerceIn(0f, 1f),
+                    onClick = { onQuickRecord(HealthRecordType.STEPS) }
+                )
+
+                // 体重
                 CleanSummaryStatItem(
                     icon = Icons.Outlined.MonitorWeight,
                     label = "体重",
-                    value = summary.weight?.let { "${String.format("%.1f", it)} kg" } ?: "--",
+                    value = summary.weight?.let { "${String.format("%.1f", it)}kg" } ?: "--",
                     onClick = { onQuickRecord(HealthRecordType.WEIGHT) }
-                )
-                CleanSummaryStatItem(
-                    icon = Icons.Outlined.Bedtime,
-                    label = "睡眠",
-                    value = summary.sleepHours?.let { "${String.format("%.1f", it)} h" } ?: "--",
-                    onClick = { onQuickRecord(HealthRecordType.SLEEP) }
-                )
-                CleanSummaryStatItem(
-                    icon = Icons.Outlined.Mood,
-                    label = "心情",
-                    value = summary.moodRating?.let { MoodRating.getDisplayName(it) } ?: "--",
-                    onClick = { onQuickRecord(HealthRecordType.MOOD) }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.md))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                CleanSummaryStatItem(
-                    icon = Icons.Outlined.WaterDrop,
-                    label = "饮水",
-                    value = "${summary.waterIntake.toInt()} ml",
-                    onClick = { onQuickRecord(HealthRecordType.WATER) }
-                )
-                CleanSummaryStatItem(
-                    icon = Icons.Outlined.DirectionsRun,
-                    label = "运动",
-                    value = "${summary.exerciseMinutes.toInt()} 分钟",
-                    onClick = { onQuickRecord(HealthRecordType.EXERCISE) }
-                )
-                CleanSummaryStatItem(
-                    icon = Icons.Outlined.DirectionsWalk,
-                    label = "步数",
-                    value = "${summary.steps.toInt()}",
-                    onClick = { onQuickRecord(HealthRecordType.STEPS) }
                 )
             }
         }
+    }
+}
+
+/**
+ * 饮水量可视化 - 水杯图标
+ */
+@Composable
+private fun WaterIntakeVisual(
+    currentMl: Int,
+    targetMl: Int,
+    onClick: () -> Unit
+) {
+    val cupsCount = 8
+    val mlPerCup = targetMl / cupsCount
+    val filledCups = (currentMl / mlPerCup).coerceIn(0, cupsCount)
+    val isCompleted = currentMl >= targetMl
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(onClick = onClick)
+            .padding(Spacing.sm)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.WaterDrop,
+                    contentDescription = null,
+                    tint = Color(0xFF03A9F4),
+                    modifier = Modifier.size(IconSize.sm)
+                )
+                Spacer(modifier = Modifier.width(Spacing.xs))
+                Text(
+                    text = "饮水",
+                    style = CleanTypography.secondary,
+                    color = CleanColors.textSecondary
+                )
+            }
+            Text(
+                text = "${currentMl}ml / ${targetMl}ml",
+                style = CleanTypography.caption,
+                color = if (isCompleted) CleanColors.success else CleanColors.textTertiary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
+        // 水杯图标行
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            repeat(cupsCount) { index ->
+                val isFilled = index < filledCups
+                Icon(
+                    imageVector = if (isFilled) Icons.Filled.LocalDrink else Icons.Outlined.LocalDrink,
+                    contentDescription = "水杯${index + 1}",
+                    tint = if (isFilled) Color(0xFF03A9F4) else CleanColors.borderLight,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // 完成提示
+        if (isCompleted) {
+            Spacer(modifier = Modifier.height(Spacing.xs))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = CleanColors.success,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "今日目标已完成！",
+                    style = CleanTypography.caption,
+                    color = CleanColors.success
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 心情表情可视化
+ */
+@Composable
+private fun MoodVisual(
+    currentMood: Int?,
+    onClick: () -> Unit
+) {
+    val moods = listOf(
+        1 to "😢",  // 很差
+        2 to "😔",  // 较差
+        3 to "😐",  // 一般
+        4 to "😊",  // 较好
+        5 to "😄"   // 很好
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(onClick = onClick)
+            .padding(Spacing.sm)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Mood,
+                    contentDescription = null,
+                    tint = CleanColors.warning,
+                    modifier = Modifier.size(IconSize.sm)
+                )
+                Spacer(modifier = Modifier.width(Spacing.xs))
+                Text(
+                    text = "今日心情",
+                    style = CleanTypography.secondary,
+                    color = CleanColors.textSecondary
+                )
+            }
+            currentMood?.let {
+                Text(
+                    text = MoodRating.getDisplayName(it),
+                    style = CleanTypography.caption,
+                    color = CleanColors.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
+        // 心情表情行
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            moods.forEach { (rating, emoji) ->
+                val isSelected = currentMood == rating
+                Surface(
+                    shape = CircleShape,
+                    color = if (isSelected) CleanColors.primary.copy(alpha = 0.15f) else Color.Transparent,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = emoji,
+                            style = CleanTypography.headline,
+                            modifier = Modifier.padding(4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (currentMood == null) {
+            Spacer(modifier = Modifier.height(Spacing.xs))
+            Text(
+                text = "点击记录今日心情",
+                style = CleanTypography.caption,
+                color = CleanColors.textTertiary,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+/**
+ * 带进度指示器的健康指标
+ */
+@Composable
+private fun HealthIndicatorWithProgress(
+    icon: ImageVector,
+    iconColor: Color,
+    label: String,
+    value: String,
+    progress: Float,
+    onClick: () -> Unit
+) {
+    val isCompleted = progress >= 1f
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(onClick = onClick)
+            .padding(Spacing.sm)
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // 进度环
+            CircularProgressIndicator(
+                progress = progress,
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 3.dp,
+                color = if (isCompleted) CleanColors.success else iconColor,
+                trackColor = CleanColors.borderLight
+            )
+            // 图标
+            Icon(
+                imageVector = if (isCompleted) Icons.Filled.CheckCircle else icon,
+                contentDescription = null,
+                tint = if (isCompleted) CleanColors.success else iconColor,
+                modifier = Modifier.size(IconSize.sm)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.xs))
+
+        Text(
+            text = value,
+            style = CleanTypography.amountSmall,
+            color = CleanColors.textPrimary
+        )
+        Text(
+            text = label,
+            style = CleanTypography.caption,
+            color = CleanColors.textSecondary
+        )
     }
 }
 

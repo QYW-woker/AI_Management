@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.dao.DailyTransactionDao
+import com.lifemanager.app.core.database.dao.FundAccountDao
 import com.lifemanager.app.core.database.dao.GoalDao
 import com.lifemanager.app.core.database.dao.TodoDao
 import com.lifemanager.app.core.database.entity.GoalEntity
@@ -26,6 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val transactionDao: DailyTransactionDao,
+    private val fundAccountDao: FundAccountDao,
     private val todoDao: TodoDao,
     private val goalDao: GoalDao,
     private val habitRepository: HabitRepository,
@@ -47,6 +49,10 @@ class HomeViewModel @Inject constructor(
     // 本月财务
     private val _monthlyFinance = MutableStateFlow(MonthlyFinanceData())
     val monthlyFinance: StateFlow<MonthlyFinanceData> = _monthlyFinance.asStateFlow()
+
+    // 财务状况（资产/负债/净资产）
+    private val _assetStatus = MutableStateFlow(AssetStatusData())
+    val assetStatus: StateFlow<AssetStatusData> = _assetStatus.asStateFlow()
 
     // 目标进度
     private val _topGoals = MutableStateFlow<List<GoalProgressData>>(emptyList())
@@ -86,11 +92,13 @@ class HomeViewModel @Inject constructor(
                 // 并行加载所有初始数据
                 val todayStatsDeferred = async { loadTodayStatsOnce() }
                 val monthlyFinanceDeferred = async { loadMonthlyFinanceOnce() }
+                val assetStatusDeferred = async { loadAssetStatusOnce() }
                 val goalsDeferred = async { loadTopGoalsOnce() }
 
                 // 等待所有数据加载完成
                 _todayStats.value = todayStatsDeferred.await()
                 _monthlyFinance.value = monthlyFinanceDeferred.await()
+                _assetStatus.value = assetStatusDeferred.await()
                 _topGoals.value = goalsDeferred.await()
             }
 
@@ -245,6 +253,25 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * 一次性加载资产状况
+     */
+    private suspend fun loadAssetStatusOnce(): AssetStatusData {
+        return try {
+            val totalAssets = fundAccountDao.getTotalAssets()
+            val totalLiabilities = fundAccountDao.getTotalLiabilities()
+            val netWorth = fundAccountDao.getNetWorth()
+
+            AssetStatusData(
+                totalAssets = totalAssets,
+                totalLiabilities = totalLiabilities,
+                netWorth = netWorth
+            )
+        } catch (e: Exception) {
+            AssetStatusData()
+        }
+    }
+
+    /**
      * 一次性加载目标进度
      */
     private suspend fun loadTopGoalsOnce(): List<GoalProgressData> {
@@ -333,4 +360,14 @@ data class GoalProgressData(
     val title: String,
     val progress: Float,
     val progressText: String
+)
+
+/**
+ * 资产状况数据
+ */
+@Stable
+data class AssetStatusData(
+    val totalAssets: Double = 0.0,      // 总资产
+    val totalLiabilities: Double = 0.0, // 总负债
+    val netWorth: Double = 0.0          // 净资产
 )

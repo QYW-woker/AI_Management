@@ -44,6 +44,7 @@ fun CleanHomeScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val todayStats by viewModel.todayStats.collectAsState()
     val monthlyFinance by viewModel.monthlyFinance.collectAsState()
+    val assetStatus by viewModel.assetStatus.collectAsState()
     val topGoals by viewModel.topGoals.collectAsState()
     val homeCardConfig by viewModel.homeCardConfig.collectAsState()
 
@@ -95,6 +96,14 @@ fun CleanHomeScreen(
                     item(key = "quick_actions") {
                         QuickActionsSection(onNavigateToModule = onNavigateToModule)
                     }
+                }
+
+                // 财务状况（资产/负债/净资产）
+                item(key = "asset_status") {
+                    AssetStatusSection(
+                        assetStatus = assetStatus,
+                        onClick = { onNavigateToModule(Screen.FundAccount.route) }
+                    )
                 }
 
                 // 本月财务
@@ -297,7 +306,7 @@ private fun StatCard(
 }
 
 /**
- * 快捷入口区域
+ * 快捷入口区域 - 网格布局，每行4个
  */
 @Composable
 private fun QuickActionsSection(
@@ -309,28 +318,47 @@ private fun QuickActionsSection(
         QuickAction("习惯", Icons.Outlined.Loop, Screen.Habit.route),
         QuickAction("日记", Icons.Outlined.Book, Screen.Diary.route),
         QuickAction("健康", Icons.Outlined.MonitorHeart, Screen.HealthRecord.route),
-        QuickAction("存钱", Icons.Outlined.Savings, Screen.SavingsPlan.route)
+        QuickAction("存钱", Icons.Outlined.Savings, Screen.SavingsPlan.route),
+        QuickAction("目标", Icons.Outlined.Flag, Screen.Goal.route),
+        QuickAction("阅读", Icons.Outlined.MenuBook, Screen.Reading.route),
+        QuickAction("时间", Icons.Outlined.Timer, Screen.TimeTrack.route)
     )
 
     Column {
         Text(
             text = "快捷入口",
             style = CleanTypography.title,
-            color = CleanColors.textPrimary,
-            modifier = Modifier.padding(horizontal = Spacing.pageHorizontal)
+            color = CleanColors.textPrimary
         )
 
         Spacer(modifier = Modifier.height(Spacing.md))
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            contentPadding = PaddingValues(horizontal = 0.dp)
+        // 网格布局，每行4个
+        val columns = 4
+        val rows = (actions.size + columns - 1) / columns
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
-            items(actions.size) { index ->
-                QuickActionItem(
-                    action = actions[index],
-                    onClick = { onNavigateToModule(actions[index].route) }
-                )
+            for (row in 0 until rows) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    for (col in 0 until columns) {
+                        val index = row * columns + col
+                        if (index < actions.size) {
+                            QuickActionItem(
+                                action = actions[index],
+                                onClick = { onNavigateToModule(actions[index].route) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            // 占位，保持布局对齐
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
         }
     }
@@ -345,11 +373,11 @@ private data class QuickAction(
 @Composable
 private fun QuickActionItem(
     action: QuickAction,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
-            .width(72.dp)
+        modifier = modifier
             .clickable(onClick = onClick)
             .padding(vertical = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -376,6 +404,123 @@ private fun QuickActionItem(
             style = CleanTypography.caption,
             color = CleanColors.textSecondary
         )
+    }
+}
+
+/**
+ * 财务状况区域（资产/负债/净资产）
+ */
+@Composable
+private fun AssetStatusSection(
+    assetStatus: AssetStatusData,
+    onClick: () -> Unit
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(Radius.md),
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
+    ) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountBalance,
+                        contentDescription = null,
+                        tint = CleanColors.primary,
+                        modifier = Modifier.size(IconSize.sm)
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.sm))
+                    Text(
+                        text = "财务状况",
+                        style = CleanTypography.title,
+                        color = CleanColors.textPrimary
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = CleanColors.textTertiary,
+                    modifier = Modifier.size(IconSize.sm)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.lg))
+
+            // 净资产突出显示
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "净资产",
+                    style = CleanTypography.caption,
+                    color = CleanColors.textTertiary
+                )
+                Spacer(modifier = Modifier.height(Spacing.xs))
+                Text(
+                    text = "¥${numberFormat.format(assetStatus.netWorth.toLong())}",
+                    style = CleanTypography.amountLarge,
+                    color = if (assetStatus.netWorth >= 0) CleanColors.primary else CleanColors.error,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.lg))
+
+            // 资产和负债
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // 总资产
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "总资产",
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = "¥${numberFormat.format(assetStatus.totalAssets.toLong())}",
+                        style = CleanTypography.amountMedium,
+                        color = CleanColors.success
+                    )
+                }
+
+                // 分隔线
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(CleanColors.borderLight)
+                )
+
+                // 总负债
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "总负债",
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = "¥${numberFormat.format(assetStatus.totalLiabilities.toLong())}",
+                        style = CleanTypography.amountMedium,
+                        color = CleanColors.error
+                    )
+                }
+            }
+        }
     }
 }
 
