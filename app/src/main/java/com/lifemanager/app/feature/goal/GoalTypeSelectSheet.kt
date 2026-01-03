@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lifemanager.app.domain.model.GoalStructureType
+import com.lifemanager.app.ui.component.*
 import com.lifemanager.app.ui.theme.*
 
 /**

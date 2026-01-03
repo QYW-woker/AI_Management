@@ -27,6 +27,7 @@ import com.lifemanager.app.domain.model.AIAnalysisState
 import com.lifemanager.app.domain.model.OperationResult
 import com.lifemanager.app.domain.model.getCategoryDisplayName
 import com.lifemanager.app.domain.model.getGoalTypeDisplayName
+import com.lifemanager.app.ui.component.*
 import com.lifemanager.app.ui.theme.*
 import java.time.Instant
 import java.time.LocalDate

@@ -183,11 +183,6 @@ sealed class Screen(val route: String) {
     /** 存钱计划 */
     object SavingsPlan : Screen("savings_plan")
 
-    /** 存钱计划详情 */
-    object SavingsPlanDetail : Screen("savings_plan_detail/{id}") {
-        fun createRoute(id: Long) = "savings_plan_detail/$id"
-    }
-
     /** 健康记录 */
     object HealthRecord : Screen("health_record")
 

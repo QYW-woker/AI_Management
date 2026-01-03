@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.SavingsRecordEntity
+import com.lifemanager.app.ui.component.*
 import com.lifemanager.app.ui.theme.*
 import java.text.NumberFormat
 import java.time.Instant

@@ -577,7 +577,7 @@ $dataStr
 
             val request = ChatRequest(
                 model = config.model,
-                messages = listOf(ChatMessage("user", prompt)),
+                messages = listOf(ApiChatMessage("user", prompt)),
                 temperature = 0.6,
                 maxTokens = 300
             )
