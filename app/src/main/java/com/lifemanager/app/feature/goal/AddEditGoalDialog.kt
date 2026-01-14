@@ -1,5 +1,7 @@
 package com.lifemanager.app.feature.goal
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -19,6 +25,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lifemanager.app.domain.model.goalCategoryOptions
 import com.lifemanager.app.domain.model.goalTypeOptions
+import com.lifemanager.app.ui.component.PremiumTextField
+import com.lifemanager.app.ui.theme.AppColors
 
 /**
  * 添加/编辑目标对话框
@@ -35,6 +43,19 @@ fun AddEditGoalDialog(
         mutableStateOf(editState.targetValue?.toString() ?: "")
     }
 
+    // 动画效果
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "dialogScale"
+    )
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -42,8 +63,28 @@ fun AddEditGoalDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(24.dp)
+                .fillMaxHeight(0.9f)
+                .scale(scale)
+                .shadow(
+                    elevation = 24.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    spotColor = AppColors.Primary.copy(alpha = 0.2f)
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.1f),
+                            AppColors.Primary.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                ),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 TopAppBar(
@@ -103,11 +144,11 @@ fun AddEditGoalDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.title,
                         onValueChange = { viewModel.updateEditTitle(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("如：存款10万元、学习一门新语言") },
+                        placeholder = "如：存款10万元、学习一门新语言",
                         singleLine = true
                     )
 
@@ -121,13 +162,14 @@ fun AddEditGoalDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.description,
                         onValueChange = { viewModel.updateEditDescription(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("详细描述你的目标...") },
+                        placeholder = "详细描述你的目标...",
                         maxLines = 3,
-                        minLines = 2
+                        minLines = 2,
+                        singleLine = false
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -146,11 +188,21 @@ fun AddEditGoalDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         goalTypeOptions.forEach { (value, label) ->
-                            FilterChip(
-                                selected = editState.goalType == value,
-                                onClick = { viewModel.updateEditGoalType(value) },
-                                label = { Text(label) }
-                            )
+                            if (editState.goalType == value) {
+                                Button(
+                                    onClick = { viewModel.updateEditGoalType(value) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(label)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEditGoalType(value) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(label)
+                                }
+                            }
                         }
                     }
 
@@ -170,11 +222,21 @@ fun AddEditGoalDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         goalCategoryOptions.forEach { (value, label) ->
-                            FilterChip(
-                                selected = editState.category == value,
-                                onClick = { viewModel.updateEditCategory(value) },
-                                label = { Text(label) }
-                            )
+                            if (editState.category == value) {
+                                Button(
+                                    onClick = { viewModel.updateEditCategory(value) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(label)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { viewModel.updateEditCategory(value) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(label)
+                                }
+                            }
                         }
                     }
 
@@ -192,16 +254,36 @@ fun AddEditGoalDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FilterChip(
-                            selected = editState.progressType == "PERCENTAGE",
-                            onClick = { viewModel.updateEditProgressType("PERCENTAGE") },
-                            label = { Text("百分比") }
-                        )
-                        FilterChip(
-                            selected = editState.progressType == "NUMERIC",
-                            onClick = { viewModel.updateEditProgressType("NUMERIC") },
-                            label = { Text("数值型") }
-                        )
+                        if (editState.progressType == "PERCENTAGE") {
+                            Button(
+                                onClick = { viewModel.updateEditProgressType("PERCENTAGE") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("百分比")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.updateEditProgressType("PERCENTAGE") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("百分比")
+                            }
+                        }
+                        if (editState.progressType == "NUMERIC") {
+                            Button(
+                                onClick = { viewModel.updateEditProgressType("NUMERIC") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("数值型")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.updateEditProgressType("NUMERIC") },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("数值型")
+                            }
+                        }
                     }
 
                     // 数值型目标设置
@@ -212,7 +294,7 @@ fun AddEditGoalDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            OutlinedTextField(
+                            PremiumTextField(
                                 value = targetValueText,
                                 onValueChange = { value ->
                                     targetValueText = value.filter { it.isDigit() || it == '.' }
@@ -221,17 +303,17 @@ fun AddEditGoalDialog(
                                     }
                                 },
                                 modifier = Modifier.weight(2f),
-                                label = { Text("目标数值 *") },
+                                label = "目标数值 *",
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 singleLine = true
                             )
 
-                            OutlinedTextField(
+                            PremiumTextField(
                                 value = editState.unit,
                                 onValueChange = { viewModel.updateEditUnit(it) },
                                 modifier = Modifier.weight(1f),
-                                label = { Text("单位") },
-                                placeholder = { Text("如：元、本") },
+                                label = "单位",
+                                placeholder = "如：元、本",
                                 singleLine = true
                             )
                         }

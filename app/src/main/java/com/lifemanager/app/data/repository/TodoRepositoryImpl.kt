@@ -2,6 +2,7 @@ package com.lifemanager.app.data.repository
 
 import com.lifemanager.app.core.database.dao.TodoDao
 import com.lifemanager.app.core.database.dao.TodoStats
+import com.lifemanager.app.core.database.dao.getTodoCountByDateRange
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.domain.repository.TodoRepository
 import kotlinx.coroutines.flow.Flow
@@ -76,11 +77,23 @@ class TodoRepositoryImpl @Inject constructor(
         dao.deleteWithSubTodos(id)
     }
 
+    override suspend fun deleteByIds(ids: List<Long>) {
+        dao.deleteByIds(ids)
+    }
+
     override suspend fun getTodayStats(today: Int): TodoStats {
         return dao.getTodayStats(today)
     }
 
     override suspend fun countPending(): Int {
         return dao.countPending()
+    }
+
+    override suspend fun getTodosByDate(epochDay: Int): List<TodoEntity> {
+        return dao.getTodosByDate(epochDay)
+    }
+
+    override suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+        return dao.getTodoCountByDateRange(startDate, endDate)
     }
 }

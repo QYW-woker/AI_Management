@@ -4,7 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,9 +23,13 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -33,8 +39,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.lifemanager.app.domain.model.SleepDuration
 import com.lifemanager.app.domain.model.moodList
+import com.lifemanager.app.domain.model.quickSleepOptions
 import com.lifemanager.app.domain.model.weatherList
+import com.lifemanager.app.ui.component.PremiumTextField
+import kotlin.math.roundToInt
+import com.lifemanager.app.ui.theme.AppColors
 
 /**
  * 编辑日记对话框
@@ -47,6 +58,19 @@ fun EditDiaryDialog(
 ) {
     val editState by viewModel.editState.collectAsState()
 
+    // 动画效果
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "dialogScale"
+    )
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -54,8 +78,28 @@ fun EditDiaryDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(24.dp)
+                .fillMaxHeight(0.9f)
+                .scale(scale)
+                .shadow(
+                    elevation = 24.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    spotColor = AppColors.Primary.copy(alpha = 0.2f)
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.1f),
+                            AppColors.Primary.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                ),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 TopAppBar(
@@ -165,6 +209,14 @@ fun EditDiaryDialog(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // 睡眠时长选择
+                    SleepDurationSection(
+                        sleepMinutes = editState.sleepMinutes,
+                        onSleepMinutesChange = { viewModel.updateEditSleep(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     // 图片/视频附件
                     Text(
                         text = "图片/视频",
@@ -189,14 +241,15 @@ fun EditDiaryDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.content,
                         onValueChange = { viewModel.updateEditContent(it) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(300.dp),
-                        placeholder = { Text("记录今天的点滴...") },
-                        textStyle = MaterialTheme.typography.bodyLarge
+                        placeholder = "记录今天的点滴...",
+                        singleLine = false,
+                        maxLines = Int.MAX_VALUE
                     )
                 }
             }
@@ -354,20 +407,21 @@ private fun AttachmentItem(
             }
         }
 
-        // 删除按钮
-        IconButton(
-            onClick = onRemove,
+        // 删除按钮 - 调小尺寸
+        Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .size(24.dp)
-                .offset(x = 6.dp, y = (-6).dp)
+                .offset(x = 4.dp, y = (-4).dp)
+                .size(18.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.error)
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "删除",
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(12.dp),
                 tint = Color.White
             )
         }
@@ -406,7 +460,6 @@ private fun MoodChip(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeatherChip(
     emoji: String,
@@ -414,15 +467,146 @@ private fun WeatherChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = emoji)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(text = name)
             }
         }
-    )
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = emoji)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = name)
+            }
+        }
+    }
+}
+
+/**
+ * 睡眠时长选择组件
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SleepDurationSection(
+    sleepMinutes: Int?,
+    onSleepMinutesChange: (Int?) -> Unit
+) {
+    val sleepDuration = SleepDuration.fromMinutes(sleepMinutes)
+    var sliderValue by remember(sleepMinutes) {
+        mutableFloatStateOf((sleepMinutes ?: 0).toFloat() / 60f)
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "昨晚睡眠",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium
+            )
+            // 显示当前睡眠时长
+            if (sleepDuration != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "🌙",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = sleepDuration.formatDisplay(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 快捷选择按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            quickSleepOptions.forEach { hours ->
+                val minutes = hours * 60
+                val isSelected = sleepMinutes == minutes
+
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        if (isSelected) {
+                            onSleepMinutesChange(null)
+                            sliderValue = 0f
+                        } else {
+                            onSleepMinutesChange(minutes)
+                            sliderValue = hours.toFloat()
+                        }
+                    },
+                    label = {
+                        Text("${hours}h")
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 滑动条
+        Column {
+            Slider(
+                value = sliderValue,
+                onValueChange = { newValue ->
+                    sliderValue = newValue
+                    // 四舍五入到15分钟
+                    val totalMinutes = (newValue * 60).roundToInt()
+                    val roundedMinutes = ((totalMinutes + 7) / 15) * 15
+                    if (roundedMinutes > 0) {
+                        onSleepMinutesChange(roundedMinutes)
+                    } else {
+                        onSleepMinutesChange(null)
+                    }
+                },
+                valueRange = 0f..12f,
+                steps = 47, // 0-12小时，每15分钟一个步进 (12*4 - 1 = 47)
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "0h",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "6h",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "12h",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }

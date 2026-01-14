@@ -8,6 +8,8 @@ import com.lifemanager.app.domain.model.RecordEditState
 import com.lifemanager.app.domain.model.SavingsPlanWithDetails
 import com.lifemanager.app.domain.model.SavingsStats
 import com.lifemanager.app.domain.model.SavingsUiState
+import com.lifemanager.app.domain.model.SavingsPlanTemplate
+import java.time.LocalDate
 import com.lifemanager.app.domain.usecase.SavingsPlanUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,11 +54,22 @@ class SavingsPlanViewModel @Inject constructor(
     private val _showDepositDialog = MutableStateFlow(false)
     val showDepositDialog: StateFlow<Boolean> = _showDepositDialog.asStateFlow()
 
+    private val _showWithdrawDialog = MutableStateFlow(false)
+    val showWithdrawDialog: StateFlow<Boolean> = _showWithdrawDialog.asStateFlow()
+
     private val _showDeleteDialog = MutableStateFlow(false)
     val showDeleteDialog: StateFlow<Boolean> = _showDeleteDialog.asStateFlow()
 
+    private val _showHistoryDialog = MutableStateFlow(false)
+    val showHistoryDialog: StateFlow<Boolean> = _showHistoryDialog.asStateFlow()
+
+    // 当前查看历史的计划
+    private val _currentHistoryPlan = MutableStateFlow<SavingsPlanWithDetails?>(null)
+    val currentHistoryPlan: StateFlow<SavingsPlanWithDetails?> = _currentHistoryPlan.asStateFlow()
+
     private var planToDelete: Long? = null
     private var currentDepositPlanId: Long? = null
+    private var currentWithdrawPlanId: Long? = null
 
     init {
         loadPlans()
@@ -180,6 +193,25 @@ class SavingsPlanViewModel @Inject constructor(
     }
 
     /**
+     * 应用模板
+     */
+    fun applyTemplate(template: SavingsPlanTemplate) {
+        val today = LocalDate.now()
+        val targetDate = today.plusMonths(template.suggestedMonths.toLong())
+
+        _planEditState.value = _planEditState.value.copy(
+            name = template.name,
+            description = template.description,
+            targetAmount = template.suggestedAmount,
+            startDate = today.toEpochDay().toInt(),
+            targetDate = targetDate.toEpochDay().toInt(),
+            strategy = template.strategy,
+            color = template.color,
+            error = null
+        )
+    }
+
+    /**
      * 保存计划
      */
     fun savePlan() {
@@ -293,6 +325,97 @@ class SavingsPlanViewModel @Inject constructor(
     }
 
     /**
+     * 显示取款对话框
+     */
+    fun showWithdrawDialog(planId: Long) {
+        currentWithdrawPlanId = planId
+        _recordEditState.value = RecordEditState(
+            planId = planId,
+            date = useCase.getToday(),
+            isWithdrawal = true
+        )
+        _showWithdrawDialog.value = true
+    }
+
+    /**
+     * 隐藏取款对话框
+     */
+    fun hideWithdrawDialog() {
+        _showWithdrawDialog.value = false
+        _recordEditState.value = RecordEditState()
+        currentWithdrawPlanId = null
+    }
+
+    /**
+     * 确认取款
+     */
+    fun confirmWithdraw() {
+        val state = _recordEditState.value
+        val planId = currentWithdrawPlanId ?: return
+
+        if (state.amount <= 0) {
+            _recordEditState.value = state.copy(error = "请输入取款金额")
+            return
+        }
+
+        viewModelScope.launch {
+            _recordEditState.value = state.copy(isSaving = true, error = null)
+            try {
+                val success = useCase.withdraw(planId, state.amount, state.note)
+                if (success) {
+                    hideWithdrawDialog()
+                    loadStats()
+                } else {
+                    _recordEditState.value = _recordEditState.value.copy(
+                        isSaving = false,
+                        error = "余额不足"
+                    )
+                }
+            } catch (e: Exception) {
+                _recordEditState.value = _recordEditState.value.copy(
+                    isSaving = false,
+                    error = e.message ?: "取款失败"
+                )
+            }
+        }
+    }
+
+    /**
+     * 显示历史记录对话框
+     */
+    fun showHistoryDialog(planId: Long) {
+        viewModelScope.launch {
+            val planDetails = useCase.getPlanDetails(planId)
+            if (planDetails != null) {
+                _currentHistoryPlan.value = planDetails
+                _showHistoryDialog.value = true
+            }
+        }
+    }
+
+    /**
+     * 隐藏历史记录对话框
+     */
+    fun hideHistoryDialog() {
+        _showHistoryDialog.value = false
+        _currentHistoryPlan.value = null
+    }
+
+    /**
+     * 快速存款（预设金额）
+     */
+    fun quickDeposit(planId: Long, amount: Double) {
+        viewModelScope.launch {
+            try {
+                useCase.deposit(planId, amount, "快速存款")
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "存款失败")
+            }
+        }
+    }
+
+    /**
      * 显示删除确认
      */
     fun showDeleteConfirm(planId: Long) {
@@ -354,5 +477,139 @@ class SavingsPlanViewModel @Inject constructor(
      */
     fun formatDate(epochDay: Int): String {
         return useCase.formatDate(epochDay)
+    }
+
+    /**
+     * 根据ID获取计划（用于详情页）
+     */
+    fun getPlanById(planId: Long) = kotlinx.coroutines.flow.flow {
+        val plan = useCase.getPlanById(planId)
+        if (plan != null) {
+            val plans = _plans.value
+            val planWithDetails = plans.find { it.plan.id == planId }
+            emit(planWithDetails)
+        } else {
+            emit(null)
+        }
+    }
+
+    /**
+     * 加载计划详情
+     */
+    fun loadPlanDetail(planId: Long) {
+        // 通过 getPlanById 获取
+    }
+
+    /**
+     * 获取计划的存款记录
+     */
+    fun getDepositsForPlan(planId: Long) = useCase.getPlanRecords(planId)
+
+    /**
+     * 根据ID获取存款记录
+     */
+    fun getDepositById(depositId: Long) = kotlinx.coroutines.flow.flow {
+        emit(useCase.getRecordById(depositId))
+    }
+
+    /**
+     * 直接存款（用于快速存钱页面）
+     */
+    fun deposit(planId: Long, amount: Double, note: String?, date: java.time.LocalDate) {
+        viewModelScope.launch {
+            try {
+                useCase.deposit(planId, amount, note ?: "")
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "存款失败")
+            }
+        }
+    }
+
+    /**
+     * 删除计划
+     */
+    fun deletePlan(planId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deletePlan(planId)
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 删除存款记录
+     */
+    fun deleteDeposit(depositId: Long) {
+        viewModelScope.launch {
+            try {
+                useCase.deleteRecord(depositId)
+                loadStats()
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "删除失败")
+            }
+        }
+    }
+
+    /**
+     * 创建计划（用于独立页面）
+     */
+    fun createPlan(
+        name: String,
+        targetAmount: Double,
+        targetDate: Int,
+        strategy: String,
+        color: String
+    ) {
+        viewModelScope.launch {
+            try {
+                val today = useCase.getToday()
+                val plan = SavingsPlanEntity(
+                    id = 0,
+                    name = name.trim(),
+                    description = "",
+                    targetAmount = targetAmount,
+                    startDate = today,
+                    targetDate = targetDate,
+                    strategy = strategy,
+                    color = color
+                )
+                useCase.createPlan(plan)
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "创建失败")
+            }
+        }
+    }
+
+    /**
+     * 更新计划（用于独立页面）
+     */
+    fun updatePlan(
+        id: Long,
+        name: String,
+        targetAmount: Double,
+        targetDate: Int,
+        strategy: String,
+        color: String
+    ) {
+        viewModelScope.launch {
+            try {
+                val existing = useCase.getPlanById(id)
+                if (existing != null) {
+                    val updated = existing.copy(
+                        name = name.trim(),
+                        targetAmount = targetAmount,
+                        targetDate = targetDate,
+                        strategy = strategy,
+                        color = color
+                    )
+                    useCase.updatePlan(updated)
+                }
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error(e.message ?: "更新失败")
+            }
+        }
     }
 }

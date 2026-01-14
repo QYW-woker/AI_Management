@@ -93,4 +93,24 @@ interface HabitDao {
      */
     @Query("SELECT COUNT(*) FROM habits WHERE status = 'ACTIVE'")
     suspend fun countActive(): Int
+
+    /**
+     * 获取所有活跃习惯（同步版本，用于AI分析）
+     */
+    @Query("""
+        SELECT * FROM habits
+        WHERE status = 'ACTIVE'
+        ORDER BY createdAt ASC
+    """)
+    suspend fun getEnabledSync(): List<HabitEntity>
+
+    /**
+     * 获取所有活跃习惯（同步版本，用于Widget）
+     */
+    @Query("""
+        SELECT * FROM habits
+        WHERE status = 'ACTIVE'
+        ORDER BY createdAt ASC
+    """)
+    suspend fun getActiveHabitsSync(): List<HabitEntity>
 }

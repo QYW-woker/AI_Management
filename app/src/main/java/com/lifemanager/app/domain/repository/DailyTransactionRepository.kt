@@ -71,6 +71,11 @@ interface DailyTransactionRepository {
     suspend fun deleteById(id: Long)
 
     /**
+     * 批量删除交易
+     */
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /**
      * 获取今日支出总额
      */
     suspend fun getTodayExpense(today: Int): Double
@@ -79,4 +84,34 @@ interface DailyTransactionRepository {
      * 统计指定日期范围的交易数量
      */
     suspend fun countInRange(startDate: Int, endDate: Int): Int
+
+    /**
+     * 获取指定日期范围内指定分类的支出总额
+     */
+    suspend fun getTotalByCategoryInRange(startDate: Int, endDate: Int, categoryId: Long): Double
+
+    /**
+     * 查找潜在的重复交易
+     */
+    suspend fun findPotentialDuplicates(
+        date: Int,
+        type: String,
+        amount: Double,
+        categoryId: Long?
+    ): List<DailyTransactionEntity>
+
+    /**
+     * 查找时间窗口内的重复交易
+     */
+    suspend fun findDuplicatesInTimeWindow(
+        date: Int,
+        type: String,
+        amount: Double,
+        timeWindowMinutes: Int = 5
+    ): List<DailyTransactionEntity>
+
+    /**
+     * 获取指定账户的交易记录
+     */
+    suspend fun getByAccountId(accountId: Long, startDate: Int, endDate: Int): List<DailyTransactionEntity>
 }

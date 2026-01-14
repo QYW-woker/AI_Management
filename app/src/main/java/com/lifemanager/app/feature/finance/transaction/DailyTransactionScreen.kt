@@ -1,8 +1,10 @@
 package com.lifemanager.app.feature.finance.transaction
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,10 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.domain.model.*
-import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.YearMonth
-import java.util.Locale
+import kotlin.math.abs
 
 /**
  * 日常记账主界面
@@ -48,38 +49,98 @@ fun DailyTransactionScreen(
     val viewMode by viewModel.viewMode.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
     val showDeleteDialog by viewModel.showDeleteDialog.collectAsState()
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+    val selectedIds by viewModel.selectedIds.collectAsState()
+    val showBatchDeleteDialog by viewModel.showBatchDeleteDialog.collectAsState()
+
+    // 使用 BackHandler 处理返回键
+    if (isSelectionMode) {
+        androidx.activity.compose.BackHandler {
+            viewModel.exitSelectionMode()
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("日常记账") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+            if (isSelectionMode) {
+                // 选择模式的顶部栏
+                TopAppBar(
+                    title = { Text("已选择 ${selectedIds.size} 项") },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.exitSelectionMode() }) {
+                            Icon(Icons.Default.Close, contentDescription = "退出选择")
+                        }
+                    },
+                    actions = {
+                        // 全选/取消全选
+                        val allCount = transactionGroups.sumOf { it.transactions.size }
+                        if (selectedIds.size < allCount) {
+                            IconButton(onClick = { viewModel.selectAll() }) {
+                                Icon(Icons.Default.SelectAll, contentDescription = "全选")
+                            }
+                        } else {
+                            IconButton(onClick = { viewModel.deselectAll() }) {
+                                Icon(Icons.Default.Deselect, contentDescription = "取消全选")
+                            }
+                        }
+                        // 删除按钮
+                        IconButton(
+                            onClick = { viewModel.showBatchDeleteConfirm() },
+                            enabled = selectedIds.isNotEmpty()
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "删除选中",
+                                tint = if (selectedIds.isNotEmpty()) MaterialTheme.colorScheme.error
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                )
+            } else {
+                // 正常模式的顶部栏
+                TopAppBar(
+                    title = { Text("日常记账") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        // 批量选择按钮
+                        IconButton(onClick = { viewModel.enterSelectionMode() }) {
+                            Icon(
+                                imageVector = Icons.Default.Checklist,
+                                contentDescription = "批量选择"
+                            )
+                        }
+                        // 导入账单按钮
+                        IconButton(onClick = onNavigateToImport) {
+                            Icon(
+                                imageVector = Icons.Filled.FileUpload,
+                                contentDescription = "导入账单"
+                            )
+                        }
+                        IconButton(onClick = { viewModel.toggleViewMode() }) {
+                            Icon(
+                                imageVector = if (viewMode == "LIST") Icons.Filled.CalendarMonth else Icons.Filled.List,
+                                contentDescription = if (viewMode == "LIST") "日历视图" else "列表视图"
+                            )
+                        }
                     }
-                },
-                actions = {
-                    // 导入账单按钮
-                    IconButton(onClick = onNavigateToImport) {
-                        Icon(
-                            imageVector = Icons.Filled.FileUpload,
-                            contentDescription = "导入账单"
-                        )
-                    }
-                    IconButton(onClick = { viewModel.toggleViewMode() }) {
-                        Icon(
-                            imageVector = if (viewMode == "LIST") Icons.Filled.CalendarMonth else Icons.Filled.List,
-                            contentDescription = if (viewMode == "LIST") "日历视图" else "列表视图"
-                        )
-                    }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { viewModel.showAddDialog() }
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "记一笔")
+            if (!isSelectionMode) {
+                FloatingActionButton(
+                    onClick = { viewModel.showAddDialog() }
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "记一笔")
+                }
             }
         }
     ) { paddingValues ->
@@ -152,8 +213,22 @@ fun DailyTransactionScreen(
                                     ) { transaction ->
                                         TransactionItem(
                                             transaction = transaction,
-                                            onClick = { viewModel.showEditDialog(transaction.transaction.id) },
-                                            onDelete = { viewModel.showDeleteConfirm(transaction.transaction.id) }
+                                            isSelectionMode = isSelectionMode,
+                                            isSelected = selectedIds.contains(transaction.transaction.id),
+                                            onClick = {
+                                                if (isSelectionMode) {
+                                                    viewModel.toggleSelection(transaction.transaction.id)
+                                                } else {
+                                                    viewModel.showEditDialog(transaction.transaction.id)
+                                                }
+                                            },
+                                            onDelete = { viewModel.showDeleteConfirm(transaction.transaction.id) },
+                                            onLongClick = {
+                                                if (!isSelectionMode) {
+                                                    viewModel.enterSelectionMode()
+                                                    viewModel.toggleSelection(transaction.transaction.id)
+                                                }
+                                            }
                                         )
                                     }
                                 }
@@ -182,7 +257,7 @@ fun DailyTransactionScreen(
         AlertDialog(
             onDismissRequest = { viewModel.hideDeleteConfirm() },
             title = { Text("确认删除") },
-            text = { Text("确定要删除这条记录吗？") },
+            text = { Text("确定要删除这条记录吗？此操作不可恢复。") },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.confirmDelete() },
@@ -200,6 +275,37 @@ fun DailyTransactionScreen(
             }
         )
     }
+
+    // 批量删除确认对话框
+    if (showBatchDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.hideBatchDeleteConfirm() },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteSweep,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("确认批量删除") },
+            text = { Text("确定要删除选中的 ${selectedIds.size} 条记录吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmBatchDelete() },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideBatchDeleteConfirm() }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -207,8 +313,6 @@ private fun StatsCards(
     todayStats: DailyStats,
     monthStats: PeriodStats
 ) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -236,10 +340,13 @@ private fun StatsCards(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "¥${numberFormat.format(todayStats.totalExpense)}",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = formatAmount(todayStats.totalExpense),
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFE65100)
+                    color = Color(0xFFE65100),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -265,10 +372,13 @@ private fun StatsCards(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "¥${numberFormat.format(monthStats.totalExpense)}",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = formatAmount(monthStats.totalExpense),
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1565C0)
+                    color = Color(0xFF1565C0),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -277,14 +387,15 @@ private fun StatsCards(
 
 @Composable
 private fun DayHeader(group: DailyTransactionGroup) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
             Text(
                 text = group.dateText,
                 style = MaterialTheme.typography.titleMedium,
@@ -298,40 +409,52 @@ private fun DayHeader(group: DailyTransactionGroup) {
             )
         }
 
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (group.totalIncome > 0) {
                 Text(
-                    text = "+${numberFormat.format(group.totalIncome)}",
+                    text = "+${formatAmountShort(group.totalIncome)}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF4CAF50)
+                    color = Color(0xFF4CAF50),
+                    maxLines = 1
                 )
-                Spacer(modifier = Modifier.width(12.dp))
             }
             if (group.totalExpense > 0) {
                 Text(
-                    text = "-${numberFormat.format(group.totalExpense)}",
+                    text = "-${formatAmountShort(group.totalExpense)}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFF44336)
+                    color = Color(0xFFF44336),
+                    maxLines = 1
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TransactionItem(
     transaction: DailyTransactionWithCategory,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
     val isExpense = transaction.transaction.type == TransactionType.EXPENSE
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -339,10 +462,28 @@ private fun TransactionItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 分类图标
+            // 选择模式下显示复选框
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            // 分类图标 - 使用卡通emoji
+            val emoji = transaction.category?.let {
+                com.lifemanager.app.ui.component.CategoryIcons.getIcon(
+                    name = it.name,
+                    iconName = it.iconName,
+                    moduleType = it.moduleType
+                )
+            } ?: if (isExpense) "💸" else "💰"
+
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(
                         transaction.category?.let { parseColor(it.color) }
@@ -350,11 +491,9 @@ private fun TransactionItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isExpense) Icons.Filled.ShoppingCart else Icons.Filled.AccountBalanceWallet,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
 
@@ -378,13 +517,16 @@ private fun TransactionItem(
                 }
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             // 金额和时间
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${if (isExpense) "-" else "+"}¥${numberFormat.format(transaction.transaction.amount)}",
+                    text = "${if (isExpense) "-" else "+"}${formatAmount(transaction.transaction.amount)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+                    color = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50),
+                    maxLines = 1
                 )
                 if (transaction.transaction.time.isNotBlank()) {
                     Text(
@@ -395,17 +537,19 @@ private fun TransactionItem(
                 }
             }
 
-            // 删除按钮
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp)
-                )
+            // 非选择模式下显示删除按钮
+            if (!isSelectionMode) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "删除",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
@@ -451,6 +595,49 @@ private fun parseColor(colorString: String): Color {
 }
 
 /**
+ * 智能格式化金额
+ * - 小于1万：显示完整金额（如 ¥1,234.56）
+ * - 1万-1亿：显示万为单位（如 ¥1.23万）
+ * - 大于1亿：显示亿为单位（如 ¥1.23亿）
+ */
+private fun formatAmount(amount: Double): String {
+    val absAmount = abs(amount)
+    return when {
+        absAmount >= 100_000_000 -> {
+            val value = absAmount / 100_000_000
+            "¥${String.format("%.2f", value)}亿"
+        }
+        absAmount >= 10_000 -> {
+            val value = absAmount / 10_000
+            "¥${String.format("%.2f", value)}万"
+        }
+        else -> {
+            "¥${String.format("%,.2f", absAmount)}"
+        }
+    }
+}
+
+/**
+ * 简短格式化金额（不带¥符号）
+ */
+private fun formatAmountShort(amount: Double): String {
+    val absAmount = abs(amount)
+    return when {
+        absAmount >= 100_000_000 -> {
+            val value = absAmount / 100_000_000
+            "${String.format("%.1f", value)}亿"
+        }
+        absAmount >= 10_000 -> {
+            val value = absAmount / 10_000
+            "${String.format("%.1f", value)}万"
+        }
+        else -> {
+            String.format("%,.0f", absAmount)
+        }
+    }
+}
+
+/**
  * 日历视图
  */
 @Composable
@@ -463,7 +650,6 @@ private fun CalendarView(
     val currentYearMonth by viewModel.currentYearMonth.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val calendarData by viewModel.calendarData.collectAsState()
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // 月份导航
@@ -597,7 +783,6 @@ private fun CalendarDayCell(
 ) {
     val today = remember { LocalDate.now().toEpochDay().toInt() }
     val isToday = day.epochDay == today
-    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
     Box(
         modifier = Modifier

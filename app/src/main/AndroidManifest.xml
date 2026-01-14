@@ -26,11 +26,18 @@
     <!-- 悬浮窗权限（悬浮球功能） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- 唤醒锁权限（保持悬浮球服务运行） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 请求忽略电池优化（保持后台运行） -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- 相机权限（拍照识别） -->
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- 前台服务类型声明 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".LifeManagerApplication"
@@ -68,7 +75,7 @@
         <!-- 开机广播接收器 -->
         <receiver
             android:name=".core.reminder.BootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
@@ -78,11 +85,19 @@
         <service
             android:name=".core.floatingball.FloatingBallService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="floating_ball_voice_assistant" />
-        </service>
+            android:foregroundServiceType="dataSync" />
+        <!-- Note: specialUse requires API 34, using dataSync for SDK 33 compatibility -->
+
+        <!-- 悬浮球重启接收器 -->
+        <receiver
+            android:name=".core.floatingball.FloatingBallRestartReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- 支付通知监听服务 -->
         <service
@@ -104,6 +119,52 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 目标追踪桌面小组件 -->
+        <receiver
+            android:name=".widget.GoalWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_goal_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.lifemanager.app.widget.GOAL_REFRESH" />
+                <action android:name="com.lifemanager.app.widget.ADD_GOAL" />
+                <action android:name="com.lifemanager.app.widget.VIEW_GOAL" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/goal_widget_info" />
+        </receiver>
+
+        <!-- 目标小组件列表服务 -->
+        <service
+            android:name=".widget.GoalWidgetRemoteViewsService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
+        <!-- 待办事项桌面小组件 -->
+        <receiver
+            android:name=".widget.TodoWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_todo_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.lifemanager.app.widget.TODO_REFRESH" />
+                <action android:name="com.lifemanager.app.widget.ADD_TODO" />
+                <action android:name="com.lifemanager.app.widget.TOGGLE_TODO" />
+                <action android:name="com.lifemanager.app.widget.VIEW_TODO" />
+                <action android:name="com.lifemanager.app.widget.VIEW_ALL_TODO" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_widget_info" />
+        </receiver>
+
+        <!-- 待办小组件列表服务 -->
+        <service
+            android:name=".widget.TodoWidgetRemoteViewsService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
 
     </application>
 

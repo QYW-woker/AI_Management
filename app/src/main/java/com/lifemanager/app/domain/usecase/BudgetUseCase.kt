@@ -1,10 +1,14 @@
 package com.lifemanager.app.domain.usecase
 
 import com.lifemanager.app.core.database.entity.BudgetEntity
+import com.lifemanager.app.domain.model.BudgetOverviewStats
 import com.lifemanager.app.domain.model.BudgetStatus
 import com.lifemanager.app.domain.model.BudgetWithSpending
 import com.lifemanager.app.domain.model.CategoryBudgetStatus
+import com.lifemanager.app.domain.model.CategorySpendingRank
+import com.lifemanager.app.domain.model.DailyBudgetTracking
 import com.lifemanager.app.domain.model.MonthlyBudgetAnalysis
+import com.lifemanager.app.domain.model.WeeklyBudgetAnalysis
 import com.lifemanager.app.domain.repository.BudgetRepository
 import com.lifemanager.app.domain.repository.DailyTransactionRepository
 import kotlinx.coroutines.flow.Flow
@@ -74,29 +78,30 @@ class BudgetUseCase @Inject constructor(
 
     /**
      * 获取分类支出详情
+     * 注意：需要配合分类ID进行支出计算，实际支出计算在ViewModel中完成
+     * 此方法返回预算配置信息，支出数据由调用方填充
      */
     suspend fun getCategorySpending(yearMonth: Int): List<CategoryBudgetStatus> {
-        val year = yearMonth / 100
-        val month = yearMonth % 100
-        val ym = YearMonth.of(year, month)
-        val startDate = ym.atDay(1).toEpochDay().toInt()
-        val endDate = ym.atEndOfMonth().toEpochDay().toInt()
-
         val budget = budgetRepository.getByYearMonth(yearMonth) ?: return emptyList()
         val categoryBudgets = parseCategoryBudgets(budget.categoryBudgets)
 
-        // 这里简化处理，实际应该按分类汇总
         return categoryBudgets.map { (category, budgetAmount) ->
-            // TODO: 实际应该从交易记录中按分类汇总
             CategoryBudgetStatus(
                 categoryName = category,
                 budgetAmount = budgetAmount,
-                spentAmount = 0.0, // 需要按分类汇总
+                spentAmount = 0.0,
                 remaining = budgetAmount,
                 usagePercentage = 0,
                 status = BudgetStatus.NORMAL
             )
         }
+    }
+
+    /**
+     * 获取指定分类在日期范围内的支出总额
+     */
+    suspend fun getCategorySpendingAmount(startDate: Int, endDate: Int, categoryId: Long): Double {
+        return transactionRepository.getTotalByCategoryInRange(startDate, endDate, categoryId)
     }
 
     /**
@@ -323,5 +328,234 @@ class BudgetUseCase @Inject constructor(
         val year = yearMonth / 100
         val month = yearMonth % 100
         return "${year}年${month}月"
+    }
+
+    // ============ 新增预算分析功能 ============
+
+    /**
+     * 获取周预算分析
+     * 将月度预算按周分解，展示每周的预算使用情况
+     */
+    suspend fun getWeeklyBudgetAnalysis(yearMonth: Int): List<WeeklyBudgetAnalysis> {
+        val year = yearMonth / 100
+        val month = yearMonth % 100
+        val ym = YearMonth.of(year, month)
+        val today = LocalDate.now()
+
+        val budget = budgetRepository.getByYearMonth(yearMonth) ?: return emptyList()
+        val daysInMonth = ym.lengthOfMonth()
+        val dailyBudget = budget.totalBudget / daysInMonth
+
+        val result = mutableListOf<WeeklyBudgetAnalysis>()
+        var currentDay = 1
+        var weekNumber = 1
+
+        while (currentDay <= daysInMonth) {
+            val weekStart = currentDay
+            val weekEnd = minOf(currentDay + 6, daysInMonth)
+            val daysInWeek = weekEnd - weekStart + 1
+
+            val startDate = ym.atDay(weekStart).toEpochDay().toInt()
+            val endDate = ym.atDay(weekEnd).toEpochDay().toInt()
+
+            val weekBudget = dailyBudget * daysInWeek
+            val weekSpent = transactionRepository.getTotalByTypeInRange(startDate, endDate, "EXPENSE")
+
+            val isCurrentWeek = today.year == year &&
+                    today.monthValue == month &&
+                    today.dayOfMonth in weekStart..weekEnd
+
+            result.add(
+                WeeklyBudgetAnalysis(
+                    weekNumber = weekNumber,
+                    weekLabel = "${month}/${weekStart} - ${month}/${weekEnd}",
+                    budgetAmount = weekBudget,
+                    spentAmount = weekSpent,
+                    isCurrentWeek = isCurrentWeek
+                )
+            )
+
+            weekNumber++
+            currentDay = weekEnd + 1
+        }
+
+        return result
+    }
+
+    /**
+     * 获取每日预算追踪数据
+     * 显示每天的预算分配和实际支出，以及累计情况
+     */
+    suspend fun getDailyBudgetTracking(yearMonth: Int): List<DailyBudgetTracking> {
+        val year = yearMonth / 100
+        val month = yearMonth % 100
+        val ym = YearMonth.of(year, month)
+        val today = LocalDate.now()
+        val currentYearMonth = today.year * 100 + today.monthValue
+
+        val budget = budgetRepository.getByYearMonth(yearMonth) ?: return emptyList()
+        val daysInMonth = ym.lengthOfMonth()
+        val dailyBudget = budget.totalBudget / daysInMonth
+
+        // 确定要显示到哪一天
+        val displayUntilDay = if (yearMonth == currentYearMonth) {
+            today.dayOfMonth
+        } else if (yearMonth < currentYearMonth) {
+            daysInMonth
+        } else {
+            0  // 未来月份不显示
+        }
+
+        if (displayUntilDay == 0) return emptyList()
+
+        val result = mutableListOf<DailyBudgetTracking>()
+        var cumulativeBudget = 0.0
+        var cumulativeSpent = 0.0
+
+        for (day in 1..displayUntilDay) {
+            val date = ym.atDay(day)
+            val epochDay = date.toEpochDay().toInt()
+
+            val dailySpent = transactionRepository.getTotalByTypeInRange(epochDay, epochDay, "EXPENSE")
+            cumulativeBudget += dailyBudget
+            cumulativeSpent += dailySpent
+
+            result.add(
+                DailyBudgetTracking(
+                    date = epochDay,
+                    dateLabel = "${month}/${day}",
+                    dailyBudget = dailyBudget,
+                    dailySpent = dailySpent,
+                    cumulativeBudget = cumulativeBudget,
+                    cumulativeSpent = cumulativeSpent
+                )
+            )
+        }
+
+        return result
+    }
+
+    /**
+     * 获取预算概览统计（跨月分析）
+     * 分析历史预算执行情况，包括节省率、最佳/最差月份等
+     */
+    suspend fun getBudgetOverviewStats(months: Int = 12): BudgetOverviewStats {
+        val currentYearMonth = YearMonth.now()
+        var totalBudget = 0.0
+        var totalSpending = 0.0
+        var monthsWithBudget = 0
+        var bestMonth = 0
+        var bestSavings = Double.MIN_VALUE
+        var worstMonth = 0
+        var worstSavings = Double.MAX_VALUE
+        var consecutiveUnderBudget = 0
+        var countingConsecutive = true
+
+        for (i in 0 until months) {
+            val ym = currentYearMonth.minusMonths(i.toLong())
+            val yearMonth = ym.year * 100 + ym.monthValue
+            val startDate = ym.atDay(1).toEpochDay().toInt()
+            val endDate = ym.atEndOfMonth().toEpochDay().toInt()
+
+            val budget = budgetRepository.getByYearMonth(yearMonth)
+            if (budget != null) {
+                monthsWithBudget++
+                val spent = transactionRepository.getTotalByTypeInRange(startDate, endDate, "EXPENSE")
+                totalBudget += budget.totalBudget
+                totalSpending += spent
+
+                val savings = budget.totalBudget - spent
+
+                // 追踪最佳月份（节省最多）
+                if (savings > bestSavings) {
+                    bestSavings = savings
+                    bestMonth = yearMonth
+                }
+
+                // 追踪最差月份（超支最多）
+                if (savings < worstSavings) {
+                    worstSavings = savings
+                    worstMonth = yearMonth
+                }
+
+                // 计算连续未超支月数
+                if (countingConsecutive) {
+                    if (spent <= budget.totalBudget) {
+                        consecutiveUnderBudget++
+                    } else {
+                        countingConsecutive = false
+                    }
+                }
+            }
+        }
+
+        val avgBudget = if (monthsWithBudget > 0) totalBudget / monthsWithBudget else 0.0
+        val avgSpending = if (monthsWithBudget > 0) totalSpending / monthsWithBudget else 0.0
+        val savingsRate = if (totalBudget > 0) ((totalBudget - totalSpending) / totalBudget * 100) else 0.0
+
+        return BudgetOverviewStats(
+            monthlyAvgBudget = avgBudget,
+            monthlyAvgSpending = avgSpending,
+            savingsRate = savingsRate,
+            bestMonth = bestMonth,
+            worstMonth = worstMonth,
+            consecutiveUnderBudget = consecutiveUnderBudget,
+            totalMonthsTracked = monthsWithBudget
+        )
+    }
+
+    /**
+     * 智能预算建议
+     * 基于历史数据生成下月预算建议
+     */
+    suspend fun getSmartBudgetSuggestion(): Double {
+        val analysis = getMonthlyBudgetAnalysis(6)
+        if (analysis.isEmpty()) return 0.0
+
+        // 计算过去6个月的平均支出
+        val avgSpending = analysis.map { it.spentAmount }.average()
+
+        // 建议预算 = 平均支出 * 1.1（留10%余地）
+        return avgSpending * 1.1
+    }
+
+    /**
+     * 获取预算达标率
+     * 计算历史上预算执行成功的月份比例
+     */
+    suspend fun getBudgetSuccessRate(months: Int = 12): Double {
+        val analysis = getMonthlyBudgetAnalysis(months)
+        val monthsWithBudget = analysis.filter { it.hasBudget }
+        if (monthsWithBudget.isEmpty()) return 0.0
+
+        val successfulMonths = monthsWithBudget.count { it.spentAmount <= it.budgetAmount }
+        return (successfulMonths.toDouble() / monthsWithBudget.size) * 100
+    }
+
+    /**
+     * 预测本月最终支出
+     * 基于当前支出速度预测月末支出
+     */
+    suspend fun predictMonthEndSpending(yearMonth: Int): Double {
+        val year = yearMonth / 100
+        val month = yearMonth % 100
+        val ym = YearMonth.of(year, month)
+        val today = LocalDate.now()
+
+        // 只对当前月份进行预测
+        if (today.year != year || today.monthValue != month) return 0.0
+
+        val startDate = ym.atDay(1).toEpochDay().toInt()
+        val todayDate = today.toEpochDay().toInt()
+
+        val currentSpent = transactionRepository.getTotalByTypeInRange(startDate, todayDate, "EXPENSE")
+        val daysPassed = today.dayOfMonth
+        val daysInMonth = ym.lengthOfMonth()
+
+        if (daysPassed == 0) return 0.0
+
+        // 日均支出 * 总天数
+        val dailyAvg = currentSpent / daysPassed
+        return dailyAvg * daysInMonth
     }
 }

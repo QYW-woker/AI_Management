@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 待办小组件背景 - 渐变绿色调 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#FFFFFF"
+        android:endColor="#F5FFF8"
+        android:angle="135" />
+    <corners android:radius="20dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#E0F5E8" />
+</shape>

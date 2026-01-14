@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 字段管理界面
@@ -202,21 +203,24 @@ private fun FieldItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 颜色图标
+            // 卡通图标
+            val emoji = com.lifemanager.app.ui.component.CategoryIcons.getIcon(
+                name = field.name,
+                iconName = field.iconName,
+                moduleType = field.moduleType
+            )
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(
                         if (field.isEnabled) fieldColor else fieldColor.copy(alpha = 0.3f)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Category,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
 
@@ -322,12 +326,12 @@ private fun FieldEditDialog(
                 }
 
                 // 名称输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.name,
                     onValueChange = { viewModel.updateName(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("类别名称") },
-                    placeholder = { Text("请输入类别名称") },
+                    label = "类别名称",
+                    placeholder = "请输入类别名称",
                     singleLine = true,
                     enabled = !editState.isPreset // 预设类别不能修改名称
                 )

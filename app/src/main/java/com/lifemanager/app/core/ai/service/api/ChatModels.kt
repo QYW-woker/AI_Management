@@ -15,11 +15,31 @@ data class ChatRequest(
 )
 
 /**
- * 聊天消息
+ * 聊天消息 - 支持纯文本和多模态内容
  */
 data class ChatMessage(
     val role: String,      // system, user, assistant
-    val content: String
+    val content: Any       // String 或 List<ContentPart> (多模态)
+)
+
+/**
+ * 多模态消息内容部分
+ */
+sealed class ContentPart {
+    data class Text(val type: String = "text", val text: String) : ContentPart()
+    data class ImageUrl(
+        val type: String = "image_url",
+        @SerializedName("image_url")
+        val imageUrl: ImageUrlDetail
+    ) : ContentPart()
+}
+
+/**
+ * 图片URL详情
+ */
+data class ImageUrlDetail(
+    val url: String,  // 可以是URL或base64格式: "data:image/jpeg;base64,..."
+    val detail: String = "auto"  // low, high, auto
 )
 
 /**

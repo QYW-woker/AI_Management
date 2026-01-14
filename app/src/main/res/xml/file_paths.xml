@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <!-- 内部文件目录（用于交易附件等） -->
+    <files-path
+        name="internal_files"
+        path="." />
+
+    <!-- 交易附件目录 -->
+    <files-path
+        name="transaction_attachments"
+        path="transaction_attachments/" />
+
     <!-- 缓存目录，用于相机拍照临时存储 -->
     <cache-path
         name="cache"

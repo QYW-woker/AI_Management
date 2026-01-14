@@ -5,8 +5,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,12 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.ui.component.PremiumTextField
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -39,6 +48,11 @@ fun BudgetScreen(
     val monthlyAnalysis by viewModel.monthlyAnalysis.collectAsState()
     val aiAdvice by viewModel.aiAdvice.collectAsState()
     val showEditDialog by viewModel.showEditDialog.collectAsState()
+    val categoryBudgetStatuses by viewModel.categoryBudgetStatuses.collectAsState()
+    val weeklyAnalysis by viewModel.weeklyAnalysis.collectAsState()
+    val budgetStats by viewModel.budgetStats.collectAsState()
+    val predictedSpending by viewModel.predictedSpending.collectAsState()
+    val budgetSuccessRate by viewModel.budgetSuccessRate.collectAsState()
 
     Scaffold(
         topBar = {
@@ -123,6 +137,36 @@ fun BudgetScreen(
                     if (budgetWithSpending != null) {
                         item {
                             SpendingProgressCard(budgetWithSpending = budgetWithSpending!!)
+                        }
+                    }
+
+                    // 分类预算卡片
+                    if (categoryBudgetStatuses.isNotEmpty()) {
+                        item {
+                            CategoryBudgetsCard(
+                                categoryBudgets = categoryBudgetStatuses,
+                                onEditBudgets = { viewModel.showEditDialog() }
+                            )
+                        }
+                    }
+
+                    // 周预算分析卡片
+                    if (weeklyAnalysis.isNotEmpty()) {
+                        item {
+                            WeeklyBudgetCard(weeklyAnalysis = weeklyAnalysis)
+                        }
+                    }
+
+                    // 预算统计卡片
+                    if (budgetStats != null && budgetStats!!.totalMonthsTracked > 0) {
+                        item {
+                            BudgetStatsCard(
+                                stats = budgetStats!!,
+                                successRate = budgetSuccessRate,
+                                predictedSpending = predictedSpending,
+                                currentBudget = budgetWithSpending?.budget?.totalBudget ?: 0.0,
+                                formatYearMonth = { viewModel.formatYearMonth(it) }
+                            )
                         }
                     }
 
@@ -407,10 +451,120 @@ private fun SpendingProgressCard(budgetWithSpending: BudgetWithSpending) {
     }
 }
 
+/**
+ * 分类预算卡片
+ */
 @Composable
-private fun BudgetTrendCard(monthlyAnalysis: List<MonthlyBudgetAnalysis>) {
+private fun CategoryBudgetsCard(
+    categoryBudgets: List<CategoryBudgetItem>,
+    onEditBudgets: () -> Unit
+) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "分类预算",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onEditBudgets) {
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("编辑")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            categoryBudgets.forEach { budget ->
+                CategoryBudgetProgressItem(
+                    budget = budget,
+                    numberFormat = numberFormat
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryBudgetProgressItem(
+    budget: CategoryBudgetItem,
+    numberFormat: NumberFormat
+) {
+    val budgetAmount = budget.budgetAmount.toDoubleOrNull() ?: 0.0
+    val progress = if (budgetAmount > 0) (budget.spentAmount / budgetAmount).coerceIn(0.0, 1.0).toFloat() else 0f
+
+    val progressColor = when (budget.status) {
+        BudgetStatus.NORMAL -> Color(0xFF4CAF50)
+        BudgetStatus.WARNING -> Color(0xFFFF9800)
+        BudgetStatus.EXCEEDED -> Color(0xFFF44336)
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 获取卡通图标
+                val emoji = com.lifemanager.app.ui.component.CategoryIcons.getExpenseIcon(budget.categoryName)
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(parseColor(budget.categoryColor)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = emoji,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = budget.categoryName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Text(
+                text = "¥${numberFormat.format(budget.spentAmount)} / ¥${numberFormat.format(budgetAmount)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun BudgetTrendCard(monthlyAnalysis: List<MonthlyBudgetAnalysis>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp)
@@ -569,89 +723,916 @@ private fun EditBudgetDialog(
     onDismiss: () -> Unit
 ) {
     val editState by viewModel.editState.collectAsState()
+    val expenseCategories by viewModel.expenseCategories.collectAsState()
+    val showAddCategoryDialog by viewModel.showAddCategoryBudgetDialog.collectAsState()
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(text = if (editState.isEditing) "编辑预算" else "设置预算")
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // 错误提示
-                editState.error?.let { error ->
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                // 预算金额
-                OutlinedTextField(
-                    value = editState.totalBudget,
-                    onValueChange = { viewModel.updateBudgetAmount(it) },
-                    label = { Text("月度预算金额") },
-                    prefix = { Text("¥") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        windowInsets = WindowInsets.ime
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // 标题
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (editState.isEditing) "✏️ 编辑预算" else "💰 设置预算",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
                 )
-
-                // 提醒阈值
-                Column {
-                    Text(
-                        text = "预算提醒阈值: ${editState.alertThreshold}%",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Slider(
-                        value = editState.alertThreshold.toFloat(),
-                        onValueChange = { viewModel.updateAlertThreshold(it.toInt()) },
-                        valueRange = 50f..100f,
-                        steps = 9
-                    )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭")
                 }
-
-                // 提醒开关
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("启用预算提醒")
-                    Switch(
-                        checked = editState.alertEnabled,
-                        onCheckedChange = { viewModel.updateAlertEnabled(it) }
-                    )
-                }
-
-                // 备注
-                OutlinedTextField(
-                    value = editState.note,
-                    onValueChange = { viewModel.updateNote(it) },
-                    label = { Text("备注（可选）") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 2
-                )
             }
-        },
-        confirmButton = {
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 错误提示
+            editState.error?.let { error ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // 预算金额输入卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "月度预算总额",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editState.totalBudget,
+                        onValueChange = { viewModel.updateBudgetAmount(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        leadingIcon = {
+                            Text(
+                                "¥",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        placeholder = { Text("0.00") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 分类预算区域
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📊", style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "分类预算",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = { viewModel.showAddCategoryBudgetDialog() },
+                            enabled = viewModel.getAvailableCategories().isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("添加分类")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (editState.categoryBudgets.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("📁", style = MaterialTheme.typography.headlineLarge)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "暂无分类预算",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "点击上方按钮添加",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        editState.categoryBudgets.forEach { categoryBudget ->
+                            EnhancedCategoryBudgetEditItem(
+                                categoryBudget = categoryBudget,
+                                onAmountChange = { amount ->
+                                    viewModel.updateCategoryBudgetAmount(categoryBudget.categoryId, amount)
+                                },
+                                onRemove = {
+                                    viewModel.removeCategoryBudget(categoryBudget.categoryId)
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 提醒设置卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔔", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "提醒设置",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 提醒开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "启用预算提醒",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "超过阈值时发送通知",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = editState.alertEnabled,
+                            onCheckedChange = { viewModel.updateAlertEnabled(it) }
+                        )
+                    }
+
+                    if (editState.alertEnabled) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "提醒阈值: ${editState.alertThreshold}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Slider(
+                            value = editState.alertThreshold.toFloat(),
+                            onValueChange = { viewModel.updateAlertThreshold(it.toInt()) },
+                            valueRange = 50f..100f,
+                            steps = 9,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "50%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "100%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 备注卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📝", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "备注",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editState.note,
+                        onValueChange = { viewModel.updateNote(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("添加备注（可选）") },
+                        maxLines = 3,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 保存按钮
             Button(
                 onClick = { viewModel.saveBudget() },
-                enabled = !editState.isSaving
+                enabled = !editState.isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
                 if (editState.isSaving) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("保存")
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "保存预算",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+        }
+    }
+
+    // 添加分类预算对话框
+    if (showAddCategoryDialog) {
+        EnhancedAddCategoryBudgetDialog(
+            availableCategories = viewModel.getAvailableCategories(),
+            onAdd = { category, amount ->
+                viewModel.addCategoryBudget(
+                    categoryId = category.id,
+                    categoryName = category.name,
+                    categoryColor = category.color ?: "#2196F3",
+                    amount = amount
+                )
+                viewModel.hideAddCategoryBudgetDialog()
+            },
+            onDismiss = { viewModel.hideAddCategoryBudgetDialog() }
+        )
+    }
+}
+
+@Composable
+private fun EnhancedCategoryBudgetEditItem(
+    categoryBudget: CategoryBudgetItem,
+    onAmountChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    val emoji = com.lifemanager.app.ui.component.CategoryIcons.getExpenseIcon(categoryBudget.categoryName)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 分类图标
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(parseColor(categoryBudget.categoryColor)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 分类名称
+            Text(
+                text = categoryBudget.categoryName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // 金额输入
+            OutlinedTextField(
+                value = categoryBudget.budgetAmount,
+                onValueChange = onAmountChange,
+                modifier = Modifier.width(120.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    textAlign = TextAlign.End
+                ),
+                leadingIcon = {
+                    Text(
+                        "¥",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 删除按钮
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    Icons.Default.RemoveCircleOutline,
+                    contentDescription = "删除",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
-    )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EnhancedAddCategoryBudgetDialog(
+    availableCategories: List<CustomFieldEntity>,
+    onAdd: (CustomFieldEntity, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf<CustomFieldEntity?>(null) }
+    var amount by remember { mutableStateOf("") }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        windowInsets = WindowInsets.ime
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            // 标题
+            Text(
+                text = "➕ 添加分类预算",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 分类选择 - 网格布局
+            Text(
+                text = "选择分类",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 使用网格布局展示分类
+            val columns = 4
+            val rows = (availableCategories.size + columns - 1) / columns
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (row in 0 until rows) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        for (col in 0 until columns) {
+                            val index = row * columns + col
+                            if (index < availableCategories.size) {
+                                val category = availableCategories[index]
+                                val isSelected = selectedCategory?.id == category.id
+                                val emoji = com.lifemanager.app.ui.component.CategoryIcons.getIcon(
+                                    name = category.name,
+                                    iconName = category.iconName,
+                                    moduleType = category.moduleType
+                                )
+
+                                CategoryGridItem(
+                                    emoji = emoji,
+                                    name = category.name,
+                                    color = category.color ?: "#2196F3",
+                                    isSelected = isSelected,
+                                    onClick = { selectedCategory = category },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                // 占位空白
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 金额输入
+            Text(
+                text = "预算金额",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                leadingIcon = {
+                    Text(
+                        "¥",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                placeholder = { Text("0.00") },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 操作按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("取消")
+                }
+
+                Button(
+                    onClick = {
+                        selectedCategory?.let { category ->
+                            if (amount.isNotBlank()) {
+                                onAdd(category, amount)
+                            }
+                        }
+                    },
+                    enabled = selectedCategory != null && amount.isNotBlank(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("添加")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryGridItem(
+    emoji: String,
+    name: String,
+    color: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.aspectRatio(1f),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) {
+            parseColor(color).copy(alpha = 0.2f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        border = if (isSelected) {
+            androidx.compose.foundation.BorderStroke(2.dp, parseColor(color))
+        } else null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = emoji,
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                color = if (isSelected) parseColor(color) else MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+private fun parseColor(colorString: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(colorString))
+    } catch (e: Exception) {
+        Color(0xFF2196F3)
+    }
+}
+
+/**
+ * 周预算分析卡片
+ */
+@Composable
+private fun WeeklyBudgetCard(weeklyAnalysis: List<WeeklyBudgetAnalysis>) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Text(
+                text = "周预算分析",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            weeklyAnalysis.forEach { week ->
+                WeekBudgetItem(
+                    week = week,
+                    numberFormat = numberFormat
+                )
+                if (week != weeklyAnalysis.last()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekBudgetItem(
+    week: WeeklyBudgetAnalysis,
+    numberFormat: NumberFormat
+) {
+    val progress = (week.usagePercentage / 100f).coerceIn(0f, 1f)
+    val progressColor = when (week.status) {
+        BudgetStatus.NORMAL -> Color(0xFF4CAF50)
+        BudgetStatus.WARNING -> Color(0xFFFF9800)
+        BudgetStatus.EXCEEDED -> Color(0xFFF44336)
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "第${week.weekNumber}周",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (week.isCurrentWeek) FontWeight.Bold else FontWeight.Normal
+                )
+                if (week.isCurrentWeek) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Text(
+                            text = "本周",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "¥${numberFormat.format(week.spentAmount)} / ¥${numberFormat.format(week.budgetAmount)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = week.weekLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * 预算统计卡片
+ */
+@Composable
+private fun BudgetStatsCard(
+    stats: BudgetOverviewStats,
+    successRate: Double,
+    predictedSpending: Double,
+    currentBudget: Double,
+    formatYearMonth: (Int) -> String
+) {
+    val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "预算执行统计",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = when {
+                        successRate >= 80 -> Color(0xFF4CAF50).copy(alpha = 0.1f)
+                        successRate >= 50 -> Color(0xFFFF9800).copy(alpha = 0.1f)
+                        else -> Color(0xFFF44336).copy(alpha = 0.1f)
+                    }
+                ) {
+                    Text(
+                        text = "达标率 ${String.format("%.0f", successRate)}%",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = when {
+                            successRate >= 80 -> Color(0xFF4CAF50)
+                            successRate >= 50 -> Color(0xFFFF9800)
+                            else -> Color(0xFFF44336)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 统计数据网格
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatItem(
+                    label = "月均预算",
+                    value = "¥${numberFormat.format(stats.monthlyAvgBudget.toLong())}",
+                    icon = Icons.Filled.AccountBalanceWallet
+                )
+                StatItem(
+                    label = "月均支出",
+                    value = "¥${numberFormat.format(stats.monthlyAvgSpending.toLong())}",
+                    icon = Icons.Filled.TrendingUp
+                )
+                StatItem(
+                    label = "节省率",
+                    value = "${String.format("%.1f", stats.savingsRate)}%",
+                    icon = Icons.Filled.Savings
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 连续达标和预测
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "连续达标",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${stats.consecutiveUnderBudget}个月",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (stats.consecutiveUnderBudget > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (predictedSpending > 0 && currentBudget > 0) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "预测月末支出",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "¥${numberFormat.format(predictedSpending.toLong())}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (predictedSpending > currentBudget) Color(0xFFF44336) else Color(0xFF4CAF50)
+                        )
+                    }
+                }
+            }
+
+            // 最佳/最差月份
+            if (stats.bestMonth > 0 && stats.worstMonth > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.EmojiEvents,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFFFD700)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "最佳: ${formatYearMonth(stats.bestMonth)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color(0xFFF44336)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "待改进: ${formatYearMonth(stats.worstMonth)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

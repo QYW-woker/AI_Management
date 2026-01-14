@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
 import com.lifemanager.app.core.database.entity.IncomeExpenseType
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 添加/编辑收支记录对话框
@@ -155,7 +156,7 @@ fun AddEditRecordDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = amountText,
                         onValueChange = { value ->
                             // 只允许输入数字和小数点
@@ -171,8 +172,8 @@ fun AddEditRecordDialog(
                             newValue.toDoubleOrNull()?.let { viewModel.updateEditAmount(it) }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("请输入金额") },
-                        prefix = { Text("¥ ") },
+                        placeholder = "请输入金额",
+                        leadingIcon = { Text("¥ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
@@ -222,11 +223,11 @@ fun AddEditRecordDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.note,
                         onValueChange = { viewModel.updateEditNote(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("添加备注（可选）") },
+                        placeholder = "添加备注（可选）",
                         maxLines = 3,
                         minLines = 2
                     )

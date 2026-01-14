@@ -111,10 +111,41 @@ interface GoalDao {
     suspend fun updateStatus(id: Long, status: String, updatedAt: Long = System.currentTimeMillis())
 
     /**
+     * 放弃目标（带原因）
+     */
+    @Query("""
+        UPDATE goals
+        SET status = 'ABANDONED',
+            abandonReason = :reason,
+            abandonedAt = :abandonedAt,
+            updatedAt = :abandonedAt
+        WHERE id = :id
+    """)
+    suspend fun abandonGoal(id: Long, reason: String, abandonedAt: Long = System.currentTimeMillis())
+
+    /**
+     * 完成目标
+     */
+    @Query("""
+        UPDATE goals
+        SET status = 'COMPLETED',
+            completedAt = :completedAt,
+            updatedAt = :completedAt
+        WHERE id = :id
+    """)
+    suspend fun completeGoal(id: Long, completedAt: Long = System.currentTimeMillis())
+
+    /**
      * 删除目标
      */
     @Query("DELETE FROM goals WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /**
+     * 删除目标及其所有子目标
+     */
+    @Query("DELETE FROM goals WHERE id = :id OR parentId = :id")
+    suspend fun deleteWithChildren(id: Long)
 
     /**
      * 统计活跃目标数量
@@ -132,4 +163,109 @@ interface GoalDao {
         AND (endDate IS NULL OR endDate >= :startDate)
     """)
     fun getGoalsInDateRange(startDate: Int, endDate: Int): Flow<List<GoalEntity>>
+
+    /**
+     * 获取顶级目标（没有父目标的活跃目标）
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE parentId IS NULL AND status = 'ACTIVE'
+        ORDER BY
+            CASE WHEN endDate IS NULL THEN 1 ELSE 0 END,
+            endDate ASC
+    """)
+    fun getTopLevelGoals(): Flow<List<GoalEntity>>
+
+    /**
+     * 获取所有顶级目标（包含所有状态）
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE parentId IS NULL
+        ORDER BY
+            CASE status
+                WHEN 'ACTIVE' THEN 0
+                WHEN 'COMPLETED' THEN 1
+                WHEN 'ABANDONED' THEN 2
+                WHEN 'ARCHIVED' THEN 3
+            END,
+            updatedAt DESC
+    """)
+    fun getAllTopLevelGoals(): Flow<List<GoalEntity>>
+
+    /**
+     * 获取子目标
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE parentId = :parentId
+        ORDER BY createdAt ASC
+    """)
+    fun getChildGoals(parentId: Long): Flow<List<GoalEntity>>
+
+    /**
+     * 获取子目标（同步版本）
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE parentId = :parentId
+        ORDER BY createdAt ASC
+    """)
+    suspend fun getChildGoalsSync(parentId: Long): List<GoalEntity>
+
+    /**
+     * 统计子目标数量
+     */
+    @Query("SELECT COUNT(*) FROM goals WHERE parentId = :parentId")
+    suspend fun countChildGoals(parentId: Long): Int
+
+    /**
+     * 统计活跃子目标数量
+     */
+    @Query("SELECT COUNT(*) FROM goals WHERE parentId = :parentId AND status = 'ACTIVE'")
+    suspend fun countActiveChildGoals(parentId: Long): Int
+
+    /**
+     * 统计已完成的子目标数量
+     */
+    @Query("SELECT COUNT(*) FROM goals WHERE parentId = :parentId AND status = 'COMPLETED'")
+    suspend fun countCompletedChildGoals(parentId: Long): Int
+
+    /**
+     * 获取所有活跃目标（同步版本，用于AI分析）
+     */
+    @Query("""
+        SELECT * FROM goals
+        WHERE status = 'ACTIVE'
+        ORDER BY updatedAt DESC
+    """)
+    suspend fun getActiveGoalsSync(): List<GoalEntity>
+
+    /**
+     * 获取所有目标（同步版本，用于Widget）
+     */
+    @Query("""
+        SELECT * FROM goals
+        ORDER BY
+            CASE status
+                WHEN 'ACTIVE' THEN 0
+                WHEN 'COMPLETED' THEN 1
+                WHEN 'ABANDONED' THEN 2
+                WHEN 'ARCHIVED' THEN 3
+            END,
+            updatedAt DESC
+    """)
+    suspend fun getAllGoalsSync(): List<GoalEntity>
+
+    /**
+     * 更新目标的多级标记
+     */
+    @Query("UPDATE goals SET isMultiLevel = :isMultiLevel, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateMultiLevelFlag(id: Long, isMultiLevel: Boolean, updatedAt: Long = System.currentTimeMillis())
+
+    /**
+     * 批量删除子目标
+     */
+    @Query("DELETE FROM goals WHERE parentId = :parentId")
+    suspend fun deleteChildGoals(parentId: Long)
 }

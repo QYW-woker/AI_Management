@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 添加/编辑开销记录对话框
@@ -136,7 +137,7 @@ fun AddEditExpenseDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = amountText,
                         onValueChange = { value ->
                             val filtered = value.filter { it.isDigit() || it == '.' }
@@ -150,8 +151,8 @@ fun AddEditExpenseDialog(
                             newValue.toDoubleOrNull()?.let { viewModel.updateEditAmount(it) }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("请输入金额") },
-                        prefix = { Text("¥ ") },
+                        label = "请输入金额",
+                        leadingIcon = { Text("¥ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
@@ -166,7 +167,7 @@ fun AddEditExpenseDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = budgetText,
                         onValueChange = { value ->
                             val filtered = value.filter { it.isDigit() || it == '.' }
@@ -180,8 +181,8 @@ fun AddEditExpenseDialog(
                             viewModel.updateEditBudget(newValue.toDoubleOrNull())
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("设置预算进行对比") },
-                        prefix = { Text("¥ ") },
+                        label = "设置预算进行对比",
+                        leadingIcon = { Text("¥ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
@@ -231,11 +232,11 @@ fun AddEditExpenseDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.note,
                         onValueChange = { viewModel.updateEditNote(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("添加备注（可选）") },
+                        label = "添加备注（可选）",
                         maxLines = 2,
                         minLines = 2
                     )

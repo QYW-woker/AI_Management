@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.TodoStatus
+import com.lifemanager.app.core.undo.UndoAction
+import com.lifemanager.app.core.undo.UndoEvent
+import com.lifemanager.app.core.undo.UndoManager
+import com.lifemanager.app.core.undo.UndoType
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.usecase.TodoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +22,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class TodoViewModel @Inject constructor(
-    private val todoUseCase: TodoUseCase
+    private val todoUseCase: TodoUseCase,
+    val undoManager: UndoManager
 ) : ViewModel() {
 
     // UI状态
@@ -41,7 +46,19 @@ class TodoViewModel @Inject constructor(
     private val _quadrantData = MutableStateFlow(QuadrantData(emptyList(), emptyList(), emptyList(), emptyList()))
     val quadrantData: StateFlow<QuadrantData> = _quadrantData.asStateFlow()
 
-    // 视图模式: LIST, QUADRANT
+    // 日历选中日期
+    private val _selectedDate = MutableStateFlow(LocalDate.now())
+    val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+
+    // 日历中每天的待办数量
+    private val _calendarTodoCount = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val calendarTodoCount: StateFlow<Map<Int, Int>> = _calendarTodoCount.asStateFlow()
+
+    // 选中日期的待办列表
+    private val _selectedDateTodos = MutableStateFlow<List<TodoEntity>>(emptyList())
+    val selectedDateTodos: StateFlow<List<TodoEntity>> = _selectedDateTodos.asStateFlow()
+
+    // 视图模式: LIST, QUADRANT, CALENDAR
     private val _viewMode = MutableStateFlow("LIST")
     val viewMode: StateFlow<String> = _viewMode.asStateFlow()
 
@@ -60,9 +77,139 @@ class TodoViewModel @Inject constructor(
     // 待删除的待办ID
     private var deleteTodoId: Long? = null
 
+    // ============ 批量删除功能 ============
+    // 选择模式
+    private val _isSelectionMode = MutableStateFlow(false)
+    val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
+
+    // 已选中的待办ID
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
+    // 显示批量删除确认对话框
+    private val _showBatchDeleteDialog = MutableStateFlow(false)
+    val showBatchDeleteDialog: StateFlow<Boolean> = _showBatchDeleteDialog.asStateFlow()
+
+    /**
+     * 进入选择模式
+     */
+    fun enterSelectionMode() {
+        _isSelectionMode.value = true
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 退出选择模式
+     */
+    fun exitSelectionMode() {
+        _isSelectionMode.value = false
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 切换选中状态
+     */
+    fun toggleSelection(id: Long) {
+        val currentSet = _selectedIds.value.toMutableSet()
+        if (currentSet.contains(id)) {
+            currentSet.remove(id)
+        } else {
+            currentSet.add(id)
+        }
+        _selectedIds.value = currentSet
+    }
+
+    /**
+     * 全选当前列表
+     */
+    fun selectAll() {
+        val allIds = _todoGroups.value.flatMap { group ->
+            group.todos.map { it.id }
+        }.toSet()
+        _selectedIds.value = allIds
+    }
+
+    /**
+     * 取消全选
+     */
+    fun deselectAll() {
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 显示批量删除确认
+     */
+    fun showBatchDeleteConfirm() {
+        if (_selectedIds.value.isNotEmpty()) {
+            _showBatchDeleteDialog.value = true
+        }
+    }
+
+    /**
+     * 隐藏批量删除确认
+     */
+    fun hideBatchDeleteConfirm() {
+        _showBatchDeleteDialog.value = false
+    }
+
+    /**
+     * 确认批量删除（带撤销功能）
+     */
+    fun confirmBatchDelete() {
+        val idsToDelete = _selectedIds.value.toList()
+        if (idsToDelete.isEmpty()) return
+
+        viewModelScope.launch {
+            try {
+                // 获取所有待删除的待办（用于撤销恢复）
+                val todosToDelete = idsToDelete.mapNotNull { todoUseCase.getTodoById(it) }
+                if (todosToDelete.isEmpty()) {
+                    hideBatchDeleteConfirm()
+                    exitSelectionMode()
+                    return@launch
+                }
+
+                hideBatchDeleteConfirm()
+                exitSelectionMode()
+
+                // 注册撤销操作
+                val undoAction = UndoAction(
+                    type = UndoType.BATCH_DELETE,
+                    message = "已删除 ${todosToDelete.size} 项待办",
+                    undoMessage = "已恢复 ${todosToDelete.size} 项待办",
+                    onDelete = {
+                        todoUseCase.deleteTodos(idsToDelete)
+                    },
+                    onUndo = {
+                        // 恢复所有待办
+                        for (todo in todosToDelete) {
+                            todoUseCase.addTodo(
+                                title = todo.title,
+                                description = todo.description,
+                                priority = todo.priority,
+                                quadrant = todo.quadrant,
+                                dueDate = todo.dueDate,
+                                dueTime = todo.dueTime,
+                                reminderAt = todo.reminderAt,
+                                repeatRule = todo.repeatRule
+                            )
+                        }
+                        refresh()
+                    }
+                )
+
+                undoManager.registerUndoAction(viewModelScope, undoAction)
+
+            } catch (e: Exception) {
+                // 处理错误
+            }
+        }
+    }
+
     init {
         loadData()
         observeQuadrantData()
+        observeCalendarData()
     }
 
     /**
@@ -106,6 +253,74 @@ class TodoViewModel @Inject constructor(
     }
 
     /**
+     * 观察日历数据
+     */
+    private fun observeCalendarData() {
+        viewModelScope.launch {
+            // 观察选中日期的变化，加载该日期的待办
+            _selectedDate.collect { date ->
+                loadTodosForDate(date)
+            }
+        }
+
+        // 加载当月所有日期的待办数量
+        loadCalendarTodoCount()
+    }
+
+    /**
+     * 加载指定日期的待办
+     */
+    private suspend fun loadTodosForDate(date: LocalDate) {
+        try {
+            val epochDay = date.toEpochDay().toInt()
+            val todos = todoUseCase.getTodosByDate(epochDay)
+            _selectedDateTodos.value = todos
+        } catch (e: Exception) {
+            _selectedDateTodos.value = emptyList()
+        }
+    }
+
+    /**
+     * 加载日历待办数量
+     */
+    private fun loadCalendarTodoCount() {
+        viewModelScope.launch {
+            try {
+                val today = LocalDate.now()
+                val startDate = today.withDayOfMonth(1).minusMonths(1).toEpochDay().toInt()
+                val endDate = today.withDayOfMonth(1).plusMonths(2).toEpochDay().toInt()
+                val counts = todoUseCase.getTodoCountByDateRange(startDate, endDate)
+                _calendarTodoCount.value = counts
+            } catch (e: Exception) {
+                _calendarTodoCount.value = emptyMap()
+            }
+        }
+    }
+
+    /**
+     * 选择日期
+     */
+    fun selectDate(date: LocalDate) {
+        _selectedDate.value = date
+    }
+
+    /**
+     * 切换到上个月
+     */
+    fun previousMonth() {
+        _selectedDate.value = _selectedDate.value.minusMonths(1)
+        loadCalendarTodoCount()
+    }
+
+    /**
+     * 切换到下个月
+     */
+    fun nextMonth() {
+        _selectedDate.value = _selectedDate.value.plusMonths(1)
+        loadCalendarTodoCount()
+    }
+
+    /**
      * 刷新数据
      */
     fun refresh() {
@@ -120,10 +335,14 @@ class TodoViewModel @Inject constructor(
     }
 
     /**
-     * 切换视图模式
+     * 切换视图模式 (LIST -> QUADRANT -> CALENDAR -> LIST)
      */
     fun toggleViewMode() {
-        _viewMode.value = if (_viewMode.value == "LIST") "QUADRANT" else "LIST"
+        _viewMode.value = when (_viewMode.value) {
+            "LIST" -> "QUADRANT"
+            "QUADRANT" -> "CALENDAR"
+            else -> "LIST"
+        }
     }
 
     /**
@@ -306,19 +525,62 @@ class TodoViewModel @Inject constructor(
     }
 
     /**
-     * 确认删除
+     * 确认删除（带撤销功能）
      */
     fun confirmDelete() {
         val id = deleteTodoId ?: return
 
         viewModelScope.launch {
             try {
-                todoUseCase.deleteTodo(id)
+                // 获取待删除的待办（用于撤销恢复）
+                val todo = todoUseCase.getTodoById(id)
+                if (todo == null) {
+                    hideDeleteConfirm()
+                    return@launch
+                }
+
+                // 立即从UI中移除（乐观更新）
                 hideDeleteConfirm()
-                refresh()
+
+                // 注册撤销操作
+                val undoAction = UndoAction(
+                    type = UndoType.DELETE_TODO,
+                    message = "已删除「${todo.title}」",
+                    undoMessage = "已恢复「${todo.title}」",
+                    onDelete = {
+                        todoUseCase.deleteTodo(id)
+                    },
+                    onUndo = {
+                        // 重新插入待办（需要复制一份新的，id=0让数据库自动生成新ID）
+                        todoUseCase.addTodo(
+                            title = todo.title,
+                            description = todo.description,
+                            priority = todo.priority,
+                            quadrant = todo.quadrant,
+                            dueDate = todo.dueDate,
+                            dueTime = todo.dueTime,
+                            reminderAt = todo.reminderAt,
+                            repeatRule = todo.repeatRule
+                        )
+                        refresh()
+                    }
+                )
+
+                undoManager.registerUndoAction(viewModelScope, undoAction)
+
             } catch (e: Exception) {
                 // 处理错误
             }
+        }
+    }
+
+    /**
+     * 执行撤销操作
+     */
+    fun undo() {
+        viewModelScope.launch {
+            undoManager.undo()
+            refresh()
         }
     }
 

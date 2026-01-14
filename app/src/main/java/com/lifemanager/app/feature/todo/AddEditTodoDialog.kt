@@ -1,10 +1,10 @@
 package com.lifemanager.app.feature.todo
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +27,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lifemanager.app.domain.model.priorityList
 import com.lifemanager.app.domain.model.quadrantList
+import com.lifemanager.app.ui.component.DatePickerButton
+import com.lifemanager.app.ui.component.DatePickerDialog
+import com.lifemanager.app.ui.component.TimePickerButton
+import com.lifemanager.app.ui.component.TimePickerDialog
+import com.lifemanager.app.ui.component.PremiumTextField
+import com.lifemanager.app.ui.theme.AppColors
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * 添加/编辑待办对话框
@@ -36,6 +47,32 @@ fun AddEditTodoDialog(
 ) {
     val editState by viewModel.editState.collectAsState()
 
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    // 将epochDay转换为LocalDate
+    val selectedDate = editState.dueDate?.let { LocalDate.ofEpochDay(it.toLong()) }
+    // 将时间字符串转换为LocalTime
+    val selectedTime = editState.dueTime?.let {
+        try {
+            val parts = it.split(":")
+            LocalTime.of(parts[0].toInt(), parts[1].toInt())
+        } catch (e: Exception) { null }
+    }
+
+    // 动画效果
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val dialogScale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.9f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "dialogScale"
+    )
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -43,8 +80,28 @@ fun AddEditTodoDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.85f),
-            shape = RoundedCornerShape(24.dp)
+                .fillMaxHeight(0.85f)
+                .scale(dialogScale)
+                .shadow(
+                    elevation = 24.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    spotColor = AppColors.Primary.copy(alpha = 0.2f)
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.5f),
+                            Color.White.copy(alpha = 0.1f),
+                            AppColors.Primary.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                ),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 TopAppBar(
@@ -104,11 +161,11 @@ fun AddEditTodoDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.title,
                         onValueChange = { viewModel.updateEditTitle(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("输入待办事项") },
+                        placeholder = "输入待办事项",
                         singleLine = true
                     )
 
@@ -122,13 +179,14 @@ fun AddEditTodoDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.description,
                         onValueChange = { viewModel.updateEditDescription(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("添加描述") },
+                        placeholder = "添加描述",
                         maxLines = 3,
-                        minLines = 2
+                        minLines = 2,
+                        singleLine = false
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -141,10 +199,11 @@ fun AddEditTodoDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(priorityList, key = { it.code }) { priority ->
+                        priorityList.forEach { priority ->
                             PriorityChip(
                                 name = priority.name,
                                 color = Color(priority.color),
@@ -221,22 +280,63 @@ fun AddEditTodoDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedTextField(
-                            value = editState.dueTime ?: "",
-                            onValueChange = { viewModel.updateEditDueTime(it.ifBlank { null }) },
+                        // 日期选择按钮
+                        DatePickerButton(
+                            selectedDate = selectedDate,
+                            onClick = { showDatePicker = true },
                             modifier = Modifier.weight(1f),
-                            label = { Text("时间") },
-                            placeholder = { Text("HH:mm") },
-                            singleLine = true
+                            placeholder = "选择日期"
                         )
+
+                        // 时间选择按钮
+                        TimePickerButton(
+                            selectedTime = selectedTime,
+                            onClick = { showTimePicker = true },
+                            modifier = Modifier.weight(1f),
+                            placeholder = "选择时间"
+                        )
+                    }
+
+                    // 清除日期时间按钮
+                    if (editState.dueDate != null || editState.dueTime != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = {
+                                viewModel.updateEditDueDate(null)
+                                viewModel.updateEditDueTime(null)
+                            }
+                        ) {
+                            Text("清除截止时间", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }
         }
     }
+
+    // 日期选择器对话框
+    if (showDatePicker) {
+        DatePickerDialog(
+            selectedDate = selectedDate,
+            onDateSelected = { date ->
+                viewModel.updateEditDueDate(date.toEpochDay().toInt())
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
+    // 时间选择器对话框
+    if (showTimePicker) {
+        TimePickerDialog(
+            selectedTime = selectedTime,
+            onTimeSelected = { time ->
+                viewModel.updateEditDueTime(String.format("%02d:%02d", time.hour, time.minute))
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PriorityChip(
     name: String,
@@ -244,25 +344,35 @@ private fun PriorityChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    FilterChip(
-        selected = selected,
+    val containerColor = if (selected) color.copy(alpha = 0.2f) else Color.Transparent
+    val contentColor = if (selected) color else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
         onClick = onClick,
-        label = { Text(name) },
-        leadingIcon = if (selected) {
-            {
+        shape = RoundedCornerShape(8.dp),
+        color = containerColor,
+        border = ButtonDefaults.outlinedButtonBorder.takeIf { !selected }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (selected) {
                 Icon(
                     imageVector = Icons.Filled.Check,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp),
+                    tint = contentColor
                 )
+                Spacer(modifier = Modifier.width(4.dp))
             }
-        } else null,
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = color.copy(alpha = 0.2f),
-            selectedLabelColor = color,
-            selectedLeadingIconColor = color
-        )
-    )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor
+            )
+        }
+    }
 }
 
 @Composable

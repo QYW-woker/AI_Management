@@ -4,6 +4,7 @@ import com.lifemanager.app.core.database.entity.Priority
 import com.lifemanager.app.core.database.entity.Quadrant
 import com.lifemanager.app.core.database.entity.TodoEntity
 import com.lifemanager.app.core.database.entity.TodoStatus
+import com.lifemanager.app.core.reminder.ReminderManager
 import com.lifemanager.app.domain.model.*
 import com.lifemanager.app.domain.repository.TodoRepository
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +17,8 @@ import javax.inject.Inject
  * 待办记事用例
  */
 class TodoUseCase @Inject constructor(
-    private val repository: TodoRepository
+    private val repository: TodoRepository,
+    private val reminderManager: ReminderManager
 ) {
 
     /**
@@ -28,6 +30,7 @@ class TodoUseCase @Inject constructor(
         return when (filter) {
             TodoFilter.ALL -> getPendingTodoGroups(today)
             TodoFilter.TODAY -> getTodayTodoGroups(today)
+            TodoFilter.UPCOMING -> getUpcomingTodoGroups(today)
             TodoFilter.OVERDUE -> getOverdueTodoGroups(today)
             TodoFilter.COMPLETED -> getCompletedTodoGroups()
         }
@@ -72,6 +75,40 @@ class TodoUseCase @Inject constructor(
         return repository.getTodayTodos(today).map { todos ->
             if (todos.isEmpty()) emptyList()
             else listOf(TodoGroup("今天", todos))
+        }
+    }
+
+    /**
+     * 获取未来待办分组（按日期分组）
+     */
+    private fun getUpcomingTodoGroups(today: Int): Flow<List<TodoGroup>> {
+        return repository.getPendingTodos().map { allTodos ->
+            // 筛选未来的待办（dueDate > today 或 dueDate == null）
+            val futureTodos = allTodos.filter { todo ->
+                todo.dueDate?.let { it > today } ?: true
+            }
+
+            // 按日期分组
+            val groups = mutableListOf<TodoGroup>()
+            val tomorrow = today + 1
+            val dayAfterTomorrow = today + 2
+            val weekLater = today + 7
+
+            val tomorrowTodos = futureTodos.filter { it.dueDate == tomorrow }
+            val dayAfterTodos = futureTodos.filter { it.dueDate == dayAfterTomorrow }
+            val thisWeekTodos = futureTodos.filter {
+                it.dueDate != null && it.dueDate!! > dayAfterTomorrow && it.dueDate!! <= weekLater
+            }
+            val laterTodos = futureTodos.filter {
+                it.dueDate == null || it.dueDate!! > weekLater
+            }
+
+            if (tomorrowTodos.isNotEmpty()) groups.add(TodoGroup("明天", tomorrowTodos))
+            if (dayAfterTodos.isNotEmpty()) groups.add(TodoGroup("后天", dayAfterTodos))
+            if (thisWeekTodos.isNotEmpty()) groups.add(TodoGroup("本周", thisWeekTodos))
+            if (laterTodos.isNotEmpty()) groups.add(TodoGroup("以后", laterTodos))
+
+            groups
         }
     }
 
@@ -152,7 +189,14 @@ class TodoUseCase @Inject constructor(
             reminderAt = reminderAt,
             repeatRule = repeatRule
         )
-        return repository.insert(todo)
+        val id = repository.insert(todo)
+
+        // 如果有提醒时间，调度提醒
+        if (reminderAt != null) {
+            reminderManager.scheduleReminder(todo.copy(id = id))
+        }
+
+        return id
     }
 
     /**
@@ -182,6 +226,14 @@ class TodoUseCase @Inject constructor(
             updatedAt = System.currentTimeMillis()
         )
         repository.update(updated)
+
+        // 更新提醒调度
+        if (reminderAt != null) {
+            reminderManager.scheduleReminder(updated)
+        } else {
+            // 如果取消了提醒，取消调度
+            reminderManager.cancelReminder(id)
+        }
     }
 
     /**
@@ -191,8 +243,14 @@ class TodoUseCase @Inject constructor(
         val todo = repository.getById(id) ?: return
         if (todo.status == TodoStatus.COMPLETED) {
             repository.markPending(id)
+            // 恢复待办时重新调度提醒
+            if (todo.reminderAt != null && todo.reminderAt > System.currentTimeMillis()) {
+                reminderManager.scheduleReminder(todo)
+            }
         } else {
             repository.markCompleted(id)
+            // 完成后取消提醒
+            reminderManager.cancelReminder(id)
         }
     }
 
@@ -201,6 +259,8 @@ class TodoUseCase @Inject constructor(
      */
     suspend fun markCompleted(id: Long) {
         repository.markCompleted(id)
+        // 完成后取消提醒
+        reminderManager.cancelReminder(id)
     }
 
     /**
@@ -214,7 +274,20 @@ class TodoUseCase @Inject constructor(
      * 删除待办
      */
     suspend fun deleteTodo(id: Long) {
+        // 删除前取消提醒
+        reminderManager.cancelReminder(id)
         repository.deleteWithSubTodos(id)
+    }
+
+    /**
+     * 批量删除待办
+     */
+    suspend fun deleteTodos(ids: List<Long>) {
+        // 删除前取消所有提醒
+        ids.forEach { id ->
+            reminderManager.cancelReminder(id)
+        }
+        repository.deleteByIds(ids)
     }
 
     /**
@@ -258,5 +331,19 @@ class TodoUseCase @Inject constructor(
     fun isOverdue(todo: TodoEntity): Boolean {
         val today = LocalDate.now().toEpochDay().toInt()
         return todo.status == TodoStatus.PENDING && todo.dueDate != null && todo.dueDate < today
+    }
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity> {
+        return repository.getTodosByDate(epochDay)
+    }
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+        return repository.getTodoCountByDateRange(startDate, endDate)
     }
 }

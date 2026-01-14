@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.TimeCategoryEntity
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.ui.component.PremiumTextField
 
 /**
  * 时间统计主界面
@@ -460,22 +461,22 @@ private fun AddRecordDialog(
         text = {
             Column {
                 // 时长输入
-                OutlinedTextField(
+                PremiumTextField(
                     value = if (editState.durationMinutes > 0) editState.durationMinutes.toString() else "",
                     onValueChange = { value ->
                         value.toIntOrNull()?.let { viewModel.updateEditDuration(it) }
                     },
-                    label = { Text("时长（分钟）") },
+                    label = "时长（分钟）",
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // 备注
-                OutlinedTextField(
+                PremiumTextField(
                     value = editState.note,
                     onValueChange = { viewModel.updateEditNote(it) },
-                    label = { Text("备注（可选）") },
+                    label = "备注（可选）",
                     modifier = Modifier.fillMaxWidth()
                 )
 

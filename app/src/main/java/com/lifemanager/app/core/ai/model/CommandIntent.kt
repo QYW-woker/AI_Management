@@ -26,9 +26,15 @@ sealed class CommandIntent {
         val title: String,
         val description: String? = null,
         val dueDate: Int? = null,        // epochDay
-        val dueTime: String? = null,
+        val startTime: String? = null,   // HH:mm格式，事件开始时间
+        val endTime: String? = null,     // HH:mm格式，事件结束时间
+        val dueTime: String? = null,     // HH:mm格式，截止时间（向后兼容）
+        val isAllDay: Boolean = true,    // 是否全天事件
+        val location: String? = null,    // 地点
         val priority: String? = null,
-        val reminderAt: Long? = null
+        val quadrant: String? = null,    // 四象限：IMPORTANT_URGENT, IMPORTANT_NOT_URGENT, NOT_IMPORTANT_URGENT, NOT_IMPORTANT_NOT_URGENT
+        val reminderAt: Long? = null,
+        val reminderMinutesBefore: Int = 0  // 提前提醒分钟数
     ) : CommandIntent()
 
     /**
@@ -88,6 +94,13 @@ sealed class CommandIntent {
         val action: SavingsAction,
         val planName: String? = null,
         val amount: Double? = null
+    ) : CommandIntent()
+
+    /**
+     * 多条记录意图（支持一次输入多条记录）
+     */
+    data class Multiple(
+        val intents: List<CommandIntent>
     ) : CommandIntent()
 
     /**

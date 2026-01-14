@@ -24,11 +24,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.lifemanager.app.core.database.entity.AccountType
+import com.lifemanager.app.core.database.entity.ChineseBank
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.core.database.entity.FundAccountEntity
 import com.lifemanager.app.domain.model.TransactionType
-import java.time.Instant
+import com.lifemanager.app.ui.component.DatePickerButton
+import com.lifemanager.app.ui.component.DatePickerDialog
+import com.lifemanager.app.ui.component.PremiumTextField
+import com.lifemanager.app.ui.component.TimePickerButton
+import com.lifemanager.app.ui.component.TimePickerDialog
 import java.time.LocalDate
-import java.time.ZoneId
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 /**
@@ -43,19 +50,31 @@ fun AddEditTransactionDialog(
 ) {
     val editState by viewModel.editState.collectAsState()
     val categories by viewModel.categories.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
 
     var amountText by remember(editState.amount) {
         mutableStateOf(if (editState.amount > 0) editState.amount.toString() else "")
     }
 
-    // 日期选择器状态
+    // 日期和时间选择器状态
     var showDatePicker by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = LocalDate.ofEpochDay(editState.date.toLong())
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-    )
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    // 将epochDay转换为LocalDate
+    val selectedDate = LocalDate.ofEpochDay(editState.date.toLong())
+    // 将时间字符串转换为LocalTime
+    val selectedTime = remember(editState.time) {
+        try {
+            val parts = editState.time.split(":")
+            if (parts.size == 2) {
+                LocalTime.of(parts[0].toInt(), parts[1].toInt())
+            } else {
+                LocalTime.now()
+            }
+        } catch (e: Exception) {
+            LocalTime.now()
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -122,25 +141,41 @@ fun AddEditTransactionDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        FilterChip(
-                            selected = editState.type == TransactionType.EXPENSE,
-                            onClick = { viewModel.updateEditType(TransactionType.EXPENSE) },
-                            label = { Text("支出") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFF44336).copy(alpha = 0.2f),
-                                selectedLabelColor = Color(0xFFF44336)
-                            )
-                        )
+                        if (editState.type == TransactionType.EXPENSE) {
+                            Button(
+                                onClick = { viewModel.updateEditType(TransactionType.EXPENSE) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFF44336).copy(alpha = 0.2f),
+                                    contentColor = Color(0xFFF44336)
+                                )
+                            ) {
+                                Text("支出")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.updateEditType(TransactionType.EXPENSE) }
+                            ) {
+                                Text("支出")
+                            }
+                        }
                         Spacer(modifier = Modifier.width(16.dp))
-                        FilterChip(
-                            selected = editState.type == TransactionType.INCOME,
-                            onClick = { viewModel.updateEditType(TransactionType.INCOME) },
-                            label = { Text("收入") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF4CAF50).copy(alpha = 0.2f),
-                                selectedLabelColor = Color(0xFF4CAF50)
-                            )
-                        )
+                        if (editState.type == TransactionType.INCOME) {
+                            Button(
+                                onClick = { viewModel.updateEditType(TransactionType.INCOME) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF4CAF50).copy(alpha = 0.2f),
+                                    contentColor = Color(0xFF4CAF50)
+                                )
+                            ) {
+                                Text("收入")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { viewModel.updateEditType(TransactionType.INCOME) }
+                            ) {
+                                Text("收入")
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -153,7 +188,7 @@ fun AddEditTransactionDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = amountText,
                         onValueChange = { value ->
                             val filtered = value.filter { it.isDigit() || it == '.' }
@@ -167,15 +202,10 @@ fun AddEditTransactionDialog(
                             newValue.toDoubleOrNull()?.let { viewModel.updateEditAmount(it) }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("0.00") },
-                        prefix = { Text("¥ ") },
+                        placeholder = "0.00",
+                        leadingIcon = { Text("¥ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (editState.type == TransactionType.EXPENSE)
-                                Color(0xFFF44336) else Color(0xFF4CAF50)
-                        )
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -185,55 +215,20 @@ fun AddEditTransactionDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // 日期选择
-                        OutlinedCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { showDatePicker = true }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.CalendarToday,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = "日期",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = formatDate(editState.date),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-
-                        // 时间输入
-                        OutlinedTextField(
-                            value = editState.time,
-                            onValueChange = { viewModel.updateEditTime(it) },
+                        // 日期选择按钮
+                        DatePickerButton(
+                            selectedDate = selectedDate,
+                            onClick = { showDatePicker = true },
                             modifier = Modifier.weight(1f),
-                            label = { Text("时间") },
-                            placeholder = { Text("HH:mm") },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.AccessTime,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            singleLine = true
+                            placeholder = "选择日期"
+                        )
+
+                        // 时间选择按钮
+                        TimePickerButton(
+                            selectedTime = selectedTime,
+                            onClick = { showTimePicker = true },
+                            modifier = Modifier.weight(1f),
+                            placeholder = "选择时间"
                         )
                     }
 
@@ -307,6 +302,100 @@ fun AddEditTransactionDialog(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // 账户选择
+                    Text(
+                        text = "账户",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (accounts.isEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Text(
+                                text = "暂无账户（可选）",
+                                modifier = Modifier.padding(16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        // 账户选择下拉菜单
+                        var accountExpanded by remember { mutableStateOf(false) }
+                        val selectedAccount = accounts.find { it.id == editState.accountId }
+
+                        ExposedDropdownMenuBox(
+                            expanded = accountExpanded,
+                            onExpandedChange = { accountExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedAccount?.let {
+                                    "${AccountType.getIcon(it.accountType)} ${it.name}"
+                                } ?: "",
+                                onValueChange = {},
+                                readOnly = true,
+                                placeholder = { Text("选择账户（可选）") },
+                                trailingIcon = {
+                                    Row {
+                                        if (selectedAccount != null) {
+                                            IconButton(
+                                                onClick = { viewModel.updateEditAccount(null) }
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Clear,
+                                                    contentDescription = "清除",
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountExpanded)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = accountExpanded,
+                                onDismissRequest = { accountExpanded = false }
+                            ) {
+                                accounts.forEach { account ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(AccountType.getIcon(account.accountType))
+                                                Column {
+                                                    Text(account.name)
+                                                    if (account.cardNumber != null) {
+                                                        Text(
+                                                            text = "尾号 ${account.cardNumber.takeLast(4)}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.updateEditAccount(account.id)
+                                            accountExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     // 备注输入
                     Text(
                         text = "备注",
@@ -315,11 +404,11 @@ fun AddEditTransactionDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    OutlinedTextField(
+                    PremiumTextField(
                         value = editState.note,
                         onValueChange = { viewModel.updateEditNote(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("添加备注（可选）") },
+                        placeholder = "添加备注（可选）",
                         maxLines = 3,
                         minLines = 2
                     )
@@ -333,30 +422,23 @@ fun AddEditTransactionDialog(
     // 日期选择器对话框
     if (showDatePicker) {
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            val selectedDate = Instant.ofEpochMilli(millis)
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate()
-                            viewModel.updateEditDate(selectedDate.toEpochDay().toInt())
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("确定")
-                }
+            selectedDate = selectedDate,
+            onDateSelected = { date ->
+                viewModel.updateEditDate(date.toEpochDay().toInt())
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("取消")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
+    // 时间选择器对话框
+    if (showTimePicker) {
+        TimePickerDialog(
+            selectedTime = selectedTime,
+            onTimeSelected = { time ->
+                viewModel.updateEditTime(String.format("%02d:%02d", time.hour, time.minute))
+            },
+            onDismiss = { showTimePicker = false }
+        )
     }
 }
 
@@ -387,6 +469,13 @@ private fun CategoryChip(
         MaterialTheme.colorScheme.primary
     }
 
+    // 获取卡通图标
+    val emoji = com.lifemanager.app.ui.component.CategoryIcons.getIcon(
+        name = category.name,
+        iconName = category.iconName,
+        moduleType = category.moduleType
+    )
+
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -400,17 +489,24 @@ private fun CategoryChip(
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(if (selected) categoryColor else categoryColor.copy(alpha = 0.6f)),
             contentAlignment = Alignment.Center
         ) {
             if (selected) {
+                // 选中时显示勾选图标
                 Icon(
                     imageVector = Icons.Filled.Check,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                // 未选中时显示emoji图标
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
         }

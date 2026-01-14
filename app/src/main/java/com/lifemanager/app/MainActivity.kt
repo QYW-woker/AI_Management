@@ -1,19 +1,27 @@
 package com.lifemanager.app
 
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.lifemanager.app.core.theme.ThemeManager
 import com.lifemanager.app.ui.navigation.AdaptiveNavigation
 import com.lifemanager.app.ui.navigation.Screen
 import com.lifemanager.app.ui.navigation.rememberWindowSizeClass
 import com.lifemanager.app.ui.theme.LifeManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
+import java.util.Locale
+import javax.inject.Inject
 
 /**
  * 主Activity
@@ -25,6 +33,32 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var themeManager: ThemeManager
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(updateLocale(newBase))
+    }
+
+    /**
+     * 更新语言配置 - 使用SharedPreferences快速读取，避免DataStore冲突
+     */
+    private fun updateLocale(context: Context): Context {
+        // 使用SharedPreferences快速读取（与LifeManagerApplication保持一致）
+        val prefs: SharedPreferences = context.getSharedPreferences("app_settings_cache", Context.MODE_PRIVATE)
+        val language = prefs.getString("language", LifeManagerApplication.LANGUAGE_CHINESE)
+            ?: LifeManagerApplication.LANGUAGE_CHINESE
+
+        val locale = LifeManagerApplication.getLocale(language)
+        Locale.setDefault(locale)
+
+        val configuration = Configuration(context.resources.configuration)
+        configuration.setLocale(locale)
+        configuration.setLayoutDirection(locale)
+
+        return context.createConfigurationContext(configuration)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -32,8 +66,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
+            // 获取深色模式设置
+            val isDarkMode by themeManager.isDarkMode.collectAsState(initial = false)
+
             // 应用主题
-            LifeManagerTheme {
+            LifeManagerTheme(darkTheme = isDarkMode) {
                 // 导航控制器
                 val navController = rememberNavController()
                 // 窗口尺寸类型

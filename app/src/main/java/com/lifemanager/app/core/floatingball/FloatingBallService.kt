@@ -5,11 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.PowerManager
 import android.view.*
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.lifemanager.app.MainActivity
 import com.lifemanager.app.R
+import com.lifemanager.app.core.ai.model.CommandIntent
+import com.lifemanager.app.core.ai.model.ExecutionResult
+import com.lifemanager.app.core.voice.VoiceCommandExecutor
+import com.lifemanager.app.core.voice.VoiceCommandProcessor
 import com.lifemanager.app.core.voice.VoiceRecognitionManager
 import com.lifemanager.app.core.voice.VoiceRecognitionState
 import dagger.hilt.android.AndroidEntryPoint
@@ -27,11 +35,24 @@ class FloatingBallService : Service() {
     @Inject
     lateinit var voiceRecognitionManager: VoiceRecognitionManager
 
+    @Inject
+    lateinit var voiceCommandProcessor: VoiceCommandProcessor
+
+    @Inject
+    lateinit var voiceCommandExecutor: VoiceCommandExecutor
+
     private lateinit var windowManager: WindowManager
     private var floatingBallView: FloatingBallView? = null
+    private var confirmationView: FloatingConfirmationView? = null
     private var isListening = false
+    private var pendingIntent: CommandIntent? = null
+    private var pendingText: String = ""
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    // WakeLock 保持服务运行
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
         private const val NOTIFICATION_ID = 1001
@@ -64,17 +85,48 @@ class FloatingBallService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
+        acquireWakeLock()
         observeVoiceState()
+    }
+
+    /**
+     * 获取WakeLock保持服务运行
+     */
+    @Suppress("DEPRECATION")
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "LifeManager:FloatingBallWakeLock"
+            )
+            wakeLock?.setReferenceCounted(false)
+        }
+        wakeLock?.acquire(10 * 60 * 1000L) // 10分钟后自动释放，服务会定期续期
+    }
+
+    /**
+     * 释放WakeLock
+     */
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        wakeLock = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
                 startForeground(NOTIFICATION_ID, createNotification())
+                acquireWakeLock() // 续期WakeLock
                 showFloatingBall()
             }
             ACTION_STOP -> {
                 hideFloatingBall()
+                releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -84,9 +136,34 @@ class FloatingBallService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * 当任务被移除时（用户从最近任务中滑掉app），重启服务
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // 设置闹钟在1秒后重启服务
+        val restartIntent = Intent(this, FloatingBallService::class.java).apply {
+            action = ACTION_START
+        }
+        val pendingIntent = PendingIntent.getService(
+            this,
+            1,
+            restartIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
+        )
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.set(
+            AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + 1000,
+            pendingIntent
+        )
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        hideConfirmationDialog()
         hideFloatingBall()
+        releaseWakeLock()
         serviceScope.cancel()
     }
 
@@ -153,6 +230,10 @@ class FloatingBallService : Service() {
             }
         }
 
+        // 计算悬浮球尺寸 (56dp * 1.5 波纹空间)
+        val density = resources.displayMetrics.density
+        val ballSizePx = (56 * 1.5f * density).toInt()
+
         val layoutParams = WindowManager.LayoutParams().apply {
             type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -164,9 +245,11 @@ class FloatingBallService : Service() {
             flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
             gravity = Gravity.TOP or Gravity.START
-            width = WindowManager.LayoutParams.WRAP_CONTENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
-            x = resources.displayMetrics.widthPixels - 200
+            // 使用固定尺寸确保悬浮球可见
+            width = ballSizePx
+            height = ballSizePx
+            // 初始位置：屏幕右侧中间
+            x = resources.displayMetrics.widthPixels - ballSizePx - 20
             y = resources.displayMetrics.heightPixels / 3
         }
 
@@ -274,9 +357,15 @@ class FloatingBallService : Service() {
                     hasError = state is VoiceRecognitionState.Error
                 )
 
-                // 识别成功后显示结果
+                // 识别成功后处理结果
                 if (state is VoiceRecognitionState.Result) {
                     floatingBallView?.showResult(state.text)
+                    processVoiceResult(state.text)
+                }
+
+                // 识别错误时显示Toast
+                if (state is VoiceRecognitionState.Error) {
+                    showToast("语音识别失败: ${state.message}")
                 }
             }
         }
@@ -286,6 +375,140 @@ class FloatingBallService : Service() {
             voiceRecognitionManager.volumeLevel.collectLatest { level ->
                 floatingBallView?.updateVolumeLevel(level)
             }
+        }
+    }
+
+    /**
+     * 处理语音识别结果
+     */
+    private fun processVoiceResult(text: String) {
+        serviceScope.launch {
+            try {
+                // 使用AI解析语音命令
+                val parseResult = voiceCommandProcessor.process(text)
+
+                parseResult.fold(
+                    onSuccess = { intent ->
+                        pendingIntent = intent
+                        pendingText = text
+                        showConfirmationDialog(text, intent)
+                    },
+                    onFailure = { e ->
+                        showToast("命令解析失败: ${e.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                showToast("处理失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 显示确认弹窗
+     */
+    private fun showConfirmationDialog(originalText: String, intent: CommandIntent) {
+        mainHandler.post {
+            hideConfirmationDialog()
+
+            confirmationView = FloatingConfirmationView(this).apply {
+                updateContent(originalText, intent)
+                setOnConfirmListener {
+                    executeCommand()
+                }
+                setOnCancelListener {
+                    hideConfirmationDialog()
+                    voiceRecognitionManager.resetState()
+                }
+            }
+
+            val layoutParams = WindowManager.LayoutParams().apply {
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+                format = PixelFormat.TRANSLUCENT
+                flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                width = WindowManager.LayoutParams.MATCH_PARENT
+                height = WindowManager.LayoutParams.MATCH_PARENT
+                gravity = Gravity.CENTER
+            }
+
+            try {
+                windowManager.addView(confirmationView, layoutParams)
+            } catch (e: Exception) {
+                showToast("无法显示确认窗口")
+            }
+        }
+    }
+
+    /**
+     * 隐藏确认弹窗
+     */
+    private fun hideConfirmationDialog() {
+        confirmationView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                // 忽略
+            }
+        }
+        confirmationView = null
+    }
+
+    /**
+     * 执行命令
+     */
+    private fun executeCommand() {
+        val intent = pendingIntent ?: return
+        hideConfirmationDialog()
+
+        serviceScope.launch {
+            try {
+                val result = voiceCommandExecutor.execute(intent)
+
+                mainHandler.post {
+                    when (result) {
+                        is ExecutionResult.Success -> {
+                            showToast("✅ ${result.message}")
+                        }
+                        is ExecutionResult.Failure -> {
+                            showToast("❌ ${result.message}")
+                        }
+                        is ExecutionResult.NeedMoreInfo -> {
+                            showToast("⚠️ ${result.prompt}")
+                        }
+                        is ExecutionResult.NeedConfirmation -> {
+                            showToast("ℹ️ ${result.previewMessage}")
+                        }
+                        is ExecutionResult.NotRecognized -> {
+                            showToast("❓ 无法识别: ${result.originalText}")
+                        }
+                        is ExecutionResult.MultipleAdded -> {
+                            showToast("✅ ${result.summary}")
+                        }
+                    }
+                }
+
+                voiceRecognitionManager.resetState()
+            } catch (e: Exception) {
+                mainHandler.post {
+                    showToast("执行失败: ${e.message}")
+                }
+            }
+        }
+
+        pendingIntent = null
+        pendingText = ""
+    }
+
+    /**
+     * 显示Toast
+     */
+    private fun showToast(message: String) {
+        mainHandler.post {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
 }

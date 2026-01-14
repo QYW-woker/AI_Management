@@ -29,11 +29,8 @@ class UserRepository @Inject constructor(
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
     init {
-        // 检查是否已登录
-        val savedUserId = prefs.getLong("current_user_id", -1)
-        if (savedUserId != -1L) {
-            _isLoggedIn.value = true
-        }
+        // 注意：init块中不能使用suspend函数，登录状态验证在loadCurrentUser中完成
+        // 这里只是初始化一个临时状态，后续会被loadCurrentUser更新
     }
 
     /**

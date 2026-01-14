@@ -77,6 +77,7 @@ data class TransactionEditState(
     val type: String = "EXPENSE",
     val amount: Double = 0.0,
     val categoryId: Long? = null,
+    val accountId: Long? = null,
     val date: Int = 0,
     val time: String = "",
     val note: String = "",
@@ -117,3 +118,129 @@ data class QuickInputTemplate(
     val note: String = "",
     val usageCount: Int = 0
 )
+
+/**
+ * 添加交易结果（带重复检测）
+ */
+data class AddTransactionResult(
+    val success: Boolean,
+    val transactionId: Long? = null,
+    val duplicateType: DuplicateType? = null,
+    val potentialDuplicates: List<DailyTransactionEntity> = emptyList()
+)
+
+/**
+ * 重复类型
+ */
+enum class DuplicateType {
+    /** 最近时间窗口内的重复（5分钟内） */
+    RECENT,
+    /** 同一天的潜在重复 */
+    SAME_DAY
+}
+
+// ==================== 季度/年度统计 ====================
+
+/**
+ * 季度统计数据
+ */
+data class QuarterlyStats(
+    val year: Int,
+    val quarter: Int,                      // 1-4
+    val startDate: Int,
+    val endDate: Int,
+    val totalIncome: Double = 0.0,
+    val totalExpense: Double = 0.0,
+    val balance: Double = 0.0,
+    val transactionCount: Int = 0,
+    val avgMonthlyExpense: Double = 0.0,
+    val avgDailyExpense: Double = 0.0,
+    val monthlyBreakdown: List<MonthlyStats> = emptyList(),
+    val categoryBreakdown: List<CategoryExpenseStats> = emptyList()
+) {
+    val quarterLabel: String get() = "${year}年第${quarter}季度"
+    val savingsRate: Double get() = if (totalIncome > 0) (totalIncome - totalExpense) / totalIncome * 100 else 0.0
+}
+
+/**
+ * 年度统计数据
+ */
+data class YearlyStats(
+    val year: Int,
+    val startDate: Int,
+    val endDate: Int,
+    val totalIncome: Double = 0.0,
+    val totalExpense: Double = 0.0,
+    val balance: Double = 0.0,
+    val transactionCount: Int = 0,
+    val avgMonthlyExpense: Double = 0.0,
+    val avgDailyExpense: Double = 0.0,
+    val quarterlyBreakdown: List<QuarterlyStats> = emptyList(),
+    val monthlyBreakdown: List<MonthlyStats> = emptyList(),
+    val categoryBreakdown: List<CategoryExpenseStats> = emptyList()
+) {
+    val yearLabel: String get() = "${year}年"
+    val savingsRate: Double get() = if (totalIncome > 0) (totalIncome - totalExpense) / totalIncome * 100 else 0.0
+}
+
+/**
+ * 月度统计数据（用于趋势分析）
+ */
+data class MonthlyStats(
+    val year: Int,
+    val month: Int,
+    val startDate: Int,
+    val endDate: Int,
+    val totalIncome: Double = 0.0,
+    val totalExpense: Double = 0.0,
+    val balance: Double = 0.0,
+    val transactionCount: Int = 0,
+    val avgDailyExpense: Double = 0.0
+) {
+    val monthLabel: String get() = "${month}月"
+    val fullLabel: String get() = "${year}年${month}月"
+    val savingsRate: Double get() = if (totalIncome > 0) (totalIncome - totalExpense) / totalIncome * 100 else 0.0
+}
+
+/**
+ * 收支趋势数据点
+ */
+data class TrendDataPoint(
+    val label: String,
+    val income: Double,
+    val expense: Double,
+    val balance: Double
+)
+
+/**
+ * 同比/环比分析
+ */
+data class ComparisonStats(
+    val currentPeriod: PeriodStats,
+    val previousPeriod: PeriodStats,
+    val incomeChange: Double,              // 收入变化百分比
+    val expenseChange: Double,             // 支出变化百分比
+    val balanceChange: Double              // 结余变化百分比
+) {
+    val incomeChangeText: String get() = formatChange(incomeChange)
+    val expenseChangeText: String get() = formatChange(expenseChange)
+    val balanceChangeText: String get() = formatChange(balanceChange)
+
+    private fun formatChange(change: Double): String {
+        return when {
+            change > 0 -> "+${String.format("%.1f", change)}%"
+            change < 0 -> "${String.format("%.1f", change)}%"
+            else -> "0%"
+        }
+    }
+}
+
+/**
+ * 统计周期类型
+ */
+enum class StatsPeriodType {
+    WEEKLY,
+    MONTHLY,
+    QUARTERLY,
+    YEARLY
+}

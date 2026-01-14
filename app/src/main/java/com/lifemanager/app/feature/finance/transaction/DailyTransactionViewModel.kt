@@ -3,7 +3,9 @@ package com.lifemanager.app.feature.finance.transaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.database.entity.CustomFieldEntity
+import com.lifemanager.app.core.database.entity.FundAccountEntity
 import com.lifemanager.app.domain.model.*
+import com.lifemanager.app.domain.repository.FundAccountRepository
 import com.lifemanager.app.domain.usecase.CustomFieldUseCase
 import com.lifemanager.app.domain.usecase.DailyTransactionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DailyTransactionViewModel @Inject constructor(
     private val transactionUseCase: DailyTransactionUseCase,
-    private val fieldUseCase: CustomFieldUseCase
+    private val fieldUseCase: CustomFieldUseCase,
+    private val fundAccountRepository: FundAccountRepository
 ) : ViewModel() {
 
     // UI状态
@@ -56,6 +59,10 @@ class DailyTransactionViewModel @Inject constructor(
     private val _categories = MutableStateFlow<List<CustomFieldEntity>>(emptyList())
     val categories: StateFlow<List<CustomFieldEntity>> = _categories.asStateFlow()
 
+    // 可用账户
+    private val _accounts = MutableStateFlow<List<FundAccountEntity>>(emptyList())
+    val accounts: StateFlow<List<FundAccountEntity>> = _accounts.asStateFlow()
+
     // 显示添加/编辑对话框
     private val _showEditDialog = MutableStateFlow(false)
     val showEditDialog: StateFlow<Boolean> = _showEditDialog.asStateFlow()
@@ -75,9 +82,104 @@ class DailyTransactionViewModel @Inject constructor(
     private val _viewMode = MutableStateFlow("LIST")
     val viewMode: StateFlow<String> = _viewMode.asStateFlow()
 
+    // ============ 批量删除功能 ============
+    // 选择模式
+    private val _isSelectionMode = MutableStateFlow(false)
+    val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
+
+    // 已选中的交易ID
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
+    // 显示批量删除确认对话框
+    private val _showBatchDeleteDialog = MutableStateFlow(false)
+    val showBatchDeleteDialog: StateFlow<Boolean> = _showBatchDeleteDialog.asStateFlow()
+
+    /**
+     * 进入选择模式
+     */
+    fun enterSelectionMode() {
+        _isSelectionMode.value = true
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 退出选择模式
+     */
+    fun exitSelectionMode() {
+        _isSelectionMode.value = false
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 切换选中状态
+     */
+    fun toggleSelection(id: Long) {
+        val currentSet = _selectedIds.value.toMutableSet()
+        if (currentSet.contains(id)) {
+            currentSet.remove(id)
+        } else {
+            currentSet.add(id)
+        }
+        _selectedIds.value = currentSet
+    }
+
+    /**
+     * 全选当前列表
+     */
+    fun selectAll() {
+        val allIds = _transactionGroups.value.flatMap { group ->
+            group.transactions.map { it.transaction.id }
+        }.toSet()
+        _selectedIds.value = allIds
+    }
+
+    /**
+     * 取消全选
+     */
+    fun deselectAll() {
+        _selectedIds.value = emptySet()
+    }
+
+    /**
+     * 显示批量删除确认
+     */
+    fun showBatchDeleteConfirm() {
+        if (_selectedIds.value.isNotEmpty()) {
+            _showBatchDeleteDialog.value = true
+        }
+    }
+
+    /**
+     * 隐藏批量删除确认
+     */
+    fun hideBatchDeleteConfirm() {
+        _showBatchDeleteDialog.value = false
+    }
+
+    /**
+     * 确认批量删除
+     */
+    fun confirmBatchDelete() {
+        val idsToDelete = _selectedIds.value.toList()
+        if (idsToDelete.isEmpty()) return
+
+        viewModelScope.launch {
+            try {
+                transactionUseCase.deleteTransactions(idsToDelete)
+                hideBatchDeleteConfirm()
+                exitSelectionMode()
+                refresh()
+            } catch (e: Exception) {
+                // 处理错误
+            }
+        }
+    }
+
     init {
         loadData()
         observeCategories()
+        loadAccounts()
     }
 
     /**
@@ -156,6 +258,19 @@ class DailyTransactionViewModel @Inject constructor(
                     if (_editState.value.type == TransactionType.EXPENSE) {
                         _categories.value = fields
                     }
+                }
+        }
+    }
+
+    /**
+     * 加载可用账户
+     */
+    private fun loadAccounts() {
+        viewModelScope.launch {
+            fundAccountRepository.getAllEnabled()
+                .catch { /* 忽略错误 */ }
+                .collect { accountList ->
+                    _accounts.value = accountList
                 }
         }
     }
@@ -252,6 +367,7 @@ class DailyTransactionViewModel @Inject constructor(
                         type = transaction.transaction.type,
                         amount = transaction.transaction.amount,
                         categoryId = transaction.transaction.categoryId,
+                        accountId = transaction.transaction.accountId,
                         date = transaction.transaction.date,
                         time = transaction.transaction.time,
                         note = transaction.transaction.note
@@ -306,6 +422,13 @@ class DailyTransactionViewModel @Inject constructor(
     }
 
     /**
+     * 更新编辑账户
+     */
+    fun updateEditAccount(accountId: Long?) {
+        _editState.value = _editState.value.copy(accountId = accountId)
+    }
+
+    /**
      * 更新编辑日期
      */
     fun updateEditDate(date: Int) {
@@ -348,7 +471,8 @@ class DailyTransactionViewModel @Inject constructor(
                         categoryId = state.categoryId,
                         date = state.date,
                         time = state.time,
-                        note = state.note
+                        note = state.note,
+                        accountId = state.accountId
                     )
                 } else {
                     transactionUseCase.addTransaction(
@@ -357,7 +481,8 @@ class DailyTransactionViewModel @Inject constructor(
                         categoryId = state.categoryId,
                         date = state.date,
                         time = state.time,
-                        note = state.note
+                        note = state.note,
+                        accountId = state.accountId
                     )
                 }
 

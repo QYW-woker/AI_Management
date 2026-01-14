@@ -85,6 +85,11 @@ interface TodoRepository {
     suspend fun deleteWithSubTodos(id: Long)
 
     /**
+     * 批量删除待办
+     */
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /**
      * 获取今日统计
      */
     suspend fun getTodayStats(today: Int): TodoStats
@@ -93,4 +98,14 @@ interface TodoRepository {
      * 统计待完成数量
      */
     suspend fun countPending(): Int
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    suspend fun getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int>
 }

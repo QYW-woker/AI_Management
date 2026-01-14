@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 待办事项小组件列表项布局 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_todo_item_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_item_background"
+    android:padding="10dp"
+    android:gravity="center_vertical">
+
+    <!-- 完成勾选框 -->
+    <FrameLayout
+        android:id="@+id/widget_todo_item_checkbox"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:background="@drawable/widget_checkbox_background">
+
+        <ImageView
+            android:id="@+id/widget_todo_item_check_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_gravity="center"
+            android:src="@android:drawable/checkbox_on_background"
+            android:visibility="gone"
+            android:contentDescription="已完成" />
+    </FrameLayout>
+
+    <!-- 待办信息 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="8dp">
+
+        <!-- 待办标题 -->
+        <TextView
+            android:id="@+id/widget_todo_item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="待办事项名称"
+            android:textSize="14sp"
+            android:textColor="#1A1A2E"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 时间和标签 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="2dp">
+
+            <!-- 时间 -->
+            <TextView
+                android:id="@+id/widget_todo_item_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="09:00"
+                android:textSize="11sp"
+                android:textColor="#888888"
+                android:drawableStart="@android:drawable/ic_menu_recent_history"
+                android:drawablePadding="2dp" />
+
+            <!-- 优先级标签 -->
+            <TextView
+                android:id="@+id/widget_todo_item_priority"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="重要"
+                android:textSize="10sp"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/widget_priority_tag"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:layout_marginStart="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 分类图标 -->
+    <TextView
+        android:id="@+id/widget_todo_item_category_icon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💼"
+        android:textSize="16sp" />
+
+</LinearLayout>

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.lifemanager.app.core.ai.model.AIConfig
 import com.lifemanager.app.core.ai.model.AIFeatureConfig
 import com.lifemanager.app.core.ai.service.AIService
+import com.lifemanager.app.core.floatingball.FloatingBallManager
 import com.lifemanager.app.data.repository.AIConfigRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -17,7 +18,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AISettingsViewModel @Inject constructor(
     private val configRepository: AIConfigRepository,
-    private val aiService: AIService
+    private val aiService: AIService,
+    private val floatingBallManager: FloatingBallManager
 ) : ViewModel() {
 
     // AI配置
@@ -130,6 +132,19 @@ class AISettingsViewModel @Inject constructor(
     fun setFloatingBallEnabled(enabled: Boolean) {
         viewModelScope.launch {
             configRepository.setFloatingBallEnabled(enabled)
+            // 实际启动或停止悬浮球服务
+            if (enabled) {
+                val success = floatingBallManager.enable()
+                if (success) {
+                    _uiState.value = AISettingsUiState.Success("悬浮球已启用")
+                } else {
+                    _uiState.value = AISettingsUiState.Error("需要悬浮窗权限")
+                    configRepository.setFloatingBallEnabled(false)
+                }
+            } else {
+                floatingBallManager.disable()
+                _uiState.value = AISettingsUiState.Success("悬浮球已关闭")
+            }
         }
     }
 

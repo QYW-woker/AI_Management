@@ -42,6 +42,17 @@ interface AIService {
     ): Result<Long?>
 
     /**
+     * 使用AI视觉模型识别图片内容（支付截图/小票等）
+     * @param imageBase64 图片的Base64编码
+     * @param categories 可用的分类列表
+     * @return 解析后的支付信息
+     */
+    suspend fun recognizeImagePayment(
+        imageBase64: String,
+        categories: List<CustomFieldEntity> = emptyList()
+    ): Result<PaymentInfo>
+
+    /**
      * 解析支付截图文本
      * @param ocrText OCR识别的文本
      * @return 解析后的支付信息
@@ -78,5 +89,24 @@ interface AIService {
     suspend fun generateReportSummary(
         period: String,
         data: Map<String, Any>
+    ): Result<String>
+
+    /**
+     * 分析目标并给出建议
+     * @param title 目标标题
+     * @param description 目标描述
+     * @param category 目标分类
+     * @param goalType 目标类型（年度/季度/月度等）
+     * @param progress 当前进度(0-1)
+     * @param remainingDays 剩余天数
+     * @return 分析和建议文本
+     */
+    suspend fun analyzeGoal(
+        title: String,
+        description: String,
+        category: String,
+        goalType: String,
+        progress: Float,
+        remainingDays: Int?
     ): Result<String>
 }

@@ -11,14 +11,15 @@ plugins {
 
 android {
     namespace = "com.lifemanager.app"
-    compileSdk = 34
+    // 降级到 SDK 33 以避免 jlink.exe 兼容性问题
+    compileSdk = 33
 
     defaultConfig {
         applicationId = "com.lifemanager.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 8
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -49,14 +50,14 @@ android {
     }
 
     compileOptions {
-        // 启用Java 8 Time API desugaring，确保在所有Android版本上兼容
-        isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        // 暂时禁用 Core Library Desugaring 以解决 jlink 兼容性问题
+        isCoreLibraryDesugaringEnabled = false
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "11"
     }
 
     buildFeatures {
@@ -77,7 +78,8 @@ android {
 
 dependencies {
     // ==================== Core Library Desugaring ====================
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // 注释掉以避免 jlink.exe 兼容性问题
+    // coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // ==================== Compose BOM ====================
     // 使用与 Kotlin 1.9.20 和 Compose Compiler 1.5.5 兼容的 BOM 版本
@@ -161,6 +163,19 @@ dependencies {
 
     // ==================== 权限处理 (Accompanist) ====================
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+
+    // ==================== 生物识别认证 (Biometric) ====================
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // ==================== 安全加密存储 (Security Crypto) ====================
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // ==================== Apache POI (Excel/Word解析) ====================
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5") {
+        exclude(group = "org.apache.xmlbeans", module = "xmlbeans")
+    }
+    implementation("org.apache.xmlbeans:xmlbeans:5.1.1")
 
     // ==================== 测试依赖 ====================
     testImplementation("junit:junit:4.13.2")

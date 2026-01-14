@@ -1,8 +1,10 @@
 package com.lifemanager.app.domain.usecase
 
+import com.lifemanager.app.core.database.entity.RecordType
 import com.lifemanager.app.core.database.entity.SavingsPlanEntity
 import com.lifemanager.app.core.database.entity.SavingsPlanStatus
 import com.lifemanager.app.core.database.entity.SavingsRecordEntity
+import com.lifemanager.app.domain.model.Milestone
 import com.lifemanager.app.domain.model.SavingsPlanWithDetails
 import com.lifemanager.app.domain.model.SavingsStats
 import com.lifemanager.app.domain.repository.SavingsPlanRepository
@@ -79,6 +81,29 @@ class SavingsPlanUseCase @Inject constructor(
         // 判断是否符合预期进度
         val isOnTrack = plan.currentAmount >= expectedAmount * 0.9 // 允许10%的偏差
 
+        // 计算存款和取款统计
+        val deposits = records.filter { it.type == RecordType.DEPOSIT }
+        val withdrawals = records.filter { it.type == RecordType.WITHDRAWAL }
+        val totalDeposits = deposits.sumOf { it.amount }
+        val totalWithdrawals = withdrawals.sumOf { it.amount }
+
+        // 计算里程碑
+        val progressPercent = (progress * 100).toInt()
+        val currentMilestone = when {
+            progressPercent >= 100 -> Milestone.COMPLETE
+            progressPercent >= 75 -> Milestone.THREE_QUARTERS
+            progressPercent >= 50 -> Milestone.HALF
+            progressPercent >= 25 -> Milestone.QUARTER
+            else -> Milestone.START
+        }
+        val nextMilestone = when {
+            progressPercent >= 100 -> null
+            progressPercent >= 75 -> Milestone.COMPLETE
+            progressPercent >= 50 -> Milestone.THREE_QUARTERS
+            progressPercent >= 25 -> Milestone.HALF
+            else -> Milestone.QUARTER
+        }
+
         return SavingsPlanWithDetails(
             plan = plan,
             records = records,
@@ -87,7 +112,13 @@ class SavingsPlanUseCase @Inject constructor(
             daysElapsed = daysElapsed,
             dailyTarget = dailyTarget,
             expectedAmount = expectedAmount,
-            isOnTrack = isOnTrack
+            isOnTrack = isOnTrack,
+            totalDeposits = totalDeposits,
+            totalWithdrawals = totalWithdrawals,
+            depositCount = deposits.size,
+            withdrawalCount = withdrawals.size,
+            currentMilestone = currentMilestone,
+            nextMilestone = nextMilestone
         )
     }
 
@@ -111,21 +142,97 @@ class SavingsPlanUseCase @Inject constructor(
             (totalCurrent / totalTarget).toFloat().coerceIn(0f, 1f)
         } else 0f
 
-        // 计算本月存款
-        val today = getToday()
-        val monthStart = LocalDate.now().withDayOfMonth(1).toEpochDay().toInt()
-        // 简化：使用总金额作为近似值
-        val thisMonthDeposit = repository.getRecentRecords(100).first()
-            .filter { it.date >= monthStart && it.date <= today }
+        // 计算本月和上月存款
+        val today = LocalDate.now()
+        val monthStart = today.withDayOfMonth(1).toEpochDay().toInt()
+        val lastMonthStart = today.minusMonths(1).withDayOfMonth(1).toEpochDay().toInt()
+
+        val recentRecords = repository.getRecentRecords(500).first()
+
+        // 本月存款（仅存款类型）
+        val thisMonthDeposit = recentRecords
+            .filter { it.date >= monthStart && it.type == RecordType.DEPOSIT }
             .sumOf { it.amount }
+
+        // 上月存款（仅存款类型）
+        val lastMonthDeposit = recentRecords
+            .filter { it.date >= lastMonthStart && it.date < monthStart && it.type == RecordType.DEPOSIT }
+            .sumOf { it.amount }
+
+        // 月度变化百分比
+        val monthlyChange = if (lastMonthDeposit > 0) {
+            ((thisMonthDeposit - lastMonthDeposit) / lastMonthDeposit * 100)
+        } else if (thisMonthDeposit > 0) {
+            100.0
+        } else {
+            0.0
+        }
+
+        // 总存款和总取款
+        val totalDeposits = recentRecords
+            .filter { it.type == RecordType.DEPOSIT }
+            .sumOf { it.amount }
+        val totalWithdrawals = recentRecords
+            .filter { it.type == RecordType.WITHDRAWAL }
+            .sumOf { it.amount }
+
+        // 计算连续存款天数
+        val savingsStreak = calculateSavingsStreak()
+
+        // 获取总存款天数
+        val totalDepositDays = repository.getTotalDepositDays()
 
         return SavingsStats(
             activePlans = activePlans,
             totalTarget = totalTarget,
             totalCurrent = totalCurrent,
             overallProgress = overallProgress,
-            thisMonthDeposit = thisMonthDeposit
+            thisMonthDeposit = thisMonthDeposit,
+            lastMonthDeposit = lastMonthDeposit,
+            monthlyChange = monthlyChange,
+            totalDeposits = totalDeposits,
+            totalWithdrawals = totalWithdrawals,
+            savingsStreak = savingsStreak,
+            totalRecords = totalDepositDays
         )
+    }
+
+    /**
+     * 计算连续存款天数（从今天或昨天往前数）
+     */
+    private suspend fun calculateSavingsStreak(): Int {
+        val depositDates = repository.getAllDepositDates()
+        if (depositDates.isEmpty()) return 0
+
+        val today = getToday()
+        val sortedDates = depositDates.sorted().reversed()  // 从最近日期开始
+
+        // 检查最近一次存款是否为今天或昨天（允许一天的间隔保持streak）
+        val latestDate = sortedDates.first()
+        if (today - latestDate > 1) {
+            // 如果最近存款不是今天或昨天，streak为0
+            return 0
+        }
+
+        // 计算连续天数
+        var streak = 1
+        var previousDate = latestDate
+
+        for (i in 1 until sortedDates.size) {
+            val currentDate = sortedDates[i]
+            // 如果日期连续或者是同一天（多次存款）
+            if (previousDate - currentDate <= 1) {
+                if (previousDate - currentDate == 1) {
+                    streak++
+                }
+                previousDate = currentDate
+            } else {
+                // 连续中断
+                break
+            }
+        }
+
+        return streak
     }
 
     /**
@@ -150,6 +257,7 @@ class SavingsPlanUseCase @Inject constructor(
         val record = SavingsRecordEntity(
             planId = planId,
             amount = amount,
+            type = RecordType.DEPOSIT,
             date = today,
             note = note
         )
@@ -164,15 +272,70 @@ class SavingsPlanUseCase @Inject constructor(
     }
 
     /**
-     * 删除存款记录
+     * 取款
+     */
+    suspend fun withdraw(planId: Long, amount: Double, note: String = ""): Boolean {
+        val plan = repository.getPlanById(planId) ?: return false
+
+        // 检查余额是否足够
+        if (plan.currentAmount < amount) {
+            return false
+        }
+
+        val today = getToday()
+        val record = SavingsRecordEntity(
+            planId = planId,
+            amount = amount,
+            type = RecordType.WITHDRAWAL,
+            date = today,
+            note = note
+        )
+        repository.saveRecord(record)
+
+        // 减少计划金额
+        val newAmount = (plan.currentAmount - amount).coerceAtLeast(0.0)
+        repository.updatePlanAmount(planId, newAmount)
+
+        // 如果计划已完成，取款后重新激活
+        if (plan.status == SavingsPlanStatus.COMPLETED && newAmount < plan.targetAmount) {
+            repository.updatePlanStatus(planId, SavingsPlanStatus.ACTIVE)
+        }
+
+        return true
+    }
+
+    /**
+     * 根据ID获取存款记录
+     */
+    suspend fun getRecordById(recordId: Long): SavingsRecordEntity? {
+        return repository.getRecordById(recordId)
+    }
+
+    /**
+     * 删除存款/取款记录
      */
     suspend fun deleteRecord(recordId: Long) {
         val record = repository.getRecordById(recordId) ?: return
         repository.deleteRecord(recordId)
+
         // 更新计划金额
         val plan = repository.getPlanById(record.planId) ?: return
-        val newAmount = (plan.currentAmount - record.amount).coerceAtLeast(0.0)
+        val adjustment = if (record.type == RecordType.DEPOSIT) {
+            // 删除存款记录，减少金额
+            -record.amount
+        } else {
+            // 删除取款记录，恢复金额
+            record.amount
+        }
+        val newAmount = (plan.currentAmount + adjustment).coerceAtLeast(0.0)
         repository.updatePlanAmount(record.planId, newAmount)
+
+        // 检查是否需要更新计划状态
+        if (newAmount >= plan.targetAmount && plan.status == SavingsPlanStatus.ACTIVE) {
+            repository.updatePlanStatus(record.planId, SavingsPlanStatus.COMPLETED)
+        } else if (newAmount < plan.targetAmount && plan.status == SavingsPlanStatus.COMPLETED) {
+            repository.updatePlanStatus(record.planId, SavingsPlanStatus.ACTIVE)
+        }
     }
 
     /**

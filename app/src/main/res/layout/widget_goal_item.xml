@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 目标小组件列表项布局 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_goal_item_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_item_background"
+    android:padding="10dp"
+    android:gravity="center_vertical">
+
+    <!-- 目标图标/emoji -->
+    <TextView
+        android:id="@+id/widget_goal_item_icon"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:gravity="center"
+        android:text="🎯"
+        android:textSize="18sp"
+        android:background="@drawable/widget_icon_circle" />
+
+    <!-- 目标信息 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="8dp">
+
+        <!-- 目标名称 -->
+        <TextView
+            android:id="@+id/widget_goal_item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="目标名称"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#1A1A2E"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 截止日期或进度 -->
+        <TextView
+            android:id="@+id/widget_goal_item_deadline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="截止: 2025-12-31"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:maxLines="1"
+            android:layout_marginTop="2dp" />
+
+        <!-- 进度条 -->
+        <ProgressBar
+            android:id="@+id/widget_goal_item_progress_bar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:max="100"
+            android:progress="50"
+            android:progressDrawable="@drawable/widget_progress_drawable"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- 进度百分比 -->
+    <TextView
+        android:id="@+id/widget_goal_item_progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="50%"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#2196F3"
+        android:minWidth="40dp"
+        android:gravity="end" />
+
+</LinearLayout>

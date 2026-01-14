@@ -13,18 +13,25 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import com.lifemanager.app.feature.home.HomeScreen
+import com.lifemanager.app.feature.home.CleanHomeScreen
 import com.lifemanager.app.feature.finance.income.MonthlyIncomeExpenseScreen
 import com.lifemanager.app.feature.finance.income.FieldManagementScreen
 import com.lifemanager.app.feature.finance.asset.MonthlyAssetScreen
 import com.lifemanager.app.feature.finance.expense.MonthlyExpenseScreen
 import com.lifemanager.app.feature.finance.transaction.DailyTransactionScreen
-import com.lifemanager.app.feature.todo.TodoScreen
-import com.lifemanager.app.feature.diary.DiaryScreen
+import com.lifemanager.app.feature.todo.CleanTodoScreen
+import com.lifemanager.app.feature.todo.CleanTodoDetailScreen
+import com.lifemanager.app.feature.diary.CleanDiaryScreen
+import com.lifemanager.app.feature.diary.CleanEditDiaryScreen
 import com.lifemanager.app.feature.timetrack.TimeTrackScreen
-import com.lifemanager.app.feature.habit.HabitScreen
-import com.lifemanager.app.feature.savings.SavingsPlanScreen
+import com.lifemanager.app.feature.habit.CleanHabitScreen
+import com.lifemanager.app.feature.habit.CleanHabitDetailScreen
+import com.lifemanager.app.feature.habit.CleanEditHabitScreen
+import com.lifemanager.app.feature.savings.CleanSavingsPlanScreen
+import com.lifemanager.app.feature.savings.CleanSavingsPlanDetailScreen
 import com.lifemanager.app.feature.goal.GoalScreen
+import com.lifemanager.app.feature.goal.GoalDetailScreen
+import com.lifemanager.app.feature.goal.AddEditGoalScreen
 import com.lifemanager.app.feature.datacenter.DataCenterScreen
 import com.lifemanager.app.feature.profile.ProfileScreen
 import com.lifemanager.app.feature.settings.SettingsScreen
@@ -37,6 +44,18 @@ import com.lifemanager.app.feature.ai.AIAssistantScreen
 import com.lifemanager.app.feature.ai.VoiceInputScreen
 import com.lifemanager.app.feature.budget.BudgetScreen
 import com.lifemanager.app.feature.finance.transaction.billimport.BillImportScreen
+import com.lifemanager.app.feature.finance.accounting.AccountingMainScreen
+import com.lifemanager.app.feature.finance.accounting.AccountingCalendarScreen
+import com.lifemanager.app.feature.finance.accounting.AccountingSearchScreen
+import com.lifemanager.app.feature.finance.ledger.LedgerManagementScreen
+import com.lifemanager.app.feature.finance.recurring.RecurringTransactionScreen
+import com.lifemanager.app.feature.finance.account.FundAccountScreen
+import com.lifemanager.app.feature.finance.account.FundAccountDetailScreen
+import com.lifemanager.app.feature.finance.statistics.StatisticsScreen
+import com.lifemanager.app.feature.health.CleanHealthRecordScreen
+import com.lifemanager.app.feature.health.CleanHealthRecordDetailScreen
+import com.lifemanager.app.ui.reading.ReadingScreen
+import com.lifemanager.app.ui.reading.BookDetailScreen
 
 /**
  * 窗口尺寸类型
@@ -234,11 +253,24 @@ fun AppNavHost(
         startDestination = Screen.Home.route,
         modifier = modifier
     ) {
-        // 首页
+        // 首页 - 使用简洁设计版本
         composable(Screen.Home.route) {
-            HomeScreen(
+            CleanHomeScreen(
                 onNavigateToModule = { route ->
-                    navController.navigate(route)
+                    // 检查是否是底部导航栏的主页面路由
+                    val isMainScreenRoute = bottomNavItems.any { it.route == route }
+                    if (isMainScreenRoute) {
+                        // 使用与底部导航栏一致的导航方式
+                        navController.navigate(route) {
+                            popUpTo(Screen.Home.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    } else {
+                        navController.navigate(route)
+                    }
                 }
             )
         }
@@ -297,10 +329,149 @@ fun AppNavHost(
             )
         }
 
+        // 记账主界面
+        composable(Screen.AccountingMain.route) {
+            AccountingMainScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onNavigateToCalendar = { navController.navigate(Screen.AccountingCalendar.route) },
+                onNavigateToSearch = { navController.navigate(Screen.AccountingSearch.route) },
+                onNavigateToStatistics = {
+                    navController.navigate(Screen.Statistics.route)
+                },
+                onNavigateToLedgerManagement = { navController.navigate(Screen.LedgerManagement.route) },
+                onNavigateToAssetManagement = { navController.navigate(Screen.MonthlyAsset.route) },
+                onNavigateToRecurringTransaction = { navController.navigate(Screen.RecurringTransaction.route) },
+                onNavigateToCategoryManagement = { navController.navigate("field_management") },
+                onNavigateToBudget = { navController.navigate(Screen.Budget.route) },
+                onNavigateToImport = { navController.navigate(Screen.BillImport.route) },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToDailyTransaction = { navController.navigate(Screen.DailyTransaction.route) },
+                onNavigateToFundAccount = { navController.navigate(Screen.FundAccount.route) }
+            )
+        }
+
+        // 记账日历
+        composable(Screen.AccountingCalendar.route) {
+            AccountingCalendarScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAddTransaction = { navController.navigate(Screen.DailyTransaction.route) }
+            )
+        }
+
+        // 记账搜索
+        composable(Screen.AccountingSearch.route) {
+            AccountingSearchScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 账本管理
+        composable(Screen.LedgerManagement.route) {
+            LedgerManagementScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 周期记账
+        composable(Screen.RecurringTransaction.route) {
+            RecurringTransactionScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 资金账户
+        composable(Screen.FundAccount.route) {
+            FundAccountScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { accountId ->
+                    navController.navigate(Screen.FundAccountDetail.createRoute(accountId))
+                }
+            )
+        }
+
+        // 资金账户详情
+        composable(
+            route = Screen.FundAccountDetail.route,
+            arguments = listOf(navArgument("accountId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getLong("accountId") ?: 0L
+            FundAccountDetailScreen(
+                accountId = accountId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 统计分析
+        composable(Screen.Statistics.route) {
+            StatisticsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // 目标管理
         composable(Screen.Goal.route) {
             GoalScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { goalId ->
+                    navController.navigate(Screen.GoalDetail.createRoute(goalId))
+                },
+                onNavigateToAdd = {
+                    navController.navigate(Screen.AddGoal.route)
+                },
+                onNavigateToAddMultiLevel = {
+                    navController.navigate(Screen.AddMultiLevelGoal.route)
+                }
+            )
+        }
+
+        // 添加单级目标
+        composable(Screen.AddGoal.route) {
+            AddEditGoalScreen(
+                goalId = null,
+                isMultiLevel = false,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 添加多级目标
+        composable(Screen.AddMultiLevelGoal.route) {
+            AddEditGoalScreen(
+                goalId = null,
+                isMultiLevel = true,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 编辑目标
+        composable(
+            route = Screen.EditGoal.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val goalId = backStackEntry.arguments?.getLong("id") ?: 0L
+            AddEditGoalScreen(
+                goalId = goalId,
+                isMultiLevel = false,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 目标详情
+        composable(
+            route = Screen.GoalDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val goalId = backStackEntry.arguments?.getLong("id") ?: 0L
+            GoalDetailScreen(
+                goalId = goalId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.EditGoal.createRoute(id))
+                }
             )
         }
 
@@ -339,16 +510,49 @@ fun AppNavHost(
             )
         }
 
-        // 待办
+        // 待办 - 使用简洁设计版本
         composable(Screen.Todo.route) {
-            TodoScreen(
-                onNavigateBack = { navController.popBackStack() }
+            CleanTodoScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { todoId ->
+                    navController.navigate(Screen.TodoDetail.createRoute(todoId))
+                }
             )
         }
 
-        // 日记
+        // 待办详情 - 使用简洁设计版本
+        composable(
+            route = Screen.TodoDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val todoId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanTodoDetailScreen(
+                todoId = todoId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToGoal = { goalId ->
+                    navController.navigate(Screen.GoalDetail.createRoute(goalId))
+                }
+            )
+        }
+
+        // 日记 - 使用简洁设计版本
         composable(Screen.Diary.route) {
-            DiaryScreen(
+            CleanDiaryScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { date ->
+                    navController.navigate(Screen.EditDiary.createRoute(date))
+                }
+            )
+        }
+
+        // 日记编辑 - 全屏编辑页面
+        composable(
+            route = Screen.EditDiary.route,
+            arguments = listOf(navArgument("date") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val date = backStackEntry.arguments?.getInt("date") ?: 0
+            CleanEditDiaryScreen(
+                diaryDate = if (date == 0) null else date,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -360,16 +564,112 @@ fun AppNavHost(
             )
         }
 
-        // 习惯打卡
+        // 习惯打卡 - 使用简洁设计版本
         composable(Screen.Habit.route) {
-            HabitScreen(
+            CleanHabitScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { habitId ->
+                    navController.navigate(Screen.HabitDetail.createRoute(habitId))
+                },
+                onNavigateToAdd = {
+                    navController.navigate(Screen.EditHabit.createNewRoute())
+                }
+            )
+        }
+
+        // 习惯详情页
+        composable(
+            route = Screen.HabitDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val habitId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanHabitDetailScreen(
+                habitId = habitId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    navController.navigate(Screen.EditHabit.createRoute(id))
+                }
+            )
+        }
+
+        // 习惯编辑页
+        composable(
+            route = Screen.EditHabit.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val habitId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanEditHabitScreen(
+                habitId = habitId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // 存钱计划
+        // 存钱计划 - 使用简洁设计版本
         composable(Screen.SavingsPlan.route) {
-            SavingsPlanScreen(
+            CleanSavingsPlanScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { planId ->
+                    navController.navigate(Screen.SavingsPlanDetail.createRoute(planId))
+                }
+            )
+        }
+
+        // 存钱计划详情
+        composable(
+            route = Screen.SavingsPlanDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanSavingsPlanDetailScreen(
+                planId = planId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id ->
+                    // TODO: Navigate to edit screen when created
+                }
+            )
+        }
+
+        // 健康记录 - 使用简洁设计版本
+        composable(Screen.HealthRecord.route) {
+            CleanHealthRecordScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { recordId ->
+                    navController.navigate(Screen.HealthRecordDetail.createRoute(recordId))
+                }
+            )
+        }
+
+        // 健康记录详情
+        composable(
+            route = Screen.HealthRecordDetail.route,
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val recordId = backStackEntry.arguments?.getLong("id") ?: 0L
+            CleanHealthRecordDetailScreen(
+                recordId = recordId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 阅读
+        composable(Screen.Reading.route) {
+            ReadingScreen(
+                onNavigateToBookDetail = { bookId ->
+                    navController.navigate(Screen.BookDetail.createRoute(bookId))
+                },
+                onNavigateToAddBook = { },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 书籍详情
+        composable(
+            route = Screen.BookDetail.route,
+            arguments = listOf(navArgument("bookId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val bookId = backStackEntry.arguments?.getLong("bookId") ?: 0L
+            BookDetailScreen(
+                bookId = bookId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

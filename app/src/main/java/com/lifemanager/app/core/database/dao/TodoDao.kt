@@ -98,6 +98,12 @@ interface TodoDao {
     suspend fun getById(id: Long): TodoEntity?
 
     /**
+     * 根据ID获取待办（同步版本，用于Widget）
+     */
+    @Query("SELECT * FROM todos WHERE id = :id")
+    fun getByIdSync(id: Long): TodoEntity?
+
+    /**
      * 获取需要提醒的待办
      */
     @Query("""
@@ -106,6 +112,16 @@ interface TodoDao {
         ORDER BY reminderAt ASC
     """)
     fun getUpcomingReminders(now: Long): Flow<List<TodoEntity>>
+
+    /**
+     * 同步获取需要提醒的待办（用于BootReceiver重新调度）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE status = 'PENDING' AND reminderAt IS NOT NULL AND reminderAt > :now
+        ORDER BY reminderAt ASC
+    """)
+    suspend fun getUpcomingRemindersSync(now: Long): List<TodoEntity>
 
     /**
      * 插入待办
@@ -152,6 +168,12 @@ interface TodoDao {
     suspend fun deleteWithSubTodos(id: Long)
 
     /**
+     * 批量删除待办
+     */
+    @Query("DELETE FROM todos WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /**
      * 统计今日待办完成情况
      */
     @Query("""
@@ -168,6 +190,53 @@ interface TodoDao {
      */
     @Query("SELECT COUNT(*) FROM todos WHERE status = 'PENDING'")
     suspend fun countPending(): Int
+
+    /**
+     * 获取指定日期的待办列表
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE dueDate = :epochDay
+        ORDER BY status ASC, priority DESC
+    """)
+    suspend fun getTodosByDate(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 同步获取指定日期的待办（用于AI服务）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE dueDate = :epochDay
+        ORDER BY status ASC, priority DESC
+    """)
+    fun getByDateSync(epochDay: Int): List<TodoEntity>
+
+    /**
+     * 同步获取逾期待办（用于AI服务）
+     */
+    @Query("""
+        SELECT * FROM todos
+        WHERE status = 'PENDING' AND dueDate < :today
+        ORDER BY dueDate ASC
+    """)
+    fun getOverdueSync(today: Int): List<TodoEntity>
+
+    /**
+     * 获取逾期待办数量（同步版本，用于Widget）
+     */
+    @Query("SELECT COUNT(*) FROM todos WHERE status = 'PENDING' AND dueDate < :today")
+    suspend fun getOverdueCountSync(today: Int): Int
+
+    /**
+     * 获取日期范围内每天的待办数量
+     */
+    @Query("""
+        SELECT dueDate as date, COUNT(*) as count
+        FROM todos
+        WHERE dueDate >= :startDate AND dueDate <= :endDate
+        GROUP BY dueDate
+    """)
+    suspend fun getTodoCountByDateRangeRaw(startDate: Int, endDate: Int): List<DateTodoCount>
 }
 
 /**
@@ -177,3 +246,18 @@ data class TodoStats(
     val total: Int,
     val completed: Int
 )
+
+/**
+ * 日期待办数量
+ */
+data class DateTodoCount(
+    val date: Int,
+    val count: Int
+)
+
+/**
+ * 扩展函数：将列表转换为Map
+ */
+suspend fun TodoDao.getTodoCountByDateRange(startDate: Int, endDate: Int): Map<Int, Int> {
+    return getTodoCountByDateRangeRaw(startDate, endDate).associate { it.date to it.count }
+}
