@@ -155,13 +155,7 @@ fun BookDetailScreen(
                     TabRow(
                         selectedTabIndex = selectedTab,
                         containerColor = CleanColors.background,
-                        contentColor = CleanColors.primary,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.SecondaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                color = CleanColors.primary
-                            )
-                        }
+                        contentColor = CleanColors.primary
                     ) {
                         Tab(
                             selected = selectedTab == 0,
@@ -482,7 +476,7 @@ fun CleanBookDetailContent(
                         }
 
                         LinearProgressIndicator(
-                            progress = { book.progressPercent / 100f },
+                            progress = book.progressPercent / 100f,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(6.dp)
@@ -984,7 +978,7 @@ fun UpdateProgressDialog(
                 if (totalPages > 0) {
                     val progressValue = (page.toIntOrNull() ?: 0) * 100 / totalPages
                     LinearProgressIndicator(
-                        progress = { progressValue / 100f },
+                        progress = progressValue / 100f,
                         modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                         color = CleanColors.primary,
                         trackColor = CleanColors.surfaceVariant
@@ -1222,26 +1216,3 @@ fun BookNotesContent(
     CleanBookNotesContent(notes, onToggleFavorite, onDeleteNote)
 }
 
-@Composable
-fun StatusChip(status: String) {
-    CleanStatusChip(status)
-}
-
-@Composable
-fun InfoRow(label: String, value: String) {
-    CleanInfoRow(label, value)
-}
-
-@Composable
-fun NoteCard(
-    note: ReadingNoteEntity,
-    onToggleFavorite: () -> Unit,
-    onDelete: () -> Unit
-) {
-    CleanNoteCard(note, onToggleFavorite, onDelete)
-}
-
-@Composable
-fun NoteTypeChip(noteType: String) {
-    CleanNoteTypeChip(noteType)
-}
