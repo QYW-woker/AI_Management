@@ -23,9 +23,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lifemanager.app.core.database.entity.*
+import com.lifemanager.app.ui.theme.*
+import kotlinx.coroutines.delay
 
 /**
- * 书籍详情页面
+ * 书籍详情页面 - 简洁设计版本
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +46,27 @@ fun BookDetailScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    // 阅读计时状态
+    var isReading by remember { mutableStateOf(false) }
+    var readingSeconds by remember { mutableLongStateOf(0L) }
+    var startPage by remember { mutableIntStateOf(0) }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     // 加载书籍详情
     LaunchedEffect(bookId) {
         viewModel.loadBookDetail(bookId)
+    }
+
+    // 阅读计时器
+    LaunchedEffect(isReading) {
+        if (isReading) {
+            startPage = selectedBook?.currentPage ?: 0
+            while (isReading) {
+                delay(1000)
+                readingSeconds++
+            }
+        }
     }
 
     // 显示消息
@@ -60,12 +78,25 @@ fun BookDetailScreen(
     }
 
     Scaffold(
+        containerColor = CleanColors.background,
         topBar = {
             TopAppBar(
-                title = { Text(selectedBook?.title ?: "书籍详情", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(
+                        selectedBook?.title ?: "书籍详情",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = CleanTypography.title,
+                        color = CleanColors.textPrimary
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "返回",
+                            tint = CleanColors.textSecondary
+                        )
                     }
                 },
                 actions = {
@@ -74,20 +105,31 @@ fun BookDetailScreen(
                             Icon(
                                 imageVector = if (book.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = if (book.isFavorite) "取消收藏" else "收藏",
-                                tint = if (book.isFavorite) Color.Red else LocalContentColor.current
+                                tint = if (book.isFavorite) CleanColors.error else CleanColors.textSecondary
                             )
                         }
                         IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "删除")
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = "删除",
+                                tint = CleanColors.textSecondary
+                            )
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = CleanColors.background
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (selectedTab == 1) {
-                FloatingActionButton(onClick = { showNoteDialog = true }) {
+                FloatingActionButton(
+                    onClick = { showNoteDialog = true },
+                    containerColor = CleanColors.primary,
+                    contentColor = CleanColors.onPrimary
+                ) {
                     Icon(Icons.Default.Add, contentDescription = "添加笔记")
                 }
             }
@@ -100,7 +142,7 @@ fun BookDetailScreen(
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = CleanColors.primary)
             }
         } else {
             selectedBook?.let { book ->
@@ -110,32 +152,73 @@ fun BookDetailScreen(
                         .padding(paddingValues)
                 ) {
                     // 标签页
-                    TabRow(selectedTabIndex = selectedTab) {
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = CleanColors.background,
+                        contentColor = CleanColors.primary,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = CleanColors.primary
+                            )
+                        }
+                    ) {
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            text = { Text("详情") }
+                            text = {
+                                Text(
+                                    "详情",
+                                    color = if (selectedTab == 0) CleanColors.primary else CleanColors.textSecondary
+                                )
+                            }
                         )
                         Tab(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            text = { Text("笔记 (${bookNotes.size})") }
+                            text = {
+                                Text(
+                                    "笔记 (${bookNotes.size})",
+                                    color = if (selectedTab == 1) CleanColors.primary else CleanColors.textSecondary
+                                )
+                            }
                         )
                     }
 
                     when (selectedTab) {
-                        0 -> BookDetailContent(
+                        0 -> CleanBookDetailContent(
                             book = book,
+                            isReading = isReading,
+                            readingSeconds = readingSeconds,
                             onUpdateProgress = { showProgressDialog = true },
                             onRateBook = { showRatingDialog = true },
-                            onStartReading = { viewModel.startReading(book.id) },
+                            onStartReading = {
+                                if (book.status == ReadingStatus.UNREAD || book.status == ReadingStatus.WISH || book.status == ReadingStatus.ABANDONED) {
+                                    viewModel.startReading(book.id)
+                                }
+                                isReading = true
+                                readingSeconds = 0
+                            },
+                            onStopReading = { endPage ->
+                                isReading = false
+                                val duration = (readingSeconds / 60).toInt()
+                                if (duration > 0 || endPage > startPage) {
+                                    viewModel.recordReadingSession(
+                                        bookId = book.id,
+                                        startPage = startPage,
+                                        endPage = endPage,
+                                        duration = duration
+                                    )
+                                }
+                                readingSeconds = 0
+                            },
                             onFinishReading = { viewModel.finishReading(book.id) },
                             onAbandonReading = { viewModel.abandonReading(book.id) }
                         )
-                        1 -> BookNotesContent(
+                        1 -> CleanBookNotesContent(
                             notes = bookNotes,
                             onToggleFavorite = { viewModel.toggleNoteFavorite(it) },
-                            onDeleteNote = { viewModel.deleteNote(it) }
+                            onDeleteNote = { viewModel.deleteNote(it, book.id) }
                         )
                     }
                 }
@@ -146,7 +229,11 @@ fun BookDetailScreen(
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("书籍不存在")
+                    Text(
+                        "书籍不存在",
+                        style = CleanTypography.body,
+                        color = CleanColors.textTertiary
+                    )
                 }
             }
         }
@@ -206,8 +293,8 @@ fun BookDetailScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这本书吗？相关的阅读记录和笔记也会被删除。") },
+            title = { Text("确认删除", style = CleanTypography.title) },
+            text = { Text("确定要删除这本书吗？相关的阅读记录和笔记也会被删除。", style = CleanTypography.body) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -215,116 +302,100 @@ fun BookDetailScreen(
                         showDeleteConfirm = false
                         onNavigateBack()
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(contentColor = CleanColors.error)
                 ) {
                     Text("删除")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
+                    Text("取消", color = CleanColors.textSecondary)
                 }
-            }
+            },
+            containerColor = CleanColors.surface
         )
     }
 }
 
 /**
- * 书籍详情内容
+ * 书籍详情内容 - 简洁设计
  */
 @Composable
-fun BookDetailContent(
+fun CleanBookDetailContent(
     book: BookEntity,
+    isReading: Boolean,
+    readingSeconds: Long,
     onUpdateProgress: () -> Unit,
     onRateBook: () -> Unit,
     onStartReading: () -> Unit,
+    onStopReading: (Int) -> Unit,
     onFinishReading: () -> Unit,
     onAbandonReading: () -> Unit
 ) {
+    var showStopReadingDialog by remember { mutableStateOf(false) }
+    var endPageInput by remember { mutableStateOf("") }
+
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(Spacing.pageHorizontal, Spacing.pageVertical),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg)
     ) {
         // 书籍封面和基本信息
         item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 封面占位
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                // 封面
                 Box(
                     modifier = Modifier
-                        .size(120.dp, 160.dp)
-                        .background(
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            RoundedCornerShape(8.dp)
-                        ),
+                        .size(100.dp, 140.dp)
+                        .background(CleanColors.surfaceVariant, RoundedCornerShape(Radius.md))
+                        .clip(RoundedCornerShape(Radius.md)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.MenuBook,
                         contentDescription = null,
-                        modifier = Modifier.size(60.dp),
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        modifier = Modifier.size(48.dp),
+                        tint = CleanColors.textTertiary
                     )
                 }
 
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     Text(
                         text = book.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = CleanTypography.title,
+                        color = CleanColors.textPrimary,
+                        fontWeight = FontWeight.SemiBold
                     )
 
                     if (book.author.isNotBlank()) {
                         Text(
-                            text = "作者: ${book.author}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = book.author,
+                            style = CleanTypography.secondary,
+                            color = CleanColors.textSecondary
                         )
                     }
 
-                    if (book.translator.isNotBlank()) {
-                        Text(
-                            text = "译者: ${book.translator}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    CleanStatusChip(status = book.status)
 
-                    if (book.publisher.isNotBlank()) {
-                        Text(
-                            text = "出版社: ${book.publisher}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    StatusChip(status = book.status)
-
-                    // 评分显示
+                    // 评分
                     if (book.rating > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             repeat(5) { index ->
                                 val filled = index < book.rating / 2
-                                val halfFilled = index == book.rating / 2 && book.rating % 2 == 1
                                 Icon(
-                                    imageVector = when {
-                                        filled -> Icons.Filled.Star
-                                        halfFilled -> Icons.Filled.StarHalf
-                                        else -> Icons.Outlined.StarBorder
-                                    },
+                                    imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                     contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = Color(0xFFFFC107)
+                                    modifier = Modifier.size(16.dp),
+                                    tint = CleanColors.warning
                                 )
                             }
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text(
                                 text = "${book.rating / 2.0}",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = CleanTypography.caption,
+                                color = CleanColors.textSecondary
                             )
                         }
                     }
@@ -332,18 +403,66 @@ fun BookDetailContent(
             }
         }
 
-        // 阅读进度卡片
+        // 阅读计时卡片
+        if (isReading) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CleanColors.primaryLight),
+                    shape = RoundedCornerShape(Radius.md)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(Spacing.lg),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "正在阅读中",
+                            style = CleanTypography.secondary,
+                            color = CleanColors.primary
+                        )
+
+                        Spacer(Modifier.height(Spacing.sm))
+
+                        Text(
+                            text = formatTime(readingSeconds),
+                            style = CleanTypography.amountLarge,
+                            color = CleanColors.primary
+                        )
+
+                        Spacer(Modifier.height(Spacing.md))
+
+                        Button(
+                            onClick = {
+                                endPageInput = book.currentPage.toString()
+                                showStopReadingDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CleanColors.primary,
+                                contentColor = CleanColors.onPrimary
+                            ),
+                            shape = RoundedCornerShape(Radius.sm)
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(Spacing.sm))
+                            Text("结束阅读")
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阅读进度
         if (book.totalPages > 0) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    colors = CardDefaults.cardColors(containerColor = CleanColors.surface),
+                    shape = RoundedCornerShape(Radius.md),
+                    elevation = CardDefaults.cardElevation(defaultElevation = Elevation.xs)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.md)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -352,37 +471,52 @@ fun BookDetailContent(
                         ) {
                             Text(
                                 text = "阅读进度",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Medium
+                                style = CleanTypography.secondary,
+                                color = CleanColors.textSecondary
                             )
                             Text(
                                 text = "${book.progressPercent}%",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                style = CleanTypography.amountMedium,
+                                color = CleanColors.primary
                             )
                         }
 
                         LinearProgressIndicator(
-                            progress = book.progressPercent / 100f,
+                            progress = { book.progressPercent / 100f },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = CleanColors.primary,
+                            trackColor = CleanColors.surfaceVariant
                         )
 
-                        Text(
-                            text = "${book.currentPage} / ${book.totalPages} 页",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-
-                        Button(
-                            onClick = onUpdateProgress,
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "${book.currentPage} / ${book.totalPages} 页",
+                                style = CleanTypography.caption,
+                                color = CleanColors.textTertiary
+                            )
+                            if (book.actualReadingTime > 0) {
+                                Text(
+                                    text = "已读 ${book.actualReadingTime / 60}小时${book.actualReadingTime % 60}分钟",
+                                    style = CleanTypography.caption,
+                                    color = CleanColors.textTertiary
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onUpdateProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(Radius.sm),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = CleanColors.primary
+                            )
+                        ) {
                             Text("更新进度")
                         }
                     }
@@ -394,52 +528,93 @@ fun BookDetailContent(
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md)
             ) {
                 when (book.status) {
-                    ReadingStatus.WISH, ReadingStatus.UNREAD -> {
-                        Button(
-                            onClick = onStartReading,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("开始阅读")
+                    ReadingStatus.WISH, ReadingStatus.UNREAD, ReadingStatus.ABANDONED -> {
+                        if (!isReading) {
+                            Button(
+                                onClick = onStartReading,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CleanColors.primary,
+                                    contentColor = CleanColors.onPrimary
+                                ),
+                                shape = RoundedCornerShape(Radius.sm)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text(if (book.status == ReadingStatus.ABANDONED) "重新阅读" else "开始阅读")
+                            }
                         }
                     }
                     ReadingStatus.READING -> {
-                        OutlinedButton(
-                            onClick = onFinishReading,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("标记完成")
+                        if (!isReading) {
+                            Button(
+                                onClick = onStartReading,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CleanColors.primary,
+                                    contentColor = CleanColors.onPrimary
+                                ),
+                                shape = RoundedCornerShape(Radius.sm)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text("继续阅读")
+                            }
                         }
                         OutlinedButton(
-                            onClick = onAbandonReading,
+                            onClick = onFinishReading,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
+                            shape = RoundedCornerShape(Radius.sm),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CleanColors.success)
                         ) {
-                            Text("放弃阅读")
+                            Text("标记完成")
                         }
                     }
                     ReadingStatus.FINISHED -> {
                         OutlinedButton(
                             onClick = onRateBook,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(Radius.sm),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CleanColors.warning)
                         ) {
-                            Icon(Icons.Default.Star, contentDescription = null)
-                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text("评价")
                         }
                     }
-                    ReadingStatus.ABANDONED -> {
-                        Button(
-                            onClick = onStartReading,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("重新阅读")
-                        }
-                    }
+                }
+            }
+        }
+
+        // 书籍信息
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CleanColors.surface),
+                shape = RoundedCornerShape(Radius.md),
+                elevation = CardDefaults.cardElevation(defaultElevation = Elevation.xs)
+            ) {
+                Column(
+                    modifier = Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md)
+                ) {
+                    Text(
+                        text = "书籍信息",
+                        style = CleanTypography.secondary,
+                        color = CleanColors.textPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    if (book.translator.isNotBlank()) CleanInfoRow("译者", book.translator)
+                    if (book.publisher.isNotBlank()) CleanInfoRow("出版社", book.publisher)
+                    book.publishYear?.let { CleanInfoRow("出版年份", it.toString()) }
+                    if (book.isbn.isNotBlank()) CleanInfoRow("ISBN", book.isbn)
+                    CleanInfoRow("格式", BookFormat.getDisplayName(book.format))
+                    CleanInfoRow("来源", BookSource.getDisplayName(book.source))
+                    if (book.price > 0) CleanInfoRow("价格", "¥${book.price}")
                 }
             }
         }
@@ -448,109 +623,142 @@ fun BookDetailContent(
         if (book.shortReview.isNotBlank()) {
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CleanColors.surface),
+                    shape = RoundedCornerShape(Radius.md),
+                    elevation = CardDefaults.cardElevation(defaultElevation = Elevation.xs)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
                         Text(
                             text = "我的评价",
-                            style = MaterialTheme.typography.titleSmall,
+                            style = CleanTypography.secondary,
+                            color = CleanColors.textPrimary,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = book.shortReview,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        }
-
-        // 书籍详细信息
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "书籍信息",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    if (book.isbn.isNotBlank()) {
-                        InfoRow("ISBN", book.isbn)
-                    }
-                    book.publishYear?.let { InfoRow("出版年份", it.toString()) }
-                    InfoRow("格式", BookFormat.getDisplayName(book.format))
-                    InfoRow("来源", BookSource.getDisplayName(book.source))
-                    if (book.price > 0) {
-                        InfoRow("价格", "¥${book.price}")
-                    }
-                    if (book.actualReadingTime > 0) {
-                        InfoRow("阅读时长", "${book.actualReadingTime / 60}小时${book.actualReadingTime % 60}分钟")
-                    }
-                }
-            }
-        }
-
-        // 备注
-        if (book.notes.isNotBlank()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "备注",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = book.notes,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = CleanTypography.body,
+                            color = CleanColors.textSecondary
                         )
                     }
                 }
             }
         }
     }
+
+    // 结束阅读对话框
+    if (showStopReadingDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopReadingDialog = false },
+            title = { Text("结束阅读", style = CleanTypography.title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    Text(
+                        text = "本次阅读时长: ${formatTime(readingSeconds)}",
+                        style = CleanTypography.body,
+                        color = CleanColors.textSecondary
+                    )
+                    OutlinedTextField(
+                        value = endPageInput,
+                        onValueChange = { endPageInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("读到第几页") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onStopReading(endPageInput.toIntOrNull() ?: book.currentPage)
+                        showStopReadingDialog = false
+                    }
+                ) {
+                    Text("保存", color = CleanColors.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopReadingDialog = false }) {
+                    Text("取消", color = CleanColors.textSecondary)
+                }
+            },
+            containerColor = CleanColors.surface
+        )
+    }
 }
 
 /**
- * 信息行
+ * 格式化时间
+ */
+private fun formatTime(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format("%02d:%02d", minutes, secs)
+    }
+}
+
+/**
+ * 简洁信息行
  */
 @Composable
-fun InfoRow(label: String, value: String) {
+fun CleanInfoRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = CleanTypography.secondary,
+            color = CleanColors.textTertiary
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium
+            style = CleanTypography.secondary,
+            color = CleanColors.textSecondary
         )
     }
 }
 
 /**
- * 书籍笔记内容
+ * 简洁状态标签
  */
 @Composable
-fun BookNotesContent(
+fun CleanStatusChip(status: String) {
+    val (color, text) = when (status) {
+        ReadingStatus.WISH -> CleanColors.primary to "想读"
+        ReadingStatus.UNREAD -> CleanColors.textTertiary to "未读"
+        ReadingStatus.READING -> CleanColors.warning to "在读"
+        ReadingStatus.FINISHED -> CleanColors.success to "已读"
+        ReadingStatus.ABANDONED -> CleanColors.error to "弃读"
+        else -> CleanColors.textTertiary to "未知"
+    }
+
+    Surface(
+        shape = RoundedCornerShape(Radius.sm),
+        color = color.copy(alpha = 0.1f)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            style = CleanTypography.caption,
+            color = color
+        )
+    }
+}
+
+/**
+ * 书籍笔记内容 - 简洁设计
+ */
+@Composable
+fun CleanBookNotesContent(
     notes: List<ReadingNoteEntity>,
     onToggleFavorite: (Long) -> Unit,
     onDeleteNote: (Long) -> Unit
@@ -559,38 +767,38 @@ fun BookNotesContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(Spacing.xxl),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Spacing.md)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Notes,
+                    imageVector = Icons.Outlined.Notes,
                     contentDescription = null,
                     modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    tint = CleanColors.textPlaceholder
                 )
                 Text(
                     text = "还没有读书笔记",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = CleanTypography.body,
+                    color = CleanColors.textTertiary
                 )
                 Text(
-                    text = "点击右下角按钮添加笔记",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    text = "点击右下角按钮添加",
+                    style = CleanTypography.caption,
+                    color = CleanColors.textPlaceholder
                 )
             }
         }
     } else {
         LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(Spacing.pageHorizontal, Spacing.pageVertical),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             items(notes, key = { it.id }) { note ->
-                NoteCard(
+                CleanNoteCard(
                     note = note,
                     onToggleFavorite = { onToggleFavorite(note.id) },
                     onDelete = { onDeleteNote(note.id) }
@@ -601,10 +809,10 @@ fun BookNotesContent(
 }
 
 /**
- * 笔记卡片
+ * 简洁笔记卡片
  */
 @Composable
-fun NoteCard(
+fun CleanNoteCard(
     note: ReadingNoteEntity,
     onToggleFavorite: () -> Unit,
     onDelete: () -> Unit
@@ -612,11 +820,14 @@ fun NoteCard(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CleanColors.surface),
+        shape = RoundedCornerShape(Radius.md),
+        elevation = CardDefaults.cardElevation(defaultElevation = Elevation.xs)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -624,72 +835,65 @@ fun NoteCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    NoteTypeChip(noteType = note.noteType)
+                    CleanNoteTypeChip(noteType = note.noteType)
                     note.pageNumber?.let {
                         Text(
-                            text = "第${it}页",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "P$it",
+                            style = CleanTypography.caption,
+                            color = CleanColors.textTertiary
                         )
                     }
                 }
 
                 Row {
-                    IconButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = if (note.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = if (note.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (note.isFavorite) CleanColors.error else CleanColors.textTertiary
                         )
                     }
-                    IconButton(
-                        onClick = { showDeleteConfirm = true },
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = Icons.Outlined.Delete,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error
+                            tint = CleanColors.textTertiary
                         )
                     }
                 }
             }
 
-            // 摘录内容
+            // 摘录
             if (note.excerpt.isNotBlank()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(4.dp)
+                    color = CleanColors.surfaceVariant,
+                    shape = RoundedCornerShape(Radius.sm)
                 ) {
                     Text(
                         text = "「${note.excerpt}」",
-                        modifier = Modifier.padding(8.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.padding(Spacing.md),
+                        style = CleanTypography.secondary,
+                        color = CleanColors.textSecondary
                     )
                 }
             }
 
-            // 笔记内容
             Text(
                 text = note.content,
-                style = MaterialTheme.typography.bodyMedium
+                style = CleanTypography.body,
+                color = CleanColors.textPrimary
             )
 
-            // 章节信息
             if (note.chapter.isNotBlank()) {
                 Text(
-                    text = "章节: ${note.chapter}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = note.chapter,
+                    style = CleanTypography.caption,
+                    color = CleanColors.textTertiary
                 )
             }
         }
@@ -698,54 +902,57 @@ fun NoteCard(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这条笔记吗？") },
+            title = { Text("确认删除", style = CleanTypography.title) },
+            text = { Text("确定要删除这条笔记吗？", style = CleanTypography.body) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         onDelete()
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(contentColor = CleanColors.error)
                 ) {
                     Text("删除")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
+                    Text("取消", color = CleanColors.textSecondary)
                 }
-            }
+            },
+            containerColor = CleanColors.surface
         )
     }
 }
 
 /**
- * 笔记类型标签
+ * 简洁笔记类型标签
  */
 @Composable
-fun NoteTypeChip(noteType: String) {
+fun CleanNoteTypeChip(noteType: String) {
     val (color, text) = when (noteType) {
-        NoteType.EXCERPT -> MaterialTheme.colorScheme.secondary to "摘录"
-        NoteType.THOUGHT -> MaterialTheme.colorScheme.primary to "想法"
-        NoteType.SUMMARY -> MaterialTheme.colorScheme.tertiary to "总结"
-        NoteType.QUESTION -> Color(0xFFFF9800) to "疑问"
+        NoteType.EXCERPT -> CleanColors.primary to "摘录"
+        NoteType.THOUGHT -> CleanColors.success to "想法"
+        NoteType.SUMMARY -> CleanColors.warning to "总结"
+        NoteType.QUESTION -> CleanColors.error to "疑问"
         NoteType.VOCABULARY -> Color(0xFF9C27B0) to "生词"
-        else -> MaterialTheme.colorScheme.outline to "其他"
+        else -> CleanColors.textTertiary to "其他"
     }
 
     Surface(
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(Radius.sm),
         color = color.copy(alpha = 0.1f)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
+            style = CleanTypography.caption,
             color = color
         )
     }
 }
+
+// ==================== 保留原有对话框组件 ====================
 
 /**
  * 更新进度对话框
@@ -761,11 +968,9 @@ fun UpdateProgressDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("更新阅读进度") },
+        title = { Text("更新阅读进度", style = CleanTypography.title) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 OutlinedTextField(
                     value = page,
                     onValueChange = { page = it.filter { c -> c.isDigit() } },
@@ -779,16 +984,15 @@ fun UpdateProgressDialog(
                 if (totalPages > 0) {
                     val progressValue = (page.toIntOrNull() ?: 0) * 100 / totalPages
                     LinearProgressIndicator(
-                        progress = progressValue / 100f,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                        progress = { progressValue / 100f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        color = CleanColors.primary,
+                        trackColor = CleanColors.surfaceVariant
                     )
                     Text(
                         text = "进度: $progressValue%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
                     )
                 }
             }
@@ -800,14 +1004,15 @@ fun UpdateProgressDialog(
                     onConfirm(newPage.coerceIn(0, totalPages.coerceAtLeast(0)))
                 }
             ) {
-                Text("保存")
+                Text("保存", color = CleanColors.primary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text("取消", color = CleanColors.textSecondary)
             }
-        }
+        },
+        containerColor = CleanColors.surface
     )
 }
 
@@ -828,16 +1033,11 @@ fun AddNoteDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加笔记") },
+        title = { Text("添加笔记", style = CleanTypography.title) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // 笔记类型
-                Text("笔记类型", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text("笔记类型", style = CleanTypography.caption, color = CleanColors.textSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     listOf(
                         NoteType.THOUGHT to "想法",
                         NoteType.EXCERPT to "摘录",
@@ -846,12 +1046,15 @@ fun AddNoteDialog(
                         FilterChip(
                             selected = noteType == type,
                             onClick = { noteType = type },
-                            label = { Text(label) }
+                            label = { Text(label, style = CleanTypography.caption) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CleanColors.primaryLight,
+                                selectedLabelColor = CleanColors.primary
+                            )
                         )
                     }
                 }
 
-                // 摘录内容（仅摘录类型显示）
                 if (noteType == NoteType.EXCERPT) {
                     OutlinedTextField(
                         value = excerpt,
@@ -863,7 +1066,6 @@ fun AddNoteDialog(
                     )
                 }
 
-                // 笔记内容
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
@@ -875,7 +1077,7 @@ fun AddNoteDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     OutlinedTextField(
                         value = page,
@@ -885,7 +1087,6 @@ fun AddNoteDialog(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
-
                     OutlinedTextField(
                         value = chapter,
                         onValueChange = { chapter = it },
@@ -900,25 +1101,20 @@ fun AddNoteDialog(
             TextButton(
                 onClick = {
                     if (content.isNotBlank() || (noteType == NoteType.EXCERPT && excerpt.isNotBlank())) {
-                        onConfirm(
-                            noteType,
-                            content.trim(),
-                            excerpt.trim(),
-                            page.toIntOrNull(),
-                            chapter.trim()
-                        )
+                        onConfirm(noteType, content.trim(), excerpt.trim(), page.toIntOrNull(), chapter.trim())
                     }
                 },
                 enabled = content.isNotBlank() || (noteType == NoteType.EXCERPT && excerpt.isNotBlank())
             ) {
-                Text("保存")
+                Text("保存", color = CleanColors.primary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text("取消", color = CleanColors.textSecondary)
             }
-        }
+        },
+        containerColor = CleanColors.surface
     )
 }
 
@@ -937,26 +1133,21 @@ fun RatingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("评价书籍") },
+        title = { Text("评价书籍", style = CleanTypography.title) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 星级评分
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     repeat(5) { index ->
                         val starValue = (index + 1) * 2
-                        IconButton(
-                            onClick = { rating = starValue }
-                        ) {
+                        IconButton(onClick = { rating = starValue }) {
                             Icon(
                                 imageVector = if (rating >= starValue) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                 contentDescription = null,
                                 modifier = Modifier.size(36.dp),
-                                tint = Color(0xFFFFC107)
+                                tint = CleanColors.warning
                             )
                         }
                     }
@@ -972,11 +1163,10 @@ fun RatingDialog(
                         else -> "强烈推荐"
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = CleanTypography.secondary,
+                    color = CleanColors.textTertiary
                 )
 
-                // 一句话评价
                 OutlinedTextField(
                     value = review,
                     onValueChange = { review = it },
@@ -987,16 +1177,71 @@ fun RatingDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { onConfirm(rating, review.trim()) }
-            ) {
-                Text("保存")
+            TextButton(onClick = { onConfirm(rating, review.trim()) }) {
+                Text("保存", color = CleanColors.primary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text("取消", color = CleanColors.textSecondary)
             }
-        }
+        },
+        containerColor = CleanColors.surface
     )
+}
+
+// 保留旧的组件名称以兼容
+@Composable
+fun BookDetailContent(
+    book: BookEntity,
+    onUpdateProgress: () -> Unit,
+    onRateBook: () -> Unit,
+    onStartReading: () -> Unit,
+    onFinishReading: () -> Unit,
+    onAbandonReading: () -> Unit
+) {
+    CleanBookDetailContent(
+        book = book,
+        isReading = false,
+        readingSeconds = 0,
+        onUpdateProgress = onUpdateProgress,
+        onRateBook = onRateBook,
+        onStartReading = onStartReading,
+        onStopReading = {},
+        onFinishReading = onFinishReading,
+        onAbandonReading = onAbandonReading
+    )
+}
+
+@Composable
+fun BookNotesContent(
+    notes: List<ReadingNoteEntity>,
+    onToggleFavorite: (Long) -> Unit,
+    onDeleteNote: (Long) -> Unit
+) {
+    CleanBookNotesContent(notes, onToggleFavorite, onDeleteNote)
+}
+
+@Composable
+fun StatusChip(status: String) {
+    CleanStatusChip(status)
+}
+
+@Composable
+fun InfoRow(label: String, value: String) {
+    CleanInfoRow(label, value)
+}
+
+@Composable
+fun NoteCard(
+    note: ReadingNoteEntity,
+    onToggleFavorite: () -> Unit,
+    onDelete: () -> Unit
+) {
+    CleanNoteCard(note, onToggleFavorite, onDelete)
+}
+
+@Composable
+fun NoteTypeChip(noteType: String) {
+    CleanNoteTypeChip(noteType)
 }

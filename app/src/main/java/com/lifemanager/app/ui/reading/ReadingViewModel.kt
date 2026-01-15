@@ -269,6 +269,9 @@ class ReadingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 readingUseCase.startReading(bookId)
+                // 重新加载书籍详情以更新UI
+                _selectedBook.value = readingUseCase.getBook(bookId)
+                _uiState.update { it.copy(message = "开始阅读") }
                 loadOverview()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
@@ -356,6 +359,8 @@ class ReadingViewModel @Inject constructor(
                     pageNumber = pageNumber,
                     chapter = chapter
                 )
+                // 重新加载笔记列表以更新UI
+                _bookNotes.value = readingUseCase.getNotesByBook(bookId).first()
                 _uiState.update { it.copy(message = "笔记已保存") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
@@ -366,10 +371,12 @@ class ReadingViewModel @Inject constructor(
     /**
      * 删除笔记
      */
-    fun deleteNote(noteId: Long) {
+    fun deleteNote(noteId: Long, bookId: Long) {
         viewModelScope.launch {
             try {
                 readingUseCase.deleteReadingNote(noteId)
+                // 重新加载笔记列表以更新UI
+                _bookNotes.value = readingUseCase.getNotesByBook(bookId).first()
                 _uiState.update { it.copy(message = "笔记已删除") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
