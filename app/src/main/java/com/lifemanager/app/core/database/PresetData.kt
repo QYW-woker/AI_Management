@@ -373,13 +373,32 @@ object PresetData {
      * 资产类别预设
      */
     val assetFields = listOf(
+        // 现金类
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "现金(支付宝)",
+            iconName = "account_balance_wallet",
+            color = "#1677FF",
+            tagType = TagType.SAVINGS,
+            sortOrder = 1,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "现金(微信)",
+            iconName = "account_balance_wallet",
+            color = "#07C160",
+            tagType = TagType.SAVINGS,
+            sortOrder = 2,
+            isPreset = true
+        ),
         CustomFieldEntity(
             moduleType = ModuleType.ASSET,
             name = "活期存款",
             iconName = "account_balance",
             color = "#2196F3",
             tagType = TagType.SAVINGS,
-            sortOrder = 1,
+            sortOrder = 3,
             isPreset = true
         ),
         CustomFieldEntity(
@@ -388,107 +407,17 @@ object PresetData {
             iconName = "lock",
             color = "#1976D2",
             tagType = TagType.SAVINGS,
-            sortOrder = 2,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "货币基金",
-            iconName = "monetization_on",
-            color = "#00BCD4",
-            tagType = TagType.SAVINGS,
-            sortOrder = 3,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "股票",
-            iconName = "show_chart",
-            color = "#E91E63",
-            tagType = TagType.INVESTMENT,
             sortOrder = 4,
             isPreset = true
         ),
+        // 养老金类
         CustomFieldEntity(
             moduleType = ModuleType.ASSET,
-            name = "基金",
-            iconName = "pie_chart",
-            color = "#9C27B0",
-            tagType = TagType.INVESTMENT,
-            sortOrder = 5,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "养老金账户",
+            name = "养老金(支付宝)",
             iconName = "elderly",
             color = "#3F51B5",
             tagType = TagType.SAVINGS,
-            sortOrder = 6,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "房产",
-            iconName = "home",
-            color = "#FF9800",
-            tagType = TagType.OTHER,
-            sortOrder = 7,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "车辆",
-            iconName = "directions_car",
-            color = "#607D8B",
-            tagType = TagType.OTHER,
-            sortOrder = 8,
-            isPreset = true
-        ),
-        // 新增资产分类
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "数字货币",
-            iconName = "currency_bitcoin",
-            color = "#F7931A",
-            tagType = TagType.INVESTMENT,
-            sortOrder = 9,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "保险产品",
-            iconName = "shield",
-            color = "#5C6BC0",
-            tagType = TagType.OTHER,
-            sortOrder = 10,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "债券",
-            iconName = "request_quote",
-            color = "#00897B",
-            tagType = TagType.INVESTMENT,
-            sortOrder = 11,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "黄金贵金属",
-            iconName = "diamond",
-            color = "#FFD700",
-            tagType = TagType.INVESTMENT,
-            sortOrder = 12,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.ASSET,
-            name = "收藏品",
-            iconName = "collections",
-            color = "#8D6E63",
-            tagType = TagType.OTHER,
-            sortOrder = 13,
+            sortOrder = 5,
             isPreset = true
         ),
         CustomFieldEntity(
@@ -497,15 +426,139 @@ object PresetData {
             iconName = "account_balance",
             color = "#1E88E5",
             tagType = TagType.SAVINGS,
+            sortOrder = 6,
+            isPreset = true
+        ),
+        // 副业收入
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "副业收入",
+            iconName = "business_center",
+            color = "#FF9800",
+            tagType = TagType.OTHER,
+            sortOrder = 7,
+            isPreset = true
+        ),
+        // 理财投资类
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "货币基金",
+            iconName = "monetization_on",
+            color = "#00BCD4",
+            tagType = TagType.SAVINGS,
+            sortOrder = 8,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "股票",
+            iconName = "show_chart",
+            color = "#E91E63",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 9,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "基金",
+            iconName = "pie_chart",
+            color = "#9C27B0",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 10,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "理财产品",
+            iconName = "savings",
+            color = "#4CAF50",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 11,
+            isPreset = true
+        ),
+        // 可用资金
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "可用资金",
+            iconName = "attach_money",
+            color = "#8BC34A",
+            tagType = TagType.SAVINGS,
+            sortOrder = 12,
+            isPreset = true
+        ),
+        // 固定资产
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "房产",
+            iconName = "home",
+            color = "#FF5722",
+            tagType = TagType.OTHER,
+            sortOrder = 13,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "车辆",
+            iconName = "directions_car",
+            color = "#607D8B",
+            tagType = TagType.OTHER,
             sortOrder = 14,
+            isPreset = true
+        ),
+        // 其他投资
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "数字货币",
+            iconName = "currency_bitcoin",
+            color = "#F7931A",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 15,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "保险产品",
+            iconName = "shield",
+            color = "#5C6BC0",
+            tagType = TagType.OTHER,
+            sortOrder = 16,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "债券",
+            iconName = "request_quote",
+            color = "#00897B",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 17,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "黄金贵金属",
+            iconName = "diamond",
+            color = "#FFD700",
+            tagType = TagType.INVESTMENT,
+            sortOrder = 18,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.ASSET,
+            name = "收藏品",
+            iconName = "collections",
+            color = "#8D6E63",
+            tagType = TagType.OTHER,
+            sortOrder = 19,
             isPreset = true
         )
     )
 
     /**
      * 负债类别预设
+     * 支持在备注中填写欠款说明
      */
     val liabilityFields = listOf(
+        // 贷款类
         CustomFieldEntity(
             moduleType = ModuleType.LIABILITY,
             name = "房贷",
@@ -526,39 +579,11 @@ object PresetData {
         ),
         CustomFieldEntity(
             moduleType = ModuleType.LIABILITY,
-            name = "信用卡",
-            iconName = "credit_card",
-            color = "#9C27B0",
-            tagType = TagType.OTHER,
-            sortOrder = 3,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.LIABILITY,
-            name = "借款",
-            iconName = "handshake",
-            color = "#795548",
-            tagType = TagType.OTHER,
-            sortOrder = 4,
-            isPreset = true
-        ),
-        // 新增负债分类
-        CustomFieldEntity(
-            moduleType = ModuleType.LIABILITY,
             name = "消费贷",
             iconName = "credit_score",
             color = "#FF7043",
             tagType = TagType.OTHER,
-            sortOrder = 5,
-            isPreset = true
-        ),
-        CustomFieldEntity(
-            moduleType = ModuleType.LIABILITY,
-            name = "花呗白条",
-            iconName = "payment",
-            color = "#42A5F5",
-            tagType = TagType.OTHER,
-            sortOrder = 6,
+            sortOrder = 3,
             isPreset = true
         ),
         CustomFieldEntity(
@@ -567,7 +592,63 @@ object PresetData {
             iconName = "school",
             color = "#66BB6A",
             tagType = TagType.FIXED,
+            sortOrder = 4,
+            isPreset = true
+        ),
+        // 信用类
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "信用卡",
+            iconName = "credit_card",
+            color = "#9C27B0",
+            tagType = TagType.OTHER,
+            sortOrder = 5,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "花呗",
+            iconName = "payment",
+            color = "#1677FF",
+            tagType = TagType.OTHER,
+            sortOrder = 6,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "白条",
+            iconName = "payment",
+            color = "#E62117",
+            tagType = TagType.OTHER,
             sortOrder = 7,
+            isPreset = true
+        ),
+        // 欠款类（支持备注说明）
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "欠款",
+            iconName = "handshake",
+            color = "#795548",
+            tagType = TagType.OTHER,
+            sortOrder = 8,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "亲友借款",
+            iconName = "people",
+            color = "#FF9800",
+            tagType = TagType.OTHER,
+            sortOrder = 9,
+            isPreset = true
+        ),
+        CustomFieldEntity(
+            moduleType = ModuleType.LIABILITY,
+            name = "其他负债",
+            iconName = "more_horiz",
+            color = "#9E9E9E",
+            tagType = TagType.OTHER,
+            sortOrder = 99,
             isPreset = true
         )
     )

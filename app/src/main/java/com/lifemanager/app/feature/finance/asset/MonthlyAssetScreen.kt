@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,13 +29,18 @@ import com.lifemanager.app.ui.component.charts.PieChartData
 import com.lifemanager.app.ui.component.charts.TrendLineChart
 import com.lifemanager.app.ui.component.charts.LineChartSeries
 import com.lifemanager.app.domain.model.NetWorthTrendPoint
+import com.lifemanager.app.ui.theme.*
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import java.text.NumberFormat
 import java.util.Locale
 
 /**
- * 月度资产主界面
+ * 月度资产主界面 - 简洁设计版本
  *
- * 展示资产负债统计、净资产变化和详细记录
+ * 设计原则:
+ * - 与首页保持一致的CleanColors设计系统
+ * - 干净、克制、有呼吸感
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,31 +59,71 @@ fun MonthlyAssetScreen(
     val showCopyDialog by viewModel.showCopyDialog.collectAsState()
     val netWorthTrend by viewModel.netWorthTrend.collectAsState()
 
-    // 当前选中的标签页 (0: 资产, 1: 负债)
     var selectedTab by remember { mutableStateOf(0) }
 
+    val context = LocalContext.current
+
     Scaffold(
+        containerColor = CleanColors.background,
         topBar = {
             TopAppBar(
-                title = { Text("月度资产") },
+                title = {
+                    Text(
+                        "月度资产",
+                        style = CleanTypography.title,
+                        color = CleanColors.textPrimary
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "返回",
+                            tint = CleanColors.textSecondary
+                        )
                     }
                 },
                 actions = {
+                    // 导出报表按钮
+                    IconButton(
+                        onClick = {
+                            val success = AssetExportUtil.exportAndShare(
+                                context = context,
+                                yearMonth = currentYearMonth,
+                                stats = assetStats,
+                                records = records,
+                                trend = netWorthTrend
+                            )
+                            if (!success) {
+                                Toast.makeText(context, "导出失败", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = "导出报表",
+                            tint = CleanColors.textSecondary
+                        )
+                    }
                     // 复制上月数据按钮
                     IconButton(onClick = { viewModel.showCopyFromPreviousMonth() }) {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = "复制上月数据")
+                        Icon(
+                            Icons.Outlined.ContentCopy,
+                            contentDescription = "复制上月数据",
+                            tint = CleanColors.textSecondary
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = CleanColors.background
+                )
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = {
-                    viewModel.showAddDialog(isAsset = selectedTab == 0)
-                }
+                onClick = { viewModel.showAddDialog(isAsset = selectedTab == 0) },
+                containerColor = CleanColors.primary,
+                contentColor = CleanColors.onPrimary
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "添加记录")
             }
@@ -89,7 +135,7 @@ fun MonthlyAssetScreen(
                 .padding(paddingValues)
         ) {
             // 月份选择器
-            MonthSelector(
+            CleanMonthSelector(
                 yearMonth = currentYearMonth,
                 onPreviousMonth = { viewModel.previousMonth() },
                 onNextMonth = { viewModel.nextMonth() },
@@ -102,7 +148,7 @@ fun MonthlyAssetScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = CleanColors.primary)
                     }
                 }
 
@@ -114,10 +160,18 @@ fun MonthlyAssetScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = (uiState as AssetUiState.Error).message,
-                                color = MaterialTheme.colorScheme.error
+                                style = CleanTypography.body,
+                                color = CleanColors.error
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { viewModel.refresh() }) {
+                            Spacer(modifier = Modifier.height(Spacing.lg))
+                            Button(
+                                onClick = { viewModel.refresh() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CleanColors.primary,
+                                    contentColor = CleanColors.onPrimary
+                                ),
+                                shape = RoundedCornerShape(Radius.sm)
+                            ) {
                                 Text("重试")
                             }
                         }
@@ -127,37 +181,50 @@ fun MonthlyAssetScreen(
                 is AssetUiState.Success -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        contentPadding = PaddingValues(
+                            horizontal = Spacing.pageHorizontal,
+                            vertical = Spacing.pageVertical
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sectionGap)
                     ) {
                         // 统计卡片
                         item {
-                            AssetStatsCard(stats = assetStats)
+                            CleanAssetStatsCard(stats = assetStats)
                         }
 
                         // 净资产趋势图
                         if (netWorthTrend.isNotEmpty()) {
                             item {
-                                NetWorthTrendCard(trendData = netWorthTrend)
+                                CleanNetWorthTrendCard(trendData = netWorthTrend)
                             }
                         }
 
                         // 标签页切换
                         item {
-                            TabRow(
-                                selectedTabIndex = selectedTab,
-                                modifier = Modifier.fillMaxWidth()
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(Radius.md),
+                                color = CleanColors.surface,
+                                shadowElevation = Elevation.xs
                             ) {
-                                Tab(
-                                    selected = selectedTab == 0,
-                                    onClick = { selectedTab = 0 },
-                                    text = { Text("资产") }
-                                )
-                                Tab(
-                                    selected = selectedTab == 1,
-                                    onClick = { selectedTab = 1 },
-                                    text = { Text("负债") }
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(Spacing.xs)
+                                ) {
+                                    CleanTabButton(
+                                        text = "资产",
+                                        selected = selectedTab == 0,
+                                        onClick = { selectedTab = 0 },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    CleanTabButton(
+                                        text = "负债",
+                                        selected = selectedTab == 1,
+                                        onClick = { selectedTab = 1 },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
 
@@ -165,7 +232,7 @@ fun MonthlyAssetScreen(
                         item {
                             val chartData = if (selectedTab == 0) assetFieldStats else liabilityFieldStats
                             if (chartData.isNotEmpty()) {
-                                FieldStatsChart(
+                                CleanFieldStatsChart(
                                     title = if (selectedTab == 0) "资产分类" else "负债分类",
                                     stats = chartData
                                 )
@@ -176,8 +243,8 @@ fun MonthlyAssetScreen(
                         item {
                             Text(
                                 text = "详细记录",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                style = CleanTypography.title,
+                                color = CleanColors.textPrimary
                             )
                         }
 
@@ -192,18 +259,24 @@ fun MonthlyAssetScreen(
 
                         if (filteredRecords.isEmpty()) {
                             item {
-                                EmptyState(
-                                    message = if (selectedTab == 0) "暂无资产记录" else "暂无负债记录"
+                                CleanEmptyState(
+                                    message = if (selectedTab == 0) "暂无资产记录" else "暂无负债记录",
+                                    hint = "点击右下角添加"
                                 )
                             }
                         } else {
                             items(filteredRecords, key = { it.record.id }) { record ->
-                                RecordItem(
+                                CleanRecordItem(
                                     record = record,
                                     onClick = { viewModel.showEditDialog(record.record.id) },
                                     onDelete = { viewModel.showDeleteConfirm(record.record.id) }
                                 )
                             }
+                        }
+
+                        // 底部安全间距
+                        item {
+                            Spacer(modifier = Modifier.height(Spacing.bottomSafe))
                         }
                     }
                 }
@@ -223,23 +296,22 @@ fun MonthlyAssetScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.hideDeleteConfirm() },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这条记录吗？") },
+            title = { Text("确认删除", style = CleanTypography.title) },
+            text = { Text("确定要删除这条记录吗？", style = CleanTypography.body) },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.confirmDelete() },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.textButtonColors(contentColor = CleanColors.error)
                 ) {
                     Text("删除")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideDeleteConfirm() }) {
-                    Text("取消")
+                    Text("取消", color = CleanColors.textSecondary)
                 }
-            }
+            },
+            containerColor = CleanColors.surface
         )
     }
 
@@ -247,27 +319,31 @@ fun MonthlyAssetScreen(
     if (showCopyDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.hideCopyDialog() },
-            title = { Text("复制上月数据") },
-            text = { Text("将上月的资产负债数据复制到本月，方便快速填写。是否继续？") },
+            title = { Text("复制上月数据", style = CleanTypography.title) },
+            text = { Text("将上月的资产负债数据复制到本月，方便快速填写。是否继续？", style = CleanTypography.body) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmCopyFromPreviousMonth() }) {
+                TextButton(
+                    onClick = { viewModel.confirmCopyFromPreviousMonth() },
+                    colors = ButtonDefaults.textButtonColors(contentColor = CleanColors.primary)
+                ) {
                     Text("确定")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideCopyDialog() }) {
-                    Text("取消")
+                    Text("取消", color = CleanColors.textSecondary)
                 }
-            }
+            },
+            containerColor = CleanColors.surface
         )
     }
 }
 
 /**
- * 月份选择器
+ * 简洁月份选择器
  */
 @Composable
-private fun MonthSelector(
+private fun CleanMonthSelector(
     yearMonth: Int,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -275,72 +351,112 @@ private fun MonthSelector(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        tonalElevation = 2.dp
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onPreviousMonth) {
-                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "上个月")
+                Icon(
+                    Icons.Default.ChevronLeft,
+                    contentDescription = "上个月",
+                    tint = CleanColors.textSecondary
+                )
             }
 
             Text(
                 text = formatYearMonth(yearMonth),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                style = CleanTypography.title,
+                color = CleanColors.textPrimary,
+                fontWeight = FontWeight.SemiBold
             )
 
             IconButton(onClick = onNextMonth) {
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "下个月")
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = "下个月",
+                    tint = CleanColors.textSecondary
+                )
             }
         }
     }
 }
 
 /**
- * 资产统计卡片
+ * 简洁标签按钮
  */
 @Composable
-private fun AssetStatsCard(stats: AssetStats) {
+private fun CleanTabButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(onClick = onClick),
+        color = if (selected) CleanColors.primary else Color.Transparent,
+        shape = RoundedCornerShape(Radius.sm)
+    ) {
+        Box(
+            modifier = Modifier.padding(vertical = Spacing.md),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = CleanTypography.button,
+                color = if (selected) CleanColors.onPrimary else CleanColors.textSecondary
+            )
+        }
+    }
+}
+
+/**
+ * 简洁资产统计卡片
+ */
+@Composable
+private fun CleanAssetStatsCard(stats: AssetStats) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(Radius.md),
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(Spacing.lg)
         ) {
             // 净资产
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "净资产",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "¥${numberFormat.format(stats.netWorth)}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (stats.netWorth >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    )
-                }
+                Text(
+                    text = "净资产",
+                    style = CleanTypography.caption,
+                    color = CleanColors.textTertiary
+                )
+                Spacer(modifier = Modifier.height(Spacing.xs))
+                Text(
+                    text = "¥${numberFormat.format(stats.netWorth.toLong())}",
+                    style = CleanTypography.amountLarge,
+                    color = if (stats.netWorth >= 0) CleanColors.primary else CleanColors.error,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Divider()
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
+            Divider(color = CleanColors.divider)
+            Spacer(modifier = Modifier.height(Spacing.lg))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -350,47 +466,63 @@ private fun AssetStatsCard(stats: AssetStats) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "总资产",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
                     )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
                     Text(
-                        text = "¥${numberFormat.format(stats.totalAssets)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2196F3)
+                        text = "¥${numberFormat.format(stats.totalAssets.toLong())}",
+                        style = CleanTypography.amountMedium,
+                        color = CleanColors.success
                     )
                 }
+
+                // 分隔线
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(CleanColors.borderLight)
+                )
 
                 // 负债
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "总负债",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
                     )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
                     Text(
-                        text = "¥${numberFormat.format(stats.totalLiabilities)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF44336)
+                        text = "¥${numberFormat.format(stats.totalLiabilities.toLong())}",
+                        style = CleanTypography.amountMedium,
+                        color = CleanColors.error
                     )
                 }
+
+                // 分隔线
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(CleanColors.borderLight)
+                )
 
                 // 负债率
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "负债率",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary
                     )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
                     Text(
                         text = String.format("%.1f%%", stats.debtRatio),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = CleanTypography.amountMedium,
                         color = when {
-                            stats.debtRatio < 30 -> Color(0xFF4CAF50)
-                            stats.debtRatio < 50 -> Color(0xFFFF9800)
-                            else -> Color(0xFFF44336)
+                            stats.debtRatio < 30 -> CleanColors.success
+                            stats.debtRatio < 50 -> CleanColors.warning
+                            else -> CleanColors.error
                         }
                     )
                 }
@@ -400,20 +532,22 @@ private fun AssetStatsCard(stats: AssetStats) {
 }
 
 /**
- * 净资产趋势图卡片
+ * 简洁净资产趋势图卡片
  */
 @Composable
-private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
+private fun CleanNetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(Radius.md),
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(Spacing.lg)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -422,20 +556,19 @@ private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
             ) {
                 Text(
                     text = "净资产趋势",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = CleanTypography.title,
+                    color = CleanColors.textPrimary
                 )
                 Text(
                     text = "近${trendData.size}个月",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = CleanTypography.caption,
+                    color = CleanColors.textTertiary
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
 
             if (trendData.size >= 2) {
-                // 计算趋势变化
                 val firstValue = trendData.firstOrNull()?.netWorth ?: 0.0
                 val lastValue = trendData.lastOrNull()?.netWorth ?: 0.0
                 val change = lastValue - firstValue
@@ -458,40 +591,40 @@ private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
                             },
                             contentDescription = null,
                             tint = when {
-                                change > 0 -> Color(0xFF4CAF50)
-                                change < 0 -> Color(0xFFF44336)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                change > 0 -> CleanColors.success
+                                change < 0 -> CleanColors.error
+                                else -> CleanColors.textTertiary
                             },
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(IconSize.sm)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(Spacing.xs))
                         Text(
                             text = when {
-                                change > 0 -> "+¥${numberFormat.format(change)}"
-                                change < 0 -> "-¥${numberFormat.format(-change)}"
+                                change > 0 -> "+¥${numberFormat.format(change.toLong())}"
+                                change < 0 -> "-¥${numberFormat.format((-change).toLong())}"
                                 else -> "¥0"
                             },
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = CleanTypography.secondary,
                             fontWeight = FontWeight.Medium,
                             color = when {
-                                change > 0 -> Color(0xFF4CAF50)
-                                change < 0 -> Color(0xFFF44336)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                change > 0 -> CleanColors.success
+                                change < 0 -> CleanColors.error
+                                else -> CleanColors.textTertiary
                             }
                         )
                     }
                     Text(
                         text = String.format("%+.1f%%", changePercent),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = CleanTypography.caption,
                         color = when {
-                            change > 0 -> Color(0xFF4CAF50)
-                            change < 0 -> Color(0xFFF44336)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            change > 0 -> CleanColors.success
+                            change < 0 -> CleanColors.error
+                            else -> CleanColors.textTertiary
                         }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.md))
 
                 // 折线图
                 TrendLineChart(
@@ -499,7 +632,7 @@ private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
                         LineChartSeries(
                             label = "净资产",
                             values = trendData.map { it.netWorth.toFloat() },
-                            color = MaterialTheme.colorScheme.primary
+                            color = CleanColors.primary
                         )
                     ),
                     xLabels = trendData.map { it.formatMonth() },
@@ -515,8 +648,8 @@ private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
                 ) {
                     Text(
                         text = "数据不足，至少需要2个月的记录",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = CleanTypography.secondary,
+                        color = CleanColors.textTertiary
                     )
                 }
             }
@@ -525,29 +658,31 @@ private fun NetWorthTrendCard(trendData: List<NetWorthTrendPoint>) {
 }
 
 /**
- * 字段统计图表
+ * 简洁字段统计图表
  */
 @Composable
-private fun FieldStatsChart(
+private fun CleanFieldStatsChart(
     title: String,
     stats: List<AssetFieldStats>
 ) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(Radius.md),
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(Spacing.lg)
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                style = CleanTypography.title,
+                color = CleanColors.textPrimary
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -556,7 +691,7 @@ private fun FieldStatsChart(
                 Box(
                     modifier = Modifier
                         .size(120.dp)
-                        .padding(8.dp)
+                        .padding(Spacing.sm)
                 ) {
                     PieChartView(
                         data = stats.map {
@@ -574,17 +709,17 @@ private fun FieldStatsChart(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(start = Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     stats.take(5).forEach { stat ->
-                        LegendItem(stat = stat)
+                        CleanLegendItem(stat = stat)
                     }
                     if (stats.size > 5) {
                         Text(
                             text = "...还有${stats.size - 5}项",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = CleanTypography.caption,
+                            color = CleanColors.textTertiary
                         )
                     }
                 }
@@ -594,10 +729,10 @@ private fun FieldStatsChart(
 }
 
 /**
- * 图例项
+ * 简洁图例项
  */
 @Composable
-private fun LegendItem(stat: AssetFieldStats) {
+private fun CleanLegendItem(stat: AssetFieldStats) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
     Row(
@@ -610,80 +745,86 @@ private fun LegendItem(stat: AssetFieldStats) {
                 .clip(CircleShape)
                 .background(parseColor(stat.fieldColor))
         )
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(Spacing.sm))
         Text(
             text = stat.fieldName,
-            style = MaterialTheme.typography.bodySmall,
+            style = CleanTypography.caption,
             modifier = Modifier.weight(1f),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            color = CleanColors.textSecondary
         )
         Text(
             text = String.format("%.1f%%", stat.percentage),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = CleanTypography.caption,
+            color = CleanColors.textTertiary
         )
     }
 }
 
 /**
- * 记录项
+ * 简洁记录项
  */
 @Composable
-private fun RecordItem(
+private fun CleanRecordItem(
     record: MonthlyAssetWithField,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val numberFormat = remember { NumberFormat.getNumberInstance(Locale.CHINA) }
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(Radius.md),
+        color = CleanColors.surface,
+        shadowElevation = Elevation.xs
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 图标
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(Radius.sm))
                     .background(
-                        record.field?.let { parseColor(it.color) }
-                            ?: MaterialTheme.colorScheme.primary
+                        record.field?.let { parseColor(it.color).copy(alpha = 0.15f) }
+                            ?: CleanColors.primaryLight
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (record.record.type == "ASSET") {
-                        Icons.Filled.AccountBalance
+                        Icons.Outlined.AccountBalance
                     } else {
-                        Icons.Filled.CreditCard
+                        Icons.Outlined.CreditCard
                     },
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    tint = record.field?.let { parseColor(it.color) } ?: CleanColors.primary,
+                    modifier = Modifier.size(IconSize.md)
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(Spacing.md))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = record.field?.name ?: "未分类",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = CleanTypography.body,
+                    color = CleanColors.textPrimary,
                     fontWeight = FontWeight.Medium
                 )
                 if (record.record.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(Spacing.xs))
                     Text(
                         text = record.record.note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = CleanTypography.caption,
+                        color = CleanColors.textTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -691,23 +832,22 @@ private fun RecordItem(
             }
 
             Text(
-                text = "¥${numberFormat.format(record.record.amount)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (record.record.type == "ASSET") {
-                    Color(0xFF2196F3)
-                } else {
-                    Color(0xFFF44336)
-                }
+                text = "¥${numberFormat.format(record.record.amount.toLong())}",
+                style = CleanTypography.amountMedium,
+                color = if (record.record.type == "ASSET") CleanColors.success else CleanColors.error
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(Spacing.sm))
 
-            IconButton(onClick = onDelete) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(32.dp)
+            ) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
+                    imageVector = Icons.Outlined.Delete,
                     contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.error
+                    tint = CleanColors.textTertiary,
+                    modifier = Modifier.size(IconSize.sm)
                 )
             }
         }
@@ -715,28 +855,34 @@ private fun RecordItem(
 }
 
 /**
- * 空状态提示
+ * 简洁空状态提示
  */
 @Composable
-private fun EmptyState(message: String) {
+private fun CleanEmptyState(message: String, hint: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(Spacing.xxl),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                imageVector = Icons.Filled.AccountBalance,
+                imageVector = Icons.Outlined.AccountBalance,
                 contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                modifier = Modifier.size(64.dp),
+                tint = CleanColors.textPlaceholder
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Spacing.md))
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = CleanTypography.body,
+                color = CleanColors.textTertiary
+            )
+            Spacer(modifier = Modifier.height(Spacing.xs))
+            Text(
+                text = hint,
+                style = CleanTypography.caption,
+                color = CleanColors.textPlaceholder
             )
         }
     }
@@ -749,6 +895,6 @@ private fun parseColor(colorString: String): Color {
     return try {
         Color(android.graphics.Color.parseColor(colorString))
     } catch (e: Exception) {
-        Color.Gray
+        CleanColors.primary
     }
 }
