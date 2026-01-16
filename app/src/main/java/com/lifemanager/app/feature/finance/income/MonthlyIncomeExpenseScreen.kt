@@ -494,7 +494,7 @@ private fun CleanRateCard(stats: IncomeExpenseMonthlyStats) {
                 )
 
                 LinearProgressIndicator(
-                    progress = (savingsRate / 100f).coerceIn(0f, 1f),
+                    progress = (savingsRate / 100.0).coerceIn(0.0, 1.0).toFloat(),
                     modifier = Modifier
                         .weight(1f)
                         .height(8.dp)
@@ -528,7 +528,7 @@ private fun CleanRateCard(stats: IncomeExpenseMonthlyStats) {
                 )
 
                 LinearProgressIndicator(
-                    progress = (expenseRate / 100f).coerceIn(0f, 1f),
+                    progress = (expenseRate / 100.0).coerceIn(0.0, 1.0).toFloat(),
                     modifier = Modifier
                         .weight(1f)
                         .height(8.dp)

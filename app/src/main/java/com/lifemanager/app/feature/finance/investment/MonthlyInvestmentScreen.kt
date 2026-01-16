@@ -455,7 +455,7 @@ private fun CleanCompletionCard(stats: InvestmentMonthlyStats) {
                 )
 
                 LinearProgressIndicator(
-                    progress = (completionRate / 100f).coerceIn(0f, 1f),
+                    progress = (completionRate / 100.0).coerceIn(0.0, 1.0).toFloat(),
                     modifier = Modifier
                         .weight(1f)
                         .height(8.dp)
